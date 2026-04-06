@@ -83,12 +83,15 @@
 > **Detecção:** Struct com `[InlineWrapper]` e exatamente 1 campo primitivo.
 - [x] Definir atributo `[InlineWrapper]` no MetaSharp.Annotations
 - [x] Detectar no TypeTransformer: struct com `[InlineWrapper]` + 1 campo → branded type
-- [ ] Gerar `type X = primitive & { readonly __brand: "X" }` + namespace com static methods
-- [ ] Constructor → `create()` function no namespace
-- [ ] Static methods → funções no namespace
-- [ ] `instanceof` checks → substituir por type guard customizado (opcional)
-- [ ] Testes com `[InlineWrapper]` + SampleIssueTracker validation
-- [ ] Plano detalhado: `specs/value-wrappers-plan.md`
+- [x] Gerar `type X = primitive & { readonly __brand: "X" }` + namespace com static methods
+- [x] Constructor → `create()` function no namespace
+- [x] Static methods → funções no namespace
+- [x] `instanceof` checks → `typeof` check no overload dispatcher
+- [x] Non-string primitives: `toString()` helper gerado automaticamente
+- [x] JS reserved words escapados no ToCamelCase (ex: `New` → `new_`)
+- [x] Fallback: struct com >1 campo → class normal
+- [x] SampleIssueTracker: UserId/IssueId como `readonly record struct` + `[InlineWrapper]`
+- [x] Plano detalhado: `specs/value-wrappers-plan.md`
 
 ### ~~Generics~~ ✅
 
@@ -111,14 +114,14 @@
 - [x] Nullable em return types e parâmetros
 - [x] Null-conditional: `x?.Prop` → `x?.prop` (optional chaining)
 - [x] Null-coalescing: `x ?? y` → `x ?? y`
-- [ ] Futuro: distinguir `null` vs `undefined` para parâmetros opcionais
+- [ ] Futuro: `[Optional]` attribute para opt-in em `param?: T` (null vs undefined — manter `T | null = null` como default seguro para APIs)
 
 ### ~~Mapeamento de Tipos Externos~~ ✅
 
 - [x] Temporal API: `DateTime` → `Temporal.PlainDateTime`, `DateOnly` → `Temporal.PlainDate`, `TimeOnly` →
   `Temporal.PlainTime`, `DateTimeOffset` → `Temporal.ZonedDateTime`, `TimeSpan` → `Temporal.Duration` (com import
   automático de `@js-temporal/polyfill`)
-- [x] `Dictionary<K,V>` → `Map<K, V>`, `HashSet<T>` → `Set<T>` (globais, sem import)
+- [x] `Dictionary<K,V>` → `Map<K, V>`, `HashSet<T>` → `HashSet<T>` (runtime, com equals/hashCode)
 - [x] `Guid` → `string`, `Uri` → `string`, `object` → `unknown`
 - [x] `Tuple<T1,T2>` / `ValueTuple` / `KeyValuePair<K,V>` → `[T1, T2]` (TsTupleType)
 - [x] `[ExportFromBcl]` — assembly-level: mapeia tipo BCL para package JS (ex: `decimal` → `Decimal` de `decimal.js`)
@@ -227,8 +230,9 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] Implementar contratos base: enums, IDs e records genéricos
 - [x] Implementar domínio: `Issue`, `Comment`, `Sprint` e `IssueWorkflow`
 - [x] Implementar aplicação: repositório em memória, service e queries exportadas como módulo
-- [ ] Gerar `js/sample-issue-tracker` e validar build/test com Bun
-- [ ] Revisar output gerado para legibilidade e cobertura das features-alvo
+- [x] Gerar `js/sample-issue-tracker` e validar build com Bun (0 erros TS)
+- [x] 22 bugs do transpiler corrigidos via SampleIssueTracker validation
+- [ ] Testes end-to-end com Bun para lógica de negócio gerada
 
 ### ~~Properties com Getter/Setter Custom~~ ✅
 
@@ -269,7 +273,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 
 - [x] `List<T>` → `T[]`
 - [x] `Dictionary<K,V>` → `Map<K,V>`
-- [x] `HashSet<T>` → `Set<T>`
+- [x] `HashSet<T>` → `HashSet<T>` (runtime, com equals/hashCode)
 - [x] LINQ methods → Array methods (BclMapper) — API direta de coleção (.push, .includes, etc.)
 - [x] LINQ runtime lazy (`EnumerableBase<T>` com hierarquia de classes compostas)
 - [x] LINQ via `System.Linq.Enumerable` → `Enumerable.from(x).where(...)` lazy chains
@@ -281,11 +285,12 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] Anti-double-wrapping: `IsAlreadyLinqChain()` para chains compostas
 - [ ] `Queue<T>`, `Stack<T>` → arrays com helpers
 
-### Enums Avançados
+### ~~Enums Avançados~~ ✅ (parcial)
 
 - [ ] Enum com métodos de extensão → funções auxiliares
-- [ ] `[Flags]` enum → bitwise operations
-- [ ] Enum parsing: `Enum.Parse<T>()` → lookup table
+- [x] `[Flags]` enum → numeric enum TS (bitwise nativo)
+- [x] `HasFlag()` → `(value & flag) === flag`
+- [x] `Enum.Parse<T>()` → `T[text as keyof typeof T]`
 
 ---
 
@@ -333,6 +338,8 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 ### @meta-sharp/runtime
 
 - [x] `HashCode` (xxHash32)
+- [x] `HashSet<T>` com equals/hashCode customizado (system/collections/)
+- [x] `dayNumber()` helper para DateOnly.DayNumber (temporal-helpers)
 - [x] Runtime type checks: `isChar`, `isString`, `isByte`, `isSByte`, `isInt16`, `isUInt16`, `isInt32`, `isUInt32`,
   `isInt64`, `isUInt64`, `isFloat32`, `isFloat64`, `isBool`, `isBigInt`
 - [ ] `Decimal` wrapper (ou integração com decimal.js)
