@@ -35,6 +35,20 @@ public static class BclMapper
         if (symbol.Name == "Count" && IsMapOrSetType(containing))
             return new TsPropertyAccess(obj, "size");
 
+        // Task.CompletedTask → Promise.resolve()
+        if (containing == "System.Threading.Tasks.Task" && symbol.Name == "CompletedTask")
+            return new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("Promise"), "resolve"),
+                []);
+
+        // DateTimeOffset.UtcNow → Temporal.Now.zonedDateTimeISO()
+        if (containing == "System.DateTimeOffset" && symbol.Name == "UtcNow")
+            return new TsCallExpression(
+                new TsPropertyAccess(
+                    new TsPropertyAccess(new TsIdentifier("Temporal"), "Now"),
+                    "zonedDateTimeISO"),
+                []);
+
         return null;
     }
 
@@ -154,25 +168,43 @@ public static class BclMapper
                 "SelectMany"        => LinqCall(wrapped, "selectMany", args),
                 "OrderBy"           => LinqCall(wrapped, "orderBy", args),
                 "OrderByDescending" => LinqCall(wrapped, "orderByDescending", args),
+                "ThenBy"            => LinqCall(wrapped, "thenBy", args),
+                "ThenByDescending"  => LinqCall(wrapped, "thenByDescending", args),
                 "Take"              => LinqCall(wrapped, "take", args),
                 "Skip"              => LinqCall(wrapped, "skip", args),
                 "Distinct"          => LinqCall(wrapped, "distinct", []),
                 "GroupBy"           => LinqCall(wrapped, "groupBy", args),
                 "Concat"            => LinqCall(wrapped, "concat", args),
+                "TakeWhile"         => LinqCall(wrapped, "takeWhile", args),
+                "SkipWhile"         => LinqCall(wrapped, "skipWhile", args),
+                "DistinctBy"        => LinqCall(wrapped, "distinctBy", args),
+                "Reverse"           => LinqCall(wrapped, "reverse", []),
+                "Zip"               => LinqCall(wrapped, "zip", args),
+                "Append"            => LinqCall(wrapped, "append", args),
+                "Prepend"           => LinqCall(wrapped, "prepend", args),
+                "Union"             => LinqCall(wrapped, "union", args),
+                "Intersect"         => LinqCall(wrapped, "intersect", args),
+                "Except"            => LinqCall(wrapped, "except", args),
 
                 // Terminal (materializes)
                 "ToList" or "ToArray" => LinqCall(wrapped, "toArray", []),
+                "ToDictionary"      => LinqCall(wrapped, "toMap", args),
+                "ToHashSet"         => LinqCall(wrapped, "toSet", []),
                 "First"             => LinqCall(wrapped, "first", args),
                 "FirstOrDefault"    => LinqCall(wrapped, "firstOrDefault", args),
                 "Last"              => LinqCall(wrapped, "last", args),
                 "LastOrDefault"     => LinqCall(wrapped, "lastOrDefault", args),
                 "Single"            => LinqCall(wrapped, "single", args),
+                "SingleOrDefault"   => LinqCall(wrapped, "singleOrDefault", args),
                 "Any"               => LinqCall(wrapped, "any", args),
                 "All"               => LinqCall(wrapped, "all", args),
                 "Count"             => LinqCall(wrapped, "count", args),
                 "Sum"               => LinqCall(wrapped, "sum", args),
+                "Average"           => LinqCall(wrapped, "average", args),
                 "Min"               => LinqCall(wrapped, "min", args),
                 "Max"               => LinqCall(wrapped, "max", args),
+                "MinBy"             => LinqCall(wrapped, "minBy", args),
+                "MaxBy"             => LinqCall(wrapped, "maxBy", args),
                 "Contains"          => LinqCall(wrapped, "contains", args),
                 "Aggregate"         => LinqCall(wrapped, "aggregate", args),
 
@@ -201,6 +233,13 @@ public static class BclMapper
         if (containing == "System.Console" && name == "WriteLine")
             return new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier("console"), "log"),
+                args
+            );
+
+        // Task.FromResult(x) → Promise.resolve(x), Task.CompletedTask → Promise.resolve()
+        if (containing is "System.Threading.Tasks.Task" && name == "FromResult")
+            return new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("Promise"), "resolve"),
                 args
             );
 
@@ -258,9 +297,13 @@ public static class BclMapper
     };
 
     private static bool IsLinqMethodName(string name) => name is
-        "where" or "select" or "selectMany" or "orderBy" or "orderByDescending"
+        "where" or "select" or "selectMany" or "orderBy" or "orderByDescending" or "thenBy" or "thenByDescending"
         or "take" or "skip" or "distinct" or "groupBy" or "concat"
-        or "toArray" or "first" or "firstOrDefault" or "last" or "lastOrDefault"
-        or "single" or "any" or "all" or "count" or "sum" or "min" or "max"
+        or "takeWhile" or "skipWhile" or "distinctBy" or "reverse"
+        or "zip" or "append" or "prepend" or "union" or "intersect" or "except"
+        or "toArray" or "toMap" or "toSet"
+        or "first" or "firstOrDefault" or "last" or "lastOrDefault"
+        or "single" or "singleOrDefault" or "any" or "all"
+        or "count" or "sum" or "average" or "min" or "max" or "minBy" or "maxBy"
         or "contains" or "aggregate";
 }

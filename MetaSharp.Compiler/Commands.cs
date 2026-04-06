@@ -42,8 +42,12 @@ public class Commands
 
         var compileSw = Stopwatch.StartNew();
 
+        Console.WriteLine("  Opening MSBuild project...");
         var proj = await workspace.OpenProjectAsync(projectPath);
+        Console.WriteLine("  Project loaded.");
+        Console.WriteLine("  Creating Roslyn compilation...");
         var compilation = await proj.GetCompilationAsync();
+        Console.WriteLine("  Compilation created.");
 
         compileSw.Stop();
 

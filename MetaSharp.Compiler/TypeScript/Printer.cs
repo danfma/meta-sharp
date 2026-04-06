@@ -91,6 +91,21 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(";");
                 _sb.WriteLn();
             }
+
+            if (iface.Methods is not null)
+            {
+                foreach (var method in iface.Methods)
+                {
+                    _sb.Write(method.Name);
+                    PrintTypeParameters(method.TypeParameters);
+                    _sb.Write("(");
+                    PrintParameters(method.Parameters);
+                    _sb.Write("): ");
+                    PrintType(method.ReturnType);
+                    _sb.Write(";");
+                    _sb.WriteLn();
+                }
+            }
         });
     }
 
@@ -486,6 +501,19 @@ public sealed class Printer(string indent = "  ")
             case TsSpreadExpression spread:
                 _sb.Write("...");
                 PrintExpression(spread.Expression);
+                break;
+
+            case TsElementAccess elemAccess:
+                PrintExpression(elemAccess.Object);
+                _sb.Write("[");
+                PrintExpression(elemAccess.Index);
+                _sb.Write("]");
+                break;
+
+            case TsArrayLiteral arrayLit:
+                _sb.Write("[");
+                _sb.WriteList(arrayLit.Elements, PrintExpression);
+                _sb.Write("]");
                 break;
 
             case TsNewExpression newExpr:

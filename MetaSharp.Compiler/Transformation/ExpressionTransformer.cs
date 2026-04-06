@@ -189,6 +189,22 @@ public sealed class ExpressionTransformer(SemanticModel model)
             SimpleLambdaExpressionSyntax simpleLambda => TransformSimpleLambda(simpleLambda),
             ParenthesizedLambdaExpressionSyntax parenLambda => TransformParenthesizedLambda(parenLambda),
 
+            // Assignment: x = value → x = value
+            AssignmentExpressionSyntax assign => new TsBinaryExpression(
+                TransformExpression(assign.Left),
+                MapAssignmentOperator(assign.OperatorToken.Text),
+                TransformExpression(assign.Right)
+            ),
+
+            // Element access: arr[index] → arr[index]
+            ElementAccessExpressionSyntax elemAccess => new TsElementAccess(
+                TransformExpression(elemAccess.Expression),
+                TransformExpression(elemAccess.ArgumentList.Arguments[0].Expression)
+            ),
+
+            // Generic type name as expression: OperationResult<Issue> → OperationResult
+            GenericNameSyntax genericName => TransformGenericName(genericName),
+
             // C# 12 collection expression: [] → []
             CollectionExpressionSyntax collExpr => TransformCollectionExpression(collExpr),
 
@@ -198,8 +214,13 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
     private TsExpression TransformIdentifier(IdentifierNameSyntax id)
     {
-        var name = SymbolHelper.ToCamelCase(id.Identifier.Text);
         var symbol = model.GetSymbolInfo(id).Symbol;
+
+        // Type references → keep PascalCase (e.g., IssueStatus, Guid, UserId)
+        if (symbol is INamedTypeSymbol or ITypeSymbol)
+            return new TsIdentifier(id.Identifier.Text);
+
+        var name = SymbolHelper.ToCamelCase(id.Identifier.Text);
 
         if (symbol is not null && symbol.ContainingType is not null)
         {
@@ -253,9 +274,13 @@ public sealed class ExpressionTransformer(SemanticModel model)
         }
 
         var obj = TransformExpression(member.Expression);
-        var name = SymbolHelper.ToCamelCase(member.Name.Identifier.Text);
 
-        return new TsPropertyAccess(obj, name);
+        // Enum members and constants → keep PascalCase
+        var memberName = symbol is IFieldSymbol { ContainingType.TypeKind: TypeKind.Enum }
+            ? member.Name.Identifier.Text
+            : SymbolHelper.ToCamelCase(member.Name.Identifier.Text);
+
+        return new TsPropertyAccess(obj, memberName);
     }
 
     private TsExpression TransformInvocation(InvocationExpressionSyntax invocation)
@@ -722,18 +747,50 @@ public sealed class ExpressionTransformer(SemanticModel model)
         _ => op
     };
 
+    private static string MapAssignmentOperator(string op) => op switch
+    {
+        "??=" => "??=",
+        _ => op
+    };
+
+    private TsExpression TransformGenericName(GenericNameSyntax genericName)
+    {
+        var symbol = model.GetSymbolInfo(genericName).Symbol;
+
+        // If it resolves to a type, keep PascalCase
+        if (symbol is INamedTypeSymbol)
+            return new TsIdentifier(genericName.Identifier.Text);
+
+        // Check if the semantic model can resolve to a type via SymbolInfo
+        var typeInfo = model.GetTypeInfo(genericName);
+        if (typeInfo.Type is not null)
+            return new TsIdentifier(typeInfo.Type.Name);
+
+        // Fallback — use the identifier text as-is (PascalCase for types)
+        return new TsIdentifier(genericName.Identifier.Text);
+    }
+
     // ─── Collection expressions ─────────────────────────────
 
     private TsExpression TransformCollectionExpression(CollectionExpressionSyntax collExpr)
     {
-        if (collExpr.Elements.Count == 0)
-            return new TsLiteral("[]");
+        // Check target type to distinguish Set vs Array
+        var convertedType = model.GetTypeInfo(collExpr).ConvertedType;
+        var isSetType = convertedType is INamedTypeSymbol named
+            && named.Name is "HashSet" or "ISet" or "SortedSet";
 
-        // Non-empty: [expr1, expr2, ...] — use a new expression wrapped in array literal
+        if (collExpr.Elements.Count == 0)
+            return isSetType
+                ? new TsNewExpression(new TsIdentifier("Set"), [])
+                : new TsLiteral("[]");
+
         var elements = collExpr.Elements
             .OfType<ExpressionElementSyntax>()
             .Select(e => TransformExpression(e.Expression))
             .ToList();
+
+        if (isSetType)
+            return new TsNewExpression(new TsIdentifier("Set"), [new TsArrayLiteral(elements)]);
 
         return new TsCallExpression(
             new TsPropertyAccess(new TsIdentifier("Array"), "of"),

@@ -1,0 +1,19 @@
+{
+  "name": "sample-issue-tracker",
+  "module": "index.ts",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1",
+    "@meta-sharp/runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@typescript/native-preview": "^7.0.0-dev.20260225.1"
+  },
+  "scripts": {
+    "generate": "dotnet run --project ../../MetaSharp.Compiler/MetaSharp.Compiler.csproj -- -p ../../SampleIssueTracker/SampleIssueTracker.csproj -o ./src --clean",
+    "build": "tsgo -b .",
+    "test": "bun test"
+  }
+}

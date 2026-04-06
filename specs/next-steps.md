@@ -43,6 +43,46 @@
 
 ## Alta Prioridade
 
+### Value Wrappers — `[Inline]` attribute
+> Structs que encapsulam um único valor primitivo (ex: `UserId`, `IssueId`) geram classes
+> completas com equals/hashCode/with, mas no TS isso é overhead desnecessário.
+>
+> **Proposta:** `[Inline]` (ou `[Wrapper]`) marca a struct para gerar um **branded type + companion namespace**:
+>
+> ```csharp
+> [Transpile, Inline]
+> public readonly struct UserId
+> {
+>     public string Value { get; }
+>     public UserId(string value) { Value = value; }
+>     public static UserId New() => new(Guid.NewGuid().ToString("N"));
+>     public static UserId System() => new("system");
+> }
+> ```
+>
+> Gera:
+> ```typescript
+> export type UserId = string & { readonly __brand: "UserId" };
+>
+> export namespace UserId {
+>     export function create(value: string): UserId { return value as UserId; }
+>     export function newId(): UserId { return crypto.randomUUID().replace(/-/g, "") as UserId; }
+>     export function system(): UserId { return "system" as UserId; }
+> }
+> ```
+>
+> **Vantagens:** Type safety via branded types (UserId ≠ IssueId), zero overhead em runtime,
+> tree-shakeable, idiomático em TS.
+>
+> **Detecção:** Struct com `[Inline]` e exatamente 1 campo primitivo.
+- [ ] Definir atributo `[Inline]` no MetaSharp.Annotations
+- [ ] Detectar no TypeTransformer: struct com [Inline] + 1 campo → branded type
+- [ ] Gerar `type X = primitive & { readonly __brand: "X" }` + namespace com static methods
+- [ ] Constructor → `create()` function no namespace
+- [ ] Static methods → funções no namespace
+- [ ] `instanceof` checks → substituir por type guard customizado (opcional)
+- [ ] Testes inline + SampleIssueTracker validation
+
 ### ~~Generics~~ ✅
 - [x] Record genérico simples (`Result<T>`) com `Partial<Result<T>>` no `with()`
 - [x] Múltiplos type params (`Pair<K, V>`)
@@ -143,28 +183,34 @@ Projeto B (consome A via NuGet)
 - [ ] Factories auxiliares (`fromXY`, `fromPoint`) — futuro
 - [ ] Herança com overloads (`super(...args)` no dispatcher) — futuro
 
-### Overload de Métodos (Method Dispatch)
+### ~~Overload de Métodos (Method Dispatch)~~ ✅
 
-**Abordagem: dispatch method + métodos separados por assinatura**
+**Abordagem implementada: dispatcher inline com type guards (slow path)**
 
-- [ ] **Fast path**: tipo conhecido em compile-time → chamada direta ao método com hash
+- [x] Agrupa métodos por nome, gera overload signatures + dispatcher com `...args: unknown[]`
+- [x] Runtime type checks especializados (isInt32, isString, instanceof, etc.)
+- [x] Void methods: converte returns em expression statements + bare return
+- [x] Return types diferentes: usa `unknown` como tipo comum do dispatcher
+- [x] Static e instance methods suportados
+- [ ] **Futuro — Fast path**: tipo conhecido em compile-time → chamada direta ao método com hash
   - Naming: `methodName` + nomes dos params (ex: `addXY`, `addPoint`)
   - Se conflito: `addNumberX_NumberY`, `addPointOther`
-- [ ] **Slow path**: dispatcher com type guards
-  ```typescript
-  static add(...args: unknown[]): Point {
-    if (args.length === 2 && typeof args[0] === 'number' && typeof args[1] === 'number')
-      return Point.addXY(args[0], args[1]);
-    if (args.length === 1 && isPoint(args[0]))
-      return Point.addPoint(args[0]);
-    throw new Error("No matching overload for add");
-  }
-  ```
-- [ ] Abordagem mista: preferir dispatch estático, fallback para dinâmico
+- [ ] Futuro: abordagem mista (dispatch estático + fallback dinâmico)
 
 ---
 
 ## Média Prioridade
+
+### Tracking — `SampleIssueTracker`
+
+Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md).
+
+- [x] Criar projeto `SampleIssueTracker` com separação em `Issues`, `Planning` e `SharedKernel`
+- [x] Implementar contratos base: enums, IDs e records genéricos
+- [x] Implementar domínio: `Issue`, `Comment`, `Sprint` e `IssueWorkflow`
+- [x] Implementar aplicação: repositório em memória, service e queries exportadas como módulo
+- [ ] Gerar `js/sample-issue-tracker` e validar build/test com Bun
+- [ ] Revisar output gerado para legibilidade e cobertura das features-alvo
 
 ### ~~Properties com Getter/Setter Custom~~ ✅
 - [x] Computed property (expression-bodied `=>`) → `get name(): Type { ... }`
@@ -202,10 +248,14 @@ Projeto B (consome A via NuGet)
 - [x] `List<T>` → `T[]`
 - [x] `Dictionary<K,V>` → `Map<K,V>`
 - [x] `HashSet<T>` → `Set<T>`
-- [x] LINQ methods → Array methods (BclMapper)
+- [x] LINQ methods → Array methods (BclMapper) — API direta de coleção (.push, .includes, etc.)
 - [x] LINQ runtime lazy (`EnumerableBase<T>` com hierarquia de classes compostas)
+- [x] LINQ via `System.Linq.Enumerable` → `Enumerable.from(x).where(...)` lazy chains
+- [x] Composição: where, select, selectMany, orderBy, orderByDescending, take, skip, distinct, groupBy, concat, takeWhile, skipWhile, distinctBy, reverse, zip, append, prepend, union, intersect, except
+- [x] Terminais: toArray, toMap (ToDictionary), toSet (ToHashSet), first, firstOrDefault, last, lastOrDefault, single, singleOrDefault, any, all, count, sum, average, min, max, minBy, maxBy, contains, aggregate
+- [x] Detecção automática: `IsLinqExtensionMethod` vs `IsCollectionType` via Roslyn semantic model
+- [x] Anti-double-wrapping: `IsAlreadyLinqChain()` para chains compostas
 - [ ] `Queue<T>`, `Stack<T>` → arrays com helpers
-- [ ] Conectar LINQ runtime ao transpiler (gerar `Enumerable.from(x).where(...)` para IEnumerable chains)
 
 ### Enums Avançados
 - [ ] Enum com métodos de extensão → funções auxiliares
@@ -256,6 +306,33 @@ Projeto B (consome A via NuGet)
 - [ ] `equals()` / `hashCode()` utilities para comparação deep
 - [ ] Serialization helpers: `toJSON()` / `fromJSON()` com validação
 
+### LINQ Runtime — Migração para pipe-based (tree-shaking)
+> A implementação atual usa factory registration (`_registerFactories`) que puxa todos os
+> operadores LINQ ao importar qualquer coisa do módulo. Isso impede tree-shaking.
+>
+> **Abordagem futura:** migrar para pipe-based (estilo RxJS), onde cada operador é uma função
+> standalone importada individualmente. O bundler elimina operadores não utilizados.
+>
+> ```typescript
+> // Atual (não tree-shakeable)
+> Enumerable.from(items).where(x => x > 0).select(x => x * 2).toArray();
+>
+> // Futuro (tree-shakeable)
+> import { from, pipe } from "@meta-sharp/runtime/linq";
+> import { where, select, toArray } from "@meta-sharp/runtime/linq/operators";
+> from(items).pipe(where(x => x > 0), select(x => x * 2), toArray());
+> ```
+>
+> **Impacto no transpiler:** BclMapper geraria `pipe()` chains + imports granulares por operador.
+> **Quando migrar:** quando o runtime crescer (serialização, type guards, etc.) ou tree-shaking
+> se tornar requisito real. Refactor localizado (BclMapper + runtime, sem afetar C# do usuário).
+- [ ] Definir tipo `OperatorFn<T, R>` e função `pipe()` com overloads tipados
+- [ ] Converter cada operador para função standalone: `where(pred)` retorna `OperatorFn`
+- [ ] `EnumerableBase.pipe(...operators)` aplica a cadeia
+- [ ] BclMapper gera `pipe()` chains em vez de fluent calls
+- [ ] Imports granulares no código gerado (um import por operador usado)
+- [ ] Manter fluent API como sugar opcional para uso manual
+
 ---
 
 ## Bugs Conhecidos (encontrados via SampleTodo)
@@ -284,9 +361,9 @@ Projeto B (consome A via NuGet)
 - [x] `.Sum()` → `.reduce()`, `.Min()`/`.Max()` → `Math.min/max`
 - [x] `Dictionary.ContainsKey` → `.has()`, `.Add` → `.set()`, `.Remove` → `.delete()`
 
-### Method overloads de instância não detectados
-- [ ] `TodoList.Add(TodoItem)`, `Add(string)`, `Add(string, Priority)` → gera 3 métodos com mesmo nome
-- [ ] Deve gerar dispatcher como nos constructor overloads
+### ~~Method overloads de instância não detectados~~ ✅
+- [x] `TodoList.Add(TodoItem)`, `Add(string)`, `Add(string, Priority)` → gera dispatcher com type guards
+- [x] Mesmo pattern dos constructor overloads (overload signatures + dispatcher body)
 
 ---
 

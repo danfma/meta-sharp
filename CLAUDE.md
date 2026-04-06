@@ -25,7 +25,7 @@ TUnit on .NET 10 requires `dotnet run` instead of `dotnet test`.
 
 ```sh
 cd js/meta-sharp-runtime && bun run build             # TypeScript build (tsgo)
-cd js/meta-sharp-runtime && bun test                  # run runtime tests (68 tests)
+cd js/meta-sharp-runtime && bun test                  # run runtime tests (86 tests)
 cd js/sample-todo && bun run build                    # TS build of generated code
 cd js/sample-todo && bun test                         # end-to-end tests (17 tests)
 ```
@@ -42,7 +42,7 @@ MetaSharp.slnx
 │   ├── TypeScript/AST/        # ~60 record types representing TS AST nodes
 │   ├── TypeScript/Printer.cs  # AST → formatted text
 │   └── Commands.cs            # CLI (ConsoleAppFramework)
-├── MetaSharp.Tests/           # 146 TUnit tests with inline C# compilation
+├── MetaSharp.Tests/           # 166 TUnit tests with inline C# compilation
 │   └── Expected/              # Expected .ts output files
 ├── SampleTodo/                # Sample C# project for end-to-end validation
 └── js/                        # Bun workspace
@@ -92,4 +92,4 @@ Tests use `TranspileHelper.Transpile(csharpSource)` which compiles C# inline, ru
 - `global.json` — SDK 10.0.0, rollForward latestMinor
 - `Directory.Build.props` — TreatWarningsAsErrors, ImplicitUsings, Nullable, LangVersion preview
 - `Directory.Packages.props` — Central Package Management
-- `MetaSharp.Compiler/next-steps.md` — Full feature backlog and roadmap
+- `specs/next-steps.md` — Full feature backlog and roadmap

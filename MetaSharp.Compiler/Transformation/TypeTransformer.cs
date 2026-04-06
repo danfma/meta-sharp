@@ -220,7 +220,7 @@ public sealed class TypeTransformer(Compilation compilation)
     private void TransformInterface(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
         var properties = new List<TsProperty>();
-        var methods = new List<TsTopLevel>();
+        var interfaceMethods = new List<TsInterfaceMethod>();
 
         foreach (var member in type.GetMembers())
         {
@@ -243,8 +243,8 @@ public sealed class TypeTransformer(Compilation compilation)
                     var parameters = method.Parameters
                         .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
                         .ToList();
-                    // Interface methods have no body — represented as a method signature in TsInterface
-                    // For now, add them as properties with function type (TS interface methods)
+                    var methodTypeParams = ExtractMethodTypeParameters(method);
+                    interfaceMethods.Add(new TsInterfaceMethod(name, parameters, returnType, methodTypeParams));
                     break;
             }
         }
@@ -252,7 +252,8 @@ public sealed class TypeTransformer(Compilation compilation)
         // Strip 'I' prefix convention for TS (IShape → Shape)
         var tsName = GetTsTypeName(type);
         var typeParams = ExtractTypeParameters(type);
-        statements.Add(new TsInterface(tsName, properties, TypeParameters: typeParams));
+        statements.Add(new TsInterface(tsName, properties, TypeParameters: typeParams,
+            Methods: interfaceMethods.Count > 0 ? interfaceMethods : null));
     }
 
     /// <summary>
@@ -1282,6 +1283,7 @@ public sealed class TypeTransformer(Compilation compilation)
         var firstName = sorted[0];
         var name = SymbolHelper.GetNameOverride(firstName) ?? SymbolHelper.ToCamelCase(firstName.Name);
         var isStatic = firstName.IsStatic;
+        var isAsync = sorted.Any(m => m.IsAsync);
         var accessibility = MapAccessibility(firstName.DeclaredAccessibility);
 
         // Determine a common return type (use unknown if they differ)
@@ -1369,7 +1371,7 @@ public sealed class TypeTransformer(Compilation compilation)
         };
 
         return [new TsMethodMember(name, dispatcherParams, commonReturn, body,
-            Static: isStatic, Accessibility: accessibility, Overloads: overloads)];
+            Static: isStatic, Async: isAsync, Accessibility: accessibility, Overloads: overloads)];
     }
 
     /// <summary>

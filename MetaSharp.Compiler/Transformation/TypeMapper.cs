@@ -198,6 +198,7 @@ public static class TypeMapper
         return fullName.StartsWith("System.Collections.Generic.List")
             || fullName.StartsWith("System.Collections.Generic.IList")
             || fullName.StartsWith("System.Collections.Generic.IReadOnlyList")
+            || fullName.StartsWith("System.Collections.Generic.IReadOnlyCollection")
             || fullName.StartsWith("System.Collections.Generic.IEnumerable")
             || fullName.StartsWith("System.Collections.Generic.ICollection")
             || fullName.StartsWith("System.Collections.Immutable.ImmutableList")
