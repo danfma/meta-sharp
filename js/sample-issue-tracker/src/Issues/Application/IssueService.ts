@@ -7,7 +7,7 @@ import type { IssueType } from "../Domain/IssueType";
 import { OperationResult } from "../../SharedKernel/OperationResult";
 import type { PageRequest } from "../../SharedKernel/PageRequest";
 import type { PageResult } from "../../SharedKernel/PageResult";
-import type { UserId } from "../../SharedKernel/UserId";
+import { UserId } from "../../SharedKernel/UserId";
 export class IssueService {
   constructor() { }
 

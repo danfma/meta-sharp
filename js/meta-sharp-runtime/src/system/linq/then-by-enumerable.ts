@@ -38,7 +38,7 @@ function collectComparators<T>(node: EnumerableBase<T>): ((a: T, b: T) => number
 
   // The root should be an OrderByEnumerable-like (has keySelector + descending)
   if ("keySelector" in current && "descending" in current) {
-    const orderBy = current as { keySelector: (item: T) => unknown; descending: boolean; source: EnumerableBase<T> };
+    const orderBy = current as unknown as { keySelector: (item: T) => unknown; descending: boolean; source: EnumerableBase<T> };
     comparators.unshift(makeComparator(orderBy.keySelector, orderBy.descending));
   }
 
@@ -61,7 +61,7 @@ function makeComparator<T>(keySelector: (item: T) => unknown, descending: boolea
   return (a, b) => {
     const ka = keySelector(a);
     const kb = keySelector(b);
-    const cmp = ka < kb ? -1 : ka > kb ? 1 : 0;
+    const cmp = (ka as any) < (kb as any) ? -1 : (ka as any) > (kb as any) ? 1 : 0;
     return descending ? -cmp : cmp;
   };
 }

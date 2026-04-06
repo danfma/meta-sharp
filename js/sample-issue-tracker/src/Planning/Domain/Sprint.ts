@@ -1,7 +1,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import type { IssueId } from "../../Issues/Domain/IssueId";
 export class Sprint {
-  constructor(readonly key: string, name: string, startDate: Temporal.PlainDate, endDate: Temporal.PlainDate) { }
+  constructor(readonly key: string, public name: string, public startDate: Temporal.PlainDate, public endDate: Temporal.PlainDate) { }
 
   private readonly _plannedIssues: Set<IssueId> = new Set();
 

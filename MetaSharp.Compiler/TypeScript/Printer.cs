@@ -29,6 +29,7 @@ public sealed class Printer(string indent = "  ")
             case TsInterface n: PrintInterface(n); break;
             case TsFunction n: PrintFunction(n); break;
             case TsEnum n: PrintEnum(n); break;
+            case TsConstObject n: PrintConstObject(n); break;
             case TsClass n: PrintClass(n); break;
         }
     }
@@ -145,6 +146,27 @@ public sealed class Printer(string indent = "  ")
         });
     }
 
+    private void PrintConstObject(TsConstObject constObj)
+    {
+        if (constObj.Exported) _sb.Write("export ");
+        _sb.Write("const ");
+        _sb.Write(constObj.Name);
+        _sb.Write(" =");
+        _sb.WriteBlock(() =>
+        {
+            foreach (var (key, value) in constObj.Entries)
+            {
+                _sb.Write(key);
+                _sb.Write(": ");
+                PrintExpression(value);
+                _sb.Write(",");
+                _sb.WriteLn();
+            }
+        });
+        _sb.Write(" as const;");
+        _sb.WriteLn();
+    }
+
     // ─── Class ──────────────────────────────────────────────
 
     private void PrintClass(TsClass tsClass)
@@ -220,7 +242,15 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintConstructorParam(TsConstructorParam p)
     {
-        PrintAccessibility(p.Accessibility);
+        // In TS, constructor params without any modifier (public/readonly/etc) don't create properties.
+        // Emit explicit "public" when not readonly but the param should still be a property.
+        // None = plain parameter, no property created (used for exception constructors).
+        if (p.Accessibility == TsAccessibility.None)
+        { /* no modifier — plain parameter */ }
+        else if (p.Accessibility == TsAccessibility.Public && !p.Readonly)
+            _sb.Write("public ");
+        else
+            PrintAccessibility(p.Accessibility);
         if (p.Readonly) _sb.Write("readonly ");
         _sb.Write(p.Name);
         _sb.Write(": ");

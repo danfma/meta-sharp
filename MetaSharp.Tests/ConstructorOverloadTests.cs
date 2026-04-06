@@ -41,7 +41,7 @@ public class ConstructorOverloadTests
 
         var output = result["Point.ts"];
         // Should have overload signatures
-        await Assert.That(output).Contains("constructor(x: number, y: number);");
+        await Assert.That(output).Contains("constructor(public x: number, public y: number);");
         await Assert.That(output).Contains("constructor();");
         // Should have dispatcher
         await Assert.That(output).Contains("...args: unknown[]");
@@ -110,8 +110,8 @@ public class ConstructorOverloadTests
 
         var output = result["Config.ts"];
         // Three overload signatures
-        await Assert.That(output).Contains("constructor(name: string, value: number);");
-        await Assert.That(output).Contains("constructor(name: string);");
+        await Assert.That(output).Contains("constructor(public name: string, public value: number);");
+        await Assert.That(output).Contains("constructor(public name: string);");
         await Assert.That(output).Contains("constructor();");
         await Assert.That(output).Contains("...args: unknown[]");
     }

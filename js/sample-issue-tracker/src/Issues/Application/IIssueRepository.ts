@@ -1,3 +1,10 @@
+import type { Issue } from "../Domain/Issue";
+import type { IssueId } from "../Domain/IssueId";
+import type { IssuePriority } from "../Domain/IssuePriority";
+import type { IssueStatus } from "../Domain/IssueStatus";
+import type { PageRequest } from "../../SharedKernel/PageRequest";
+import type { PageResult } from "../../SharedKernel/PageResult";
+import type { UserId } from "../../SharedKernel/UserId";
 export interface IIssueRepository {
   getByIdAsync(id: IssueId): Promise<Issue | null>;
   listAsync(): Promise<Issue[]>;

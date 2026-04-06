@@ -38,7 +38,7 @@ _registerFactories({
   skipWhile: (source, predicate) => new SkipWhileEnumerable(source, predicate),
   distinctBy: (source, keySelector) => new DistinctByEnumerable(source, keySelector),
   reverse: (source) => new ReverseEnumerable(source),
-  zip: (first, second, resultSelector) => new ZipEnumerable(first, second, resultSelector),
+  zip: (source, second, resultSelector) => new ZipEnumerable(source, second, resultSelector),
   append: (source, element) => new AppendEnumerable(source, element),
   prepend: (source, element) => new PrependEnumerable(source, element),
   union: (first, second) => new UnionEnumerable(first, second),

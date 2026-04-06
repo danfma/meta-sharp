@@ -25,4 +25,5 @@ public enum TsAccessibility
     Public,
     Protected,
     Private,
+    None,
 }

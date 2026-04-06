@@ -298,15 +298,21 @@ public sealed class TypeTransformer(Compilation compilation)
         if (isStringEnum)
         {
             var literalTypes = new List<TsType>();
+            var entries = new List<(string Key, TsExpression Value)>();
             foreach (var member in type.GetMembers().OfType<IFieldSymbol>())
             {
                 if (!member.HasConstantValue)
                     continue;
                 var name = SymbolHelper.GetNameOverride(member) ?? member.Name;
                 literalTypes.Add(new TsStringLiteralType(name));
+                entries.Add((member.Name, new TsStringLiteral(name)));
             }
 
-            statements.Add(new TsTypeAlias(type.Name, new TsUnionType(literalTypes)));
+            // Generate: export const EnumName = { Member: "value", ... } as const;
+            statements.Add(new TsConstObject(type.Name, entries));
+            // Generate: export type EnumName = typeof EnumName[keyof typeof EnumName];
+            statements.Add(new TsTypeAlias(type.Name,
+                new TsNamedType($"typeof {type.Name}[keyof typeof {type.Name}]")));
         }
         else
         {
@@ -344,7 +350,8 @@ public sealed class TypeTransformer(Compilation compilation)
             {
                 ctorParams.Add(new TsConstructorParam(
                     SymbolHelper.ToCamelCase(p.Name),
-                    TypeMapper.Map(p.Type)
+                    TypeMapper.Map(p.Type),
+                    Accessibility: TsAccessibility.None
                 ));
             }
 
@@ -1821,6 +1828,14 @@ public sealed class TypeTransformer(Compilation compilation)
                 CollectFromTypeParameters(iface.TypeParameters, names);
                 foreach (var prop in iface.Properties)
                     CollectFromType(prop.Type, names);
+                if (iface.Methods is not null)
+                    foreach (var method in iface.Methods)
+                    {
+                        CollectFromTypeParameters(method.TypeParameters, names);
+                        foreach (var p in method.Parameters)
+                            CollectFromType(p.Type, names);
+                        CollectFromType(method.ReturnType, names);
+                    }
                 break;
             case TsFunction func:
                 CollectFromTypeParameters(func.TypeParameters, names);
@@ -1979,6 +1994,9 @@ public sealed class TypeTransformer(Compilation compilation)
             case TsBinaryExpression bin:
                 CollectFromExpression(bin.Left, names, valueNames);
                 CollectFromExpression(bin.Right, names, valueNames);
+                // instanceof uses the type as a value
+                if (bin.Operator == "instanceof" && bin.Right is TsIdentifier instanceId)
+                    valueNames.Add(instanceId.Name);
                 break;
             case TsObjectLiteral obj:
                 foreach (var prop in obj.Properties)

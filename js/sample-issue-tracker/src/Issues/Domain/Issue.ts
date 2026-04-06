@@ -6,9 +6,9 @@ import type { IssuePriority } from "./IssuePriority";
 import type { IssueStatus } from "./IssueStatus";
 import type { IssueType } from "./IssueType";
 import { IssueWorkflow } from "./IssueWorkflow";
-import type { UserId } from "../../SharedKernel/UserId";
+import { UserId } from "../../SharedKernel/UserId";
 export class Issue {
-  constructor(readonly id: IssueId, title: string, description: string, readonly type: IssueType, priority: IssuePriority = "medium") { }
+  constructor(readonly id: IssueId, public title: string, public description: string, readonly type: IssueType, public priority: IssuePriority = "medium") { }
 
   status: IssueStatus = IssueStatus.Backlog;
 
