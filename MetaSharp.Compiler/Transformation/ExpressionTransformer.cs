@@ -271,7 +271,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             SyntaxKind.TrueLiteralExpression => new TsLiteral("true"),
             SyntaxKind.FalseLiteralExpression => new TsLiteral("false"),
             SyntaxKind.NullLiteralExpression => new TsLiteral("null"),
-            SyntaxKind.DefaultLiteralExpression => new TsLiteral("undefined"),
+            SyntaxKind.DefaultLiteralExpression => new TsLiteral("null"),
             // Numeric: strip suffixes (m, L, f, d)
             _ => new TsLiteral(lit.Token.ValueText),
         };

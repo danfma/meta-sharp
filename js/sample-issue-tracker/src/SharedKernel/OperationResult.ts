@@ -11,7 +11,7 @@ export class OperationResult<T> {
   }
 
   static fail<T>(errorCode: string, errorMessage: string): OperationResult<T> {
-    return new OperationResult(false, undefined, errorCode, errorMessage);
+    return new OperationResult(false, null, errorCode, errorMessage);
   }
 
   equals(other: any): boolean {

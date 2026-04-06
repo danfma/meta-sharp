@@ -1,4 +1,5 @@
 import { isString } from "@meta-sharp/runtime";
+import type { IIssueRepository } from "./IIssueRepository";
 import { Issue } from "../Domain/Issue";
 import { IssueId } from "../Domain/IssueId";
 import { IssuePriority } from "../Domain/IssuePriority";
@@ -9,9 +10,11 @@ import type { PageRequest } from "../../SharedKernel/PageRequest";
 import type { PageResult } from "../../SharedKernel/PageResult";
 import { UserId } from "../../SharedKernel/UserId";
 export class IssueService {
-  constructor() { }
+  constructor(repository: IIssueRepository) {
+    this._repository = repository;
+  }
 
-  private readonly _repository: IIssueRepository = repository;
+  private readonly _repository: IIssueRepository;
 
   createAsync(title: string, description: string, type: IssueType, priority: IssuePriority): Promise<OperationResult<Issue>>;
   createAsync(title: string, description: string, type: IssueType): Promise<OperationResult<Issue>>;

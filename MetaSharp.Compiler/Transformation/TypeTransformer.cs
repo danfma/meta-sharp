@@ -557,6 +557,11 @@ public sealed class TypeTransformer(Compilation compilation)
         // Constructor signature: only own params (base properties are declared in parent)
         var ctorParamsForSignature = ownParams.ToList();
 
+        // Detect captured primary constructor params (used in field initializers but not properties)
+        var capturedParams = GetCapturedConstructorParams(type, ctorParamsForSignature);
+        ctorParamsForSignature.AddRange(capturedParams);
+        var capturedParamNames = capturedParams.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
         // Detect multiple constructors
         var explicitCtors = type.Constructors
             .Where(c => c.DeclaredAccessibility == Accessibility.Public)
@@ -584,6 +589,20 @@ public sealed class TypeTransformer(Compilation compilation)
                 }
             }
 
+            // Add captured param assignments: this._field = param
+            foreach (var captured in capturedParams)
+            {
+                var fieldName = GetCapturedFieldName(type, captured.Name);
+                if (fieldName is not null)
+                {
+                    ctorBody.Add(new TsExpressionStatement(
+                        new TsBinaryExpression(
+                            new TsPropertyAccess(new TsIdentifier("this"), fieldName),
+                            "=",
+                            new TsIdentifier(captured.Name))));
+                }
+            }
+
             constructor = new TsConstructor(ctorParamsForSignature, ctorBody);
         }
         var classMembers = new List<TsClassMember>();
@@ -599,7 +618,7 @@ public sealed class TypeTransformer(Compilation compilation)
             switch (member)
             {
                 case IFieldSymbol field:
-                    var fieldMember = TransformField(type, field);
+                    var fieldMember = TransformField(type, field, capturedParamNames);
                     if (fieldMember is not null)
                         classMembers.Add(fieldMember);
                     break;
@@ -788,7 +807,8 @@ public sealed class TypeTransformer(Compilation compilation)
     /// Transforms a C# field into a TsFieldMember.
     /// Handles private/protected/public fields with initializers.
     /// </summary>
-    private TsFieldMember? TransformField(INamedTypeSymbol containingType, IFieldSymbol field)
+    private TsFieldMember? TransformField(INamedTypeSymbol containingType, IFieldSymbol field,
+        HashSet<string>? capturedParamNames = null)
     {
         if (field.IsImplicitlyDeclared) return null;
         if (field.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) return null;
@@ -806,9 +826,18 @@ public sealed class TypeTransformer(Compilation compilation)
         var syntax = field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
         if (syntax is VariableDeclaratorSyntax { Initializer: not null } varDecl)
         {
-            var semanticModel = compilation.GetSemanticModel(varDecl.SyntaxTree);
-            var exprTransformer = CreateExpressionTransformer(semanticModel);
-            initializer = exprTransformer.TransformExpression(varDecl.Initializer.Value);
+            // Skip initializer if it references a captured constructor param
+            // (the assignment is moved to the constructor body)
+            var isCapuredInit = varDecl.Initializer.Value is IdentifierNameSyntax initId
+                && capturedParamNames is not null
+                && capturedParamNames.Contains(SymbolHelper.ToCamelCase(initId.Identifier.Text));
+
+            if (!isCapuredInit)
+            {
+                var semanticModel = compilation.GetSemanticModel(varDecl.SyntaxTree);
+                var exprTransformer = CreateExpressionTransformer(semanticModel);
+                initializer = exprTransformer.TransformExpression(varDecl.Initializer.Value);
+            }
         }
 
         return new TsFieldMember(name, tsType, initializer, isReadonly, accessibility);
@@ -1005,6 +1034,67 @@ public sealed class TypeTransformer(Compilation compilation)
             }
         }
 
+        return null;
+    }
+
+    /// <summary>
+    /// Detects primary constructor parameters that are captured in field initializers
+    /// but are not properties (e.g., DI params like `IssueService(IIssueRepository repository)`).
+    /// These need to be added to the TS constructor signature.
+    /// </summary>
+    private IReadOnlyList<TsConstructorParam> GetCapturedConstructorParams(
+        INamedTypeSymbol type,
+        IReadOnlyList<TsConstructorParam> existingParams)
+    {
+        var primaryCtor = type.Constructors
+            .OrderByDescending(c => c.Parameters.Length)
+            .FirstOrDefault();
+        if (primaryCtor is null) return [];
+
+        var existingNames = existingParams.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var result = new List<TsConstructorParam>();
+
+        foreach (var param in primaryCtor.Parameters)
+        {
+            var camelName = SymbolHelper.ToCamelCase(param.Name);
+            if (existingNames.Contains(camelName)) continue;
+
+            // Check if this param is referenced by any field initializer
+            var isCapured = type.GetMembers().OfType<IFieldSymbol>()
+                .Any(f =>
+                {
+                    var syntax = f.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+                    if (syntax is VariableDeclaratorSyntax { Initializer.Value: IdentifierNameSyntax id })
+                        return string.Equals(id.Identifier.Text, param.Name, StringComparison.OrdinalIgnoreCase);
+                    return false;
+                });
+
+            if (isCapured)
+            {
+                result.Add(new TsConstructorParam(
+                    camelName,
+                    TypeMapper.Map(param.Type),
+                    Accessibility: TsAccessibility.None));
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Gets the TS field name for a captured constructor param (e.g., "repository" → "_repository").
+    /// </summary>
+    private static string? GetCapturedFieldName(INamedTypeSymbol type, string paramName)
+    {
+        foreach (var field in type.GetMembers().OfType<IFieldSymbol>())
+        {
+            var syntax = field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+            if (syntax is VariableDeclaratorSyntax { Initializer.Value: IdentifierNameSyntax id }
+                && string.Equals(id.Identifier.Text, paramName, StringComparison.OrdinalIgnoreCase))
+            {
+                return SymbolHelper.ToCamelCase(field.Name);
+            }
+        }
         return null;
     }
 
@@ -2061,6 +2151,13 @@ public sealed class TypeTransformer(Compilation compilation)
                 break;
             case TsPropertyAccess access:
                 CollectFromExpression(access.Object, names, valueNames);
+                // Static member access like IssuePriority.High → collect the type as value
+                if (access.Object is TsIdentifier { Name: var propObjName }
+                    && propObjName.Length > 0 && char.IsUpper(propObjName[0]))
+                {
+                    names.Add(propObjName);
+                    valueNames.Add(propObjName);
+                }
                 break;
             case TsBinaryExpression bin:
                 CollectFromExpression(bin.Left, names, valueNames);
@@ -2090,6 +2187,19 @@ public sealed class TypeTransformer(Compilation compilation)
                 break;
             case TsSpreadExpression spread:
                 CollectFromExpression(spread.Expression, names, valueNames);
+                break;
+            case TsArrowFunction arrow:
+                foreach (var p in arrow.Parameters)
+                    CollectFromType(p.Type, names);
+                CollectFromStatements(arrow.Body, names, valueNames);
+                break;
+            case TsElementAccess elemAccess:
+                CollectFromExpression(elemAccess.Object, names, valueNames);
+                CollectFromExpression(elemAccess.Index, names, valueNames);
+                break;
+            case TsArrayLiteral arrayLit:
+                foreach (var e in arrayLit.Elements)
+                    CollectFromExpression(e, names, valueNames);
                 break;
         }
     }

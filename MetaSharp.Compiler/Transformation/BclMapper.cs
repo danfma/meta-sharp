@@ -236,6 +236,20 @@ public static class BclMapper
                 args
             );
 
+        // Guid.ToString("N") → .replace(/-/g, ""), Guid.ToString() → (identity, already string)
+        if (containing == "System.Guid" && name == "ToString"
+            && invocation.Expression is MemberAccessExpressionSyntax guidToStringAccess)
+        {
+            var obj = transformer.TransformExpression(guidToStringAccess.Expression);
+            // Check if format arg is "N" (no hyphens)
+            if (args.Count == 1 && args[0] is TsStringLiteral { Value: "N" })
+                return new TsCallExpression(
+                    new TsPropertyAccess(obj, "replace"),
+                    [new TsLiteral("/-/g"), new TsStringLiteral("")]);
+            // Default: Guid is already a string in JS, .toString() is identity
+            return obj;
+        }
+
         // Guid.NewGuid() → crypto.randomUUID()
         if (containing == "System.Guid" && name == "NewGuid")
             return new TsCallExpression(

@@ -3,7 +3,7 @@ export class UserId {
   constructor(readonly value: string) { }
 
   static new(): UserId {
-    return new UserId(crypto.randomUUID().toString("N"));
+    return new UserId(crypto.randomUUID().replace(/-/g, ""));
   }
 
   static system(): UserId {
