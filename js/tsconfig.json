@@ -1,0 +1,7 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./meta-sharp-runtime/tsconfig.json" },
+    { "path": "./sample-todo/tsconfig.json" },
+  ],
+}

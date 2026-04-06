@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="TUnit" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../MetaSharp.Annotations/MetaSharp.Annotations.csproj" />
+    <ProjectReference Include="../MetaSharp.Compiler/MetaSharp.Compiler.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Expected/**/*.ts" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

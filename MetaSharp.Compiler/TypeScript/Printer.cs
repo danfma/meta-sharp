@@ -1,0 +1,639 @@
+using MetaSharp.TypeScript.AST;
+
+namespace MetaSharp.TypeScript;
+
+/// <summary>
+/// Walks a TypeScript AST and produces formatted source text.
+/// Modeled after the tsc emitter: AST in, text out.
+/// </summary>
+public sealed class Printer(string indent = "  ")
+{
+    private readonly IndentedStringBuilder _sb = new(indent);
+
+    public string Print(TsSourceFile file)
+    {
+        _sb.Clear();
+        _sb.WriteLines(file.Statements, PrintTopLevel);
+        return _sb.ToString();
+    }
+
+    // ─── Top-level ──────────────────────────────────────────
+
+    private void PrintTopLevel(TsTopLevel node)
+    {
+        switch (node)
+        {
+            case TsImport n: PrintImport(n); break;
+            case TsReExport n: PrintReExport(n); break;
+            case TsTypeAlias n: PrintTypeAlias(n); break;
+            case TsInterface n: PrintInterface(n); break;
+            case TsFunction n: PrintFunction(n); break;
+            case TsEnum n: PrintEnum(n); break;
+            case TsClass n: PrintClass(n); break;
+        }
+    }
+
+    private void PrintImport(TsImport import)
+    {
+        _sb.Write("import ");
+        if (import.TypeOnly) _sb.Write("type ");
+        _sb.Write("{ ");
+        _sb.Write(string.Join(", ", import.Names));
+        _sb.Write(" } from ");
+        _sb.WriteQuoted(import.From);
+        _sb.Write(";");
+    }
+
+    private void PrintReExport(TsReExport reExport)
+    {
+        _sb.Write("export ");
+        if (reExport.TypeOnly) _sb.Write("type ");
+        if (reExport.Names is ["*"])
+        {
+            _sb.Write("* from ");
+        }
+        else
+        {
+            _sb.Write("{ ");
+            _sb.Write(string.Join(", ", reExport.Names));
+            _sb.Write(" } from ");
+        }
+
+        _sb.WriteQuoted(reExport.From);
+        _sb.Write(";");
+    }
+
+    private void PrintTypeAlias(TsTypeAlias alias)
+    {
+        if (alias.Exported) _sb.Write("export ");
+        _sb.Write("type ");
+        _sb.Write(alias.Name);
+        _sb.Write(" = ");
+        PrintType(alias.Type);
+        _sb.Write(";");
+    }
+
+    private void PrintInterface(TsInterface iface)
+    {
+        if (iface.Exported) _sb.Write("export ");
+        _sb.Write("interface ");
+        _sb.Write(iface.Name);
+        PrintTypeParameters(iface.TypeParameters);
+        _sb.WriteBlock(() =>
+        {
+            foreach (var prop in iface.Properties)
+            {
+                PrintAccessibility(prop.Accessibility);
+                if (prop.Readonly) _sb.Write("readonly ");
+                _sb.Write(prop.Name);
+                _sb.Write(": ");
+                PrintType(prop.Type);
+                _sb.Write(";");
+                _sb.WriteLn();
+            }
+        });
+    }
+
+    private void PrintFunction(TsFunction func)
+    {
+        if (func.Exported) _sb.Write("export ");
+        if (func.Async) _sb.Write("async ");
+        _sb.Write("function ");
+        _sb.Write(func.Name);
+        PrintTypeParameters(func.TypeParameters);
+        _sb.Write("(");
+        PrintParameters(func.Parameters);
+        _sb.Write("): ");
+        PrintType(func.ReturnType);
+        PrintBody(func.Body);
+    }
+
+    private void PrintEnum(TsEnum tsEnum)
+    {
+        if (tsEnum.Exported) _sb.Write("export ");
+        _sb.Write("enum ");
+        _sb.Write(tsEnum.Name);
+        _sb.WriteBlock(() =>
+        {
+            foreach (var member in tsEnum.Members)
+            {
+                _sb.Write(member.Name);
+                if (member.Value is not null)
+                {
+                    _sb.Write(" = ");
+                    PrintExpression(member.Value);
+                }
+
+                _sb.Write(",");
+                _sb.WriteLn();
+            }
+        });
+    }
+
+    // ─── Class ──────────────────────────────────────────────
+
+    private void PrintClass(TsClass tsClass)
+    {
+        if (tsClass.Exported) _sb.Write("export ");
+        _sb.Write("class ");
+        _sb.Write(tsClass.Name);
+        PrintTypeParameters(tsClass.TypeParameters);
+
+        if (tsClass.Extends is not null)
+        {
+            _sb.Write(" extends ");
+            PrintType(tsClass.Extends);
+        }
+
+        if (tsClass.Implements is { Count: > 0 })
+        {
+            _sb.Write(" implements ");
+            _sb.WriteList(tsClass.Implements, PrintType);
+        }
+
+        _sb.WriteBlock(() =>
+        {
+            if (tsClass.Constructor is not null)
+                PrintConstructor(tsClass.Constructor);
+
+            foreach (var member in tsClass.Members)
+            {
+                _sb.WriteLn();
+                PrintClassMember(member);
+            }
+        });
+    }
+
+    private void PrintConstructor(TsConstructor ctor)
+    {
+        if (ctor.Overloads is { Count: > 0 })
+        {
+            // Print overload signatures first
+            foreach (var overload in ctor.Overloads)
+            {
+                _sb.Write("constructor(");
+                _sb.WriteList(overload.Parameters, PrintConstructorParam);
+                _sb.Write(");");
+                _sb.WriteLn();
+            }
+
+            // Print dispatcher implementation
+            _sb.Write("constructor(");
+            _sb.WriteList(ctor.Parameters, PrintConstructorParam);
+            _sb.Write(")");
+            PrintBody(ctor.Body);
+        }
+        else
+        {
+            // Single constructor (no overloads)
+            _sb.Write("constructor(");
+            _sb.WriteList(ctor.Parameters, PrintConstructorParam);
+            _sb.Write(")");
+
+            if (ctor.Body.Count == 0)
+            {
+                _sb.WriteEmptyBlock();
+            }
+            else
+            {
+                PrintBody(ctor.Body);
+            }
+        }
+
+        _sb.WriteLn();
+    }
+
+    private void PrintConstructorParam(TsConstructorParam p)
+    {
+        PrintAccessibility(p.Accessibility);
+        if (p.Readonly) _sb.Write("readonly ");
+        _sb.Write(p.Name);
+        _sb.Write(": ");
+        PrintType(p.Type);
+        if (p.DefaultValue is not null)
+        {
+            _sb.Write(" = ");
+            PrintExpression(p.DefaultValue);
+        }
+    }
+
+    private void PrintClassMember(TsClassMember member)
+    {
+        switch (member)
+        {
+            case TsGetterMember getter:
+                _sb.Write("get ");
+                _sb.Write(getter.Name);
+                _sb.Write("(): ");
+                PrintType(getter.ReturnType);
+                PrintBody(getter.Body);
+                _sb.WriteLn();
+                break;
+
+            case TsSetterMember setter:
+                _sb.Write("set ");
+                _sb.Write(setter.Name);
+                _sb.Write("(");
+                _sb.Write(setter.ValueParam.Name);
+                _sb.Write(": ");
+                PrintType(setter.ValueParam.Type);
+                _sb.Write(")");
+                PrintBody(setter.Body);
+                _sb.WriteLn();
+                break;
+
+            case TsFieldMember field:
+                PrintAccessibility(field.Accessibility);
+                if (field.Readonly) _sb.Write("readonly ");
+                _sb.Write(field.Name);
+                _sb.Write(": ");
+                PrintType(field.Type);
+                if (field.Initializer is not null)
+                {
+                    _sb.Write(" = ");
+                    PrintExpression(field.Initializer);
+                }
+                _sb.Write(";");
+                _sb.WriteLn();
+                break;
+
+            case TsMethodMember method:
+                if (method.Overloads is { Count: > 0 })
+                {
+                    // Print overload signatures first
+                    foreach (var overload in method.Overloads)
+                    {
+                        PrintAccessibility(method.Accessibility);
+                        if (method.Static) _sb.Write("static ");
+                        _sb.Write(method.Name);
+                        _sb.Write("(");
+                        PrintParameters(overload.Parameters);
+                        _sb.Write("): ");
+                        PrintType(overload.ReturnType);
+                        _sb.Write(";");
+                        _sb.WriteLn();
+                    }
+                }
+
+                // Print the implementation (or single method)
+                PrintAccessibility(method.Accessibility);
+                if (method.Static) _sb.Write("static ");
+                if (method.Async) _sb.Write("async ");
+                _sb.Write(method.Name);
+                PrintTypeParameters(method.TypeParameters);
+                _sb.Write("(");
+                PrintParameters(method.Parameters);
+                _sb.Write("): ");
+                PrintType(method.ReturnType);
+                PrintBody(method.Body);
+                _sb.WriteLn();
+                break;
+        }
+    }
+
+    // ─── Types ──────────────────────────────────────────────
+
+    private void PrintType(TsType type)
+    {
+        switch (type)
+        {
+            case TsNumberType: _sb.Write("number"); break;
+            case TsStringType: _sb.Write("string"); break;
+            case TsBooleanType: _sb.Write("boolean"); break;
+            case TsVoidType: _sb.Write("void"); break;
+            case TsBigIntType: _sb.Write("bigint"); break;
+            case TsAnyType: _sb.Write("any"); break;
+
+            case TsNamedType named:
+                _sb.Write(named.Name);
+                if (named.TypeArguments is { Count: > 0 })
+                {
+                    _sb.Write("<");
+                    _sb.WriteList(named.TypeArguments, PrintType);
+                    _sb.Write(">");
+                }
+
+                break;
+
+            case TsArrayType array:
+                PrintType(array.ElementType);
+                _sb.Write("[]");
+                break;
+
+            case TsPromiseType promise:
+                _sb.Write("Promise<");
+                PrintType(promise.Inner);
+                _sb.Write(">");
+                break;
+
+            case TsStringLiteralType lit:
+                _sb.WriteQuoted(lit.Value);
+                break;
+
+            case TsUnionType union:
+                _sb.WriteList(union.Types, PrintType, " | ");
+                break;
+
+            case TsTupleType tuple:
+                _sb.Write("[");
+                _sb.WriteList(tuple.Elements, PrintType);
+                _sb.Write("]");
+                break;
+
+            case TsTypePredicateType predicate:
+                _sb.Write(predicate.ParameterName);
+                _sb.Write(" is ");
+                PrintType(predicate.Type);
+                break;
+        }
+    }
+
+    // ─── Statements ─────────────────────────────────────────
+
+    private void PrintStatement(TsStatement stmt)
+    {
+        switch (stmt)
+        {
+            case TsReturnStatement ret:
+                _sb.Write("return");
+                if (ret.Expression is not null)
+                {
+                    _sb.Write(" ");
+                    PrintExpression(ret.Expression);
+                }
+
+                _sb.Write(";");
+                break;
+
+            case TsIfStatement ifStmt:
+                _sb.Write("if (");
+                PrintExpression(ifStmt.Condition);
+                _sb.Write(")");
+                _sb.WriteBlock(() => _sb.WriteLines(ifStmt.Then, PrintStatement));
+                if (ifStmt.Else is { Count: > 0 })
+                {
+                    _sb.Write(" else");
+                    _sb.WriteBlock(() => _sb.WriteLines(ifStmt.Else, PrintStatement));
+                }
+
+                break;
+
+            case TsThrowStatement throwStmt:
+                _sb.Write("throw ");
+                PrintExpression(throwStmt.Expression);
+                _sb.Write(";");
+                break;
+
+            case TsVariableDeclaration varDecl:
+                _sb.Write(varDecl.Const ? "const " : "let ");
+                _sb.Write(varDecl.Name);
+                _sb.Write(" = ");
+                PrintExpression(varDecl.Initializer);
+                _sb.Write(";");
+                break;
+
+            case TsExpressionStatement exprStmt:
+                PrintExpression(exprStmt.Expression);
+                _sb.Write(";");
+                break;
+
+            case TsSwitchStatement switchStmt:
+                _sb.Write("switch (");
+                PrintExpression(switchStmt.Discriminant);
+                _sb.Write(")");
+                _sb.WriteBlock(() =>
+                {
+                    foreach (var c in switchStmt.Cases)
+                    {
+                        if (c.Test is not null)
+                        {
+                            _sb.Write("case ");
+                            PrintExpression(c.Test);
+                            _sb.Write(":");
+                        }
+                        else
+                        {
+                            _sb.Write("default:");
+                        }
+
+                        _sb.WriteLn();
+                        _sb.Indent();
+                        _sb.WriteLines(c.Body, PrintStatement);
+                        _sb.Dedent();
+                    }
+                });
+                break;
+        }
+    }
+
+    // ─── Expressions ────────────────────────────────────────
+
+    private void PrintExpression(TsExpression expr)
+    {
+        switch (expr)
+        {
+            case TsIdentifier id:
+                _sb.Write(id.Name);
+                break;
+
+            case TsLiteral lit:
+                _sb.Write(lit.Raw);
+                break;
+
+            case TsStringLiteral str:
+                _sb.WriteQuoted(str.Value);
+                break;
+
+            case TsTemplateLiteral tmpl:
+                _sb.Write("`");
+                for (var i = 0; i < tmpl.Quasis.Count; i++)
+                {
+                    _sb.Write(tmpl.Quasis[i]);
+                    if (i < tmpl.Expressions.Count)
+                    {
+                        _sb.Write("${");
+                        PrintExpression(tmpl.Expressions[i]);
+                        _sb.Write("}");
+                    }
+                }
+
+                _sb.Write("`");
+                break;
+
+            case TsBinaryExpression bin:
+                PrintExpression(bin.Left);
+                _sb.Write($" {bin.Operator} ");
+                PrintExpression(bin.Right);
+                break;
+
+            case TsPropertyAccess access:
+                PrintExpression(access.Object);
+                _sb.Write(".");
+                _sb.Write(access.Property);
+                break;
+
+            case TsCallExpression call:
+                PrintExpression(call.Callee);
+                _sb.Write("(");
+                _sb.WriteList(call.Arguments, PrintExpression);
+                _sb.Write(")");
+                break;
+
+            case TsObjectLiteral obj:
+                PrintObjectLiteral(obj);
+                break;
+
+            case TsSpreadExpression spread:
+                _sb.Write("...");
+                PrintExpression(spread.Expression);
+                break;
+
+            case TsNewExpression newExpr:
+                _sb.Write("new ");
+                PrintExpression(newExpr.Callee);
+                _sb.Write("(");
+                _sb.WriteList(newExpr.Arguments, PrintExpression);
+                _sb.Write(")");
+                break;
+
+            case TsAwaitExpression awaitExpr:
+                _sb.Write("await ");
+                PrintExpression(awaitExpr.Expression);
+                break;
+
+            case TsArrowFunction arrow:
+                if (arrow.Async) _sb.Write("async ");
+                _sb.Write("(");
+                PrintParameters(arrow.Parameters);
+                _sb.Write(") => ");
+                // Single return statement → concise expression body
+                if (arrow.Body is [TsReturnStatement { Expression: { } returnExpr }])
+                {
+                    PrintExpression(returnExpr);
+                }
+                else
+                {
+                    _sb.WriteBlock(() => _sb.WriteLines(arrow.Body, PrintStatement));
+                }
+                break;
+
+            case TsUnaryExpression unary:
+                _sb.Write(unary.Operator);
+                PrintExpression(unary.Operand);
+                break;
+
+            case TsParenthesized paren:
+                _sb.Write("(");
+                PrintExpression(paren.Expression);
+                _sb.Write(")");
+                break;
+
+            case TsCastExpression cast:
+                PrintExpression(cast.Expression);
+                _sb.Write(" as ");
+                PrintType(cast.Type);
+                break;
+
+            case TsConditionalExpression cond:
+                PrintExpression(cond.Condition);
+                _sb.Write(" ? ");
+                PrintExpression(cond.WhenTrue);
+                _sb.Write(" : ");
+                PrintExpression(cond.WhenFalse);
+                break;
+        }
+    }
+
+    private void PrintObjectLiteral(TsObjectLiteral obj)
+    {
+        if (obj.Properties.Count == 0)
+        {
+            _sb.Write("{}");
+            return;
+        }
+
+        var hasSpread = obj.Properties.Any(p => p.Value is TsSpreadExpression);
+        if (obj.Properties.Count <= 3 && !hasSpread)
+        {
+            _sb.Write("{ ");
+            _sb.WriteList(obj.Properties, PrintObjectProperty);
+            _sb.Write(" }");
+        }
+        else
+        {
+            _sb.Write("{");
+            _sb.WriteLn();
+            _sb.Indent();
+            foreach (var prop in obj.Properties)
+            {
+                PrintObjectProperty(prop);
+                _sb.Write(",");
+                _sb.WriteLn();
+            }
+
+            _sb.Dedent();
+            _sb.Write("}");
+        }
+    }
+
+    private void PrintObjectProperty(TsObjectProperty prop)
+    {
+        if (prop.Value is TsSpreadExpression spread)
+        {
+            _sb.Write("...");
+            PrintExpression(spread.Expression);
+        }
+        else if (prop.Shorthand)
+        {
+            _sb.Write(prop.Key);
+        }
+        else
+        {
+            _sb.Write(prop.Key);
+            _sb.Write(": ");
+            PrintExpression(prop.Value);
+        }
+    }
+
+    // ─── Shared helpers ─────────────────────────────────────
+
+    private void PrintParameters(IReadOnlyList<TsParameter> parameters)
+    {
+        _sb.WriteList(parameters, p =>
+        {
+            _sb.Write(p.Name);
+            _sb.Write(": ");
+            PrintType(p.Type);
+        });
+    }
+
+    private void PrintTypeParameters(IReadOnlyList<TsTypeParameter>? typeParams)
+    {
+        if (typeParams is not { Count: > 0 }) return;
+        _sb.Write("<");
+        _sb.WriteList(typeParams, tp =>
+        {
+            _sb.Write(tp.Name);
+            if (tp.Constraint is not null)
+            {
+                _sb.Write(" extends ");
+                PrintType(tp.Constraint);
+            }
+        });
+        _sb.Write(">");
+    }
+
+    private void PrintAccessibility(TsAccessibility accessibility)
+    {
+        switch (accessibility)
+        {
+            case TsAccessibility.Private: _sb.Write("private "); break;
+            case TsAccessibility.Protected: _sb.Write("protected "); break;
+        }
+    }
+
+    private void PrintBody(IReadOnlyList<TsStatement> body)
+    {
+        _sb.WriteBlock(() => _sb.WriteLines(body, PrintStatement));
+    }
+}

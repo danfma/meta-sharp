@@ -1,0 +1,2214 @@
+using MetaSharp.TypeScript;
+using MetaSharp.TypeScript.AST;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+namespace MetaSharp.Transformation;
+
+/// <summary>
+/// Transforms C# types annotated with [Transpile] into TypeScript AST source files.
+/// </summary>
+public sealed class TypeTransformer(Compilation compilation)
+{
+    /// <summary>
+    /// Discovers all types with [Transpile] and transforms each into a TsSourceFile.
+    /// Generates namespace-based folder structure and index.ts barrel files.
+    /// </summary>
+    public IReadOnlyList<TsSourceFile> TransformAll()
+    {
+        _currentAssembly = compilation.Assembly;
+
+        // Read [ExportFromBcl] assembly-level attributes
+        LoadBclExportMappings();
+
+        // Detect [assembly: TranspileAssembly] — MUST happen before DiscoverTranspilableTypes
+        // Check both semantic model (for real projects) and syntax tree (for inline compilation)
+        _assemblyWideTranspile = compilation.Assembly.GetAttributes()
+            .Any(a => a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly")
+            || compilation.SyntaxTrees.Any(tree => tree.GetRoot()
+                .DescendantNodes().OfType<AttributeListSyntax>()
+                .Any(al => al.Target?.Identifier.Text == "assembly"
+                    && al.Attributes.Any(a =>
+                    {
+                        var name = a.Name.ToString();
+                        return name is "TranspileAssembly" or "TranspileAssemblyAttribute"
+                            or "MetaSharp.TranspileAssembly" or "MetaSharp.TranspileAssemblyAttribute";
+                    })));
+
+        var transpilableTypes = DiscoverTranspilableTypes();
+        // Map by both C# name and TS name (when [Name] override differs)
+        _transpilableTypeMap = new Dictionary<string, INamedTypeSymbol>();
+        foreach (var t in transpilableTypes)
+        {
+            _transpilableTypeMap[t.Name] = t;
+            var tsName = GetTsTypeName(t);
+            if (tsName != t.Name)
+                _transpilableTypeMap[tsName] = t;
+        }
+
+        // Register [Import] types as external (no .ts file generated, but importable)
+        _externalImportMap = new Dictionary<string, (string Name, string From)>();
+        foreach (var t in transpilableTypes.ToList())
+        {
+            var import = SymbolHelper.GetImport(t);
+            if (import is not null)
+            {
+                _externalImportMap[t.Name] = import.Value;
+                var tsName = GetTsTypeName(t);
+                if (tsName != t.Name)
+                    _externalImportMap[tsName] = import.Value;
+            }
+        }
+
+        // Build guard name → type name map for cross-file guard imports
+        _guardNameToTypeMap = new Dictionary<string, string>();
+        foreach (var t in transpilableTypes)
+        {
+            var tsName = GetTsTypeName(t);
+            _guardNameToTypeMap[$"is{tsName}"] = tsName;
+        }
+
+        // Detect root namespace (longest common prefix)
+        var namespaces = transpilableTypes
+            .Select(t => GetNamespace(t))
+            .Where(ns => ns.Length > 0)
+            .ToList();
+
+        _rootNamespace = namespaces.Count > 0 ? FindCommonNamespacePrefix(namespaces) : "";
+
+        var files = new List<TsSourceFile>();
+
+        foreach (var type in transpilableTypes)
+        {
+            var file = TransformType(type);
+            if (file is not null)
+                files.Add(file);
+        }
+
+        // Generate index.ts barrel files per namespace folder
+        var indexFiles = GenerateIndexFiles(files);
+        files.AddRange(indexFiles);
+
+        return files;
+    }
+
+    private bool _assemblyWideTranspile;
+    private IAssemblySymbol? _currentAssembly;
+    private Dictionary<string, INamedTypeSymbol> _transpilableTypeMap = [];
+    private Dictionary<string, (string Name, string From)> _externalImportMap = [];
+    private Dictionary<string, (string ExportedName, string FromPackage)> _bclExportMap = [];
+    /// <summary>
+    /// Maps guard function names (e.g., "isCurrency") to the type they guard (e.g., "Currency").
+    /// Used to resolve imports for cross-file guard calls.
+    /// </summary>
+    private Dictionary<string, string> _guardNameToTypeMap = [];
+    private string _rootNamespace = "";
+
+    private IReadOnlyList<INamedTypeSymbol> DiscoverTranspilableTypes()
+    {
+        var types = new List<INamedTypeSymbol>();
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            var model = compilation.GetSemanticModel(tree);
+            var root = tree.GetRoot();
+
+            foreach (var typeDecl in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
+            {
+                var symbol = model.GetDeclaredSymbol(typeDecl);
+                if (symbol is INamedTypeSymbol namedType && SymbolHelper.IsTranspilable(namedType, _assemblyWideTranspile, _currentAssembly))
+                    types.Add(namedType);
+            }
+        }
+
+        return types;
+    }
+
+    private void LoadBclExportMappings()
+    {
+        _bclExportMap = new Dictionary<string, (string ExportedName, string FromPackage)>();
+
+        foreach (var attr in compilation.Assembly.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name is not ("ExportFromBclAttribute" or "ExportFromBcl"))
+                continue;
+
+            // Constructor arg is typeof(Type)
+            if (attr.ConstructorArguments.Length == 0) continue;
+            var typeArg = attr.ConstructorArguments[0].Value as INamedTypeSymbol;
+            if (typeArg is null) continue;
+
+            var exportedName = "";
+            var fromPackage = "";
+
+            foreach (var namedArg in attr.NamedArguments)
+            {
+                switch (namedArg.Key)
+                {
+                    case "ExportedName":
+                        exportedName = namedArg.Value.Value?.ToString() ?? "";
+                        break;
+                    case "FromPackage":
+                        fromPackage = namedArg.Value.Value?.ToString() ?? "";
+                        break;
+                }
+            }
+
+            if (exportedName.Length > 0)
+            {
+                _bclExportMap[typeArg.ToDisplayString()] = (exportedName, fromPackage);
+            }
+        }
+
+        // Make BCL export map available to TypeMapper
+        TypeMapper.BclExportMap = _bclExportMap;
+    }
+
+    private TsSourceFile? TransformType(INamedTypeSymbol type)
+    {
+        // [Import] types are external — don't generate .ts files
+        if (SymbolHelper.HasImport(type))
+            return null;
+
+        var statements = new List<TsTopLevel>();
+
+        if (type.TypeKind == TypeKind.Enum)
+        {
+            TransformEnum(type, statements);
+        }
+        else if (type.TypeKind == TypeKind.Interface)
+        {
+            TransformInterface(type, statements);
+        }
+        else if (IsExceptionType(type))
+        {
+            TransformException(type, statements);
+        }
+        else if ((SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) && type.IsStatic)
+        {
+            TransformAsModule(type, statements);
+        }
+        else if (type.IsRecord || type.TypeKind is TypeKind.Struct or TypeKind.Class)
+        {
+            TransformRecordOrClass(type, statements);
+        }
+
+        if (statements.Count == 0)
+            return null;
+
+        // Generate type guard function when [GenerateGuard] is present
+        if (SymbolHelper.HasGenerateGuard(type))
+        {
+            var guard = GenerateTypeGuard(type);
+            if (guard is not null)
+                statements.Add(guard);
+        }
+
+        // Add imports for referenced transpilable types
+        var imports = CollectImports(type, statements);
+        statements.InsertRange(0, imports);
+
+        var ns = GetNamespace(type);
+        var tsTypeName = GetTsTypeName(type);
+        var relativePath = GetRelativePath(ns, tsTypeName);
+
+        return new TsSourceFile(relativePath, statements, ns);
+    }
+
+    // ─── Interface ──────────────────────────────────────────
+
+    private void TransformInterface(INamedTypeSymbol type, List<TsTopLevel> statements)
+    {
+        var properties = new List<TsProperty>();
+        var methods = new List<TsTopLevel>();
+
+        foreach (var member in type.GetMembers())
+        {
+            if (member.IsImplicitlyDeclared) continue;
+            if (member.DeclaredAccessibility != Accessibility.Public) continue;
+            if (SymbolHelper.HasIgnore(member)) continue;
+
+            switch (member)
+            {
+                case IPropertySymbol prop:
+                    var propName = SymbolHelper.GetNameOverride(prop) ?? SymbolHelper.ToCamelCase(prop.Name);
+                    var propType = TypeMapper.Map(prop.Type);
+                    var isReadonly = prop.SetMethod is null || prop.SetMethod.IsInitOnly;
+                    properties.Add(new TsProperty(propName, propType, isReadonly));
+                    break;
+
+                case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary:
+                    var name = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
+                    var returnType = TypeMapper.Map(method.ReturnType);
+                    var parameters = method.Parameters
+                        .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+                        .ToList();
+                    // Interface methods have no body — represented as a method signature in TsInterface
+                    // For now, add them as properties with function type (TS interface methods)
+                    break;
+            }
+        }
+
+        // Strip 'I' prefix convention for TS (IShape → Shape)
+        var tsName = GetTsTypeName(type);
+        var typeParams = ExtractTypeParameters(type);
+        statements.Add(new TsInterface(tsName, properties, TypeParameters: typeParams));
+    }
+
+    /// <summary>
+    /// Returns the TypeScript name for a type. Uses [Name] override if present, otherwise the C# name as-is.
+    /// </summary>
+    private static string GetTsTypeName(INamedTypeSymbol type)
+    {
+        return SymbolHelper.GetNameOverride(type) ?? type.Name;
+    }
+
+    /// <summary>
+    /// Collects transpilable interfaces implemented by a type, returning their TS names.
+    /// </summary>
+    private List<TsType> GetImplementedInterfaces(INamedTypeSymbol type)
+    {
+        var result = new List<TsType>();
+        foreach (var iface in type.Interfaces)
+        {
+            if (SymbolHelper.IsTranspilable(iface.OriginalDefinition, _assemblyWideTranspile, _currentAssembly))
+            {
+                var tsName = GetTsTypeName(iface.OriginalDefinition);
+                if (iface.TypeArguments.Length > 0)
+                {
+                    var args = iface.TypeArguments.Select(TypeMapper.Map).ToList();
+                    result.Add(new TsNamedType(tsName, args));
+                }
+                else
+                {
+                    result.Add(new TsNamedType(tsName));
+                }
+            }
+        }
+        return result;
+    }
+
+    // ─── Enum ───────────────────────────────────────────────
+
+    private void TransformEnum(INamedTypeSymbol type, List<TsTopLevel> statements)
+    {
+        var isStringEnum = SymbolHelper.HasStringEnum(type);
+
+        if (isStringEnum)
+        {
+            var literalTypes = new List<TsType>();
+            foreach (var member in type.GetMembers().OfType<IFieldSymbol>())
+            {
+                if (!member.HasConstantValue)
+                    continue;
+                var name = SymbolHelper.GetNameOverride(member) ?? member.Name;
+                literalTypes.Add(new TsStringLiteralType(name));
+            }
+
+            statements.Add(new TsTypeAlias(type.Name, new TsUnionType(literalTypes)));
+        }
+        else
+        {
+            var members = new List<TsEnumMember>();
+            foreach (var member in type.GetMembers().OfType<IFieldSymbol>())
+            {
+                if (!member.HasConstantValue)
+                    continue;
+                var name = SymbolHelper.GetNameOverride(member) ?? member.Name;
+                members.Add(
+                    new TsEnumMember(name, new TsLiteral(member.ConstantValue!.ToString()!))
+                );
+            }
+
+            statements.Add(new TsEnum(type.Name, members));
+        }
+    }
+
+    // ─── Exception (class extending Error) ───────────────────
+
+    private void TransformException(INamedTypeSymbol type, List<TsTopLevel> statements)
+    {
+        // Find the primary constructor or the constructor that calls base(message)
+        var ctor = type.Constructors
+            .Where(c => !c.IsImplicitlyDeclared && c.DeclaredAccessibility == Accessibility.Public)
+            .OrderByDescending(c => c.Parameters.Length)
+            .FirstOrDefault();
+
+        var ctorParams = new List<TsConstructorParam>();
+        var superArgs = new List<TsExpression>();
+
+        if (ctor is not null)
+        {
+            foreach (var p in ctor.Parameters)
+            {
+                ctorParams.Add(new TsConstructorParam(
+                    SymbolHelper.ToCamelCase(p.Name),
+                    TypeMapper.Map(p.Type)
+                ));
+            }
+
+            // Try to find the base constructor argument (the message)
+            var syntax = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+
+            // For primary constructors with base initializer: class Foo(args) : Exception(expr)
+            if (syntax is ClassDeclarationSyntax classDecl && classDecl.BaseList is not null)
+            {
+                foreach (var baseType in classDecl.BaseList.Types)
+                {
+                    if (baseType is PrimaryConstructorBaseTypeSyntax primaryBase)
+                    {
+                        var semanticModel = compilation.GetSemanticModel(primaryBase.SyntaxTree);
+                        var exprTransformer = CreateExpressionTransformer(semanticModel);
+                        foreach (var arg in primaryBase.ArgumentList.Arguments)
+                        {
+                            superArgs.Add(exprTransformer.TransformExpression(arg.Expression));
+                        }
+                    }
+                }
+            }
+        }
+
+        // If we couldn't resolve the super args, just pass all ctor params
+        if (superArgs.Count == 0 && ctorParams.Count > 0)
+        {
+            superArgs.Add(new TsIdentifier(ctorParams[0].Name));
+        }
+
+        // Build constructor body: super(message)
+        var ctorBody = new List<TsStatement>
+        {
+            new TsExpressionStatement(
+                new TsCallExpression(new TsIdentifier("super"), superArgs)
+            )
+        };
+
+        var constructor = new TsConstructor(ctorParams, ctorBody);
+
+        // Determine the base class in TS
+        TsType extendsType = new TsNamedType("Error");
+        if (type.BaseType is not null && IsExceptionType(type.BaseType)
+            && type.BaseType.ToDisplayString() != "System.Exception"
+            && SymbolHelper.IsTranspilable(type.BaseType, _assemblyWideTranspile, _currentAssembly))
+        {
+            extendsType = TypeMapper.Map(type.BaseType);
+        }
+
+        statements.Add(new TsClass(type.Name, constructor, [], Extends: extendsType));
+    }
+
+    private static bool IsExceptionType(INamedTypeSymbol type)
+    {
+        var current = type.BaseType;
+        while (current is not null)
+        {
+            if (current.ToDisplayString() == "System.Exception") return true;
+            current = current.BaseType;
+        }
+
+        return false;
+    }
+
+    // ─── ExportedAsModule (static class → top-level functions) ─
+
+    /// <summary>
+    /// Checks if a static class contains extension methods (classic or C# 14 blocks).
+    /// </summary>
+    private static bool HasExtensionMembers(INamedTypeSymbol type)
+    {
+        // Classic extensions
+        if (type.GetMembers().OfType<IMethodSymbol>()
+            .Any(m => m.IsExtensionMethod && m.MethodKind == MethodKind.Ordinary))
+            return true;
+
+        // C# 14 extension blocks — detected via syntax
+        foreach (var syntaxRef in type.DeclaringSyntaxReferences)
+        {
+            var syntax = syntaxRef.GetSyntax();
+            if (syntax.DescendantNodes().Any(n => n.Kind().ToString() == "ExtensionBlockDeclaration"))
+                return true;
+        }
+
+        return false;
+    }
+
+    private void TransformAsModule(INamedTypeSymbol type, List<TsTopLevel> statements)
+    {
+        foreach (var member in type.GetMembers())
+        {
+            if (SymbolHelper.HasIgnore(member)) continue;
+
+            switch (member)
+            {
+                case IMethodSymbol { MethodKind: MethodKind.Ordinary } method:
+                    var func = TransformModuleFunction(type, method);
+                    if (func is not null) statements.Add(func);
+                    break;
+
+                // Extension properties (C# 14) — Roslyn exposes the getter as a method
+                // but the property itself as IPropertySymbol. Generate a function.
+                case IPropertySymbol prop when prop.Parameters.Length > 0:
+                    // Extension property has receiver as parameter
+                    var propFunc = TransformExtensionProperty(type, prop);
+                    if (propFunc is not null) statements.Add(propFunc);
+                    break;
+            }
+        }
+    }
+
+    private TsFunction? TransformExtensionProperty(INamedTypeSymbol containingType, IPropertySymbol prop)
+    {
+        if (prop.DeclaredAccessibility != Accessibility.Public) return null;
+        if (prop.IsImplicitlyDeclared) return null;
+
+        var name = SymbolHelper.GetNameOverride(prop) ?? SymbolHelper.ToCamelCase(prop.Name);
+        var returnType = TypeMapper.Map(prop.Type);
+
+        // The receiver parameter
+        var parameters = prop.Parameters
+            .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+            .ToList();
+
+        // Get the getter body
+        var getter = prop.GetMethod;
+        if (getter is null) return null;
+
+        var syntax = getter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        var semanticModel = compilation.GetSemanticModel(syntax!.SyntaxTree);
+        var exprTransformer = CreateExpressionTransformer(semanticModel);
+
+        IReadOnlyList<TsStatement> body;
+        if (syntax is AccessorDeclarationSyntax accessor)
+            body = exprTransformer.TransformBody(accessor.Body, accessor.ExpressionBody);
+        else if (syntax is ArrowExpressionClauseSyntax arrow)
+            body = [new TsReturnStatement(exprTransformer.TransformExpression(arrow.Expression))];
+        else
+            return null;
+
+        return new TsFunction(name, parameters, returnType, body);
+    }
+
+    private TsFunction? TransformModuleFunction(INamedTypeSymbol containingType, IMethodSymbol method)
+    {
+        if (method.DeclaredAccessibility != Accessibility.Public) return null;
+        if (method.IsImplicitlyDeclared) return null;
+        if (SymbolHelper.HasEmit(method)) return null;
+        // Skip property accessors — extension properties are handled via their associated property
+        if (method.AssociatedSymbol is IPropertySymbol) return null;
+
+        var syntaxNode = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        if (syntaxNode is null) return null;
+
+        var name = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
+        var returnType = TypeMapper.Map(method.ReturnType);
+        var isAsync = method.IsAsync;
+
+        var parameters = method.Parameters
+            .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+            .ToList();
+
+        var semanticModel = compilation.GetSemanticModel(syntaxNode.SyntaxTree);
+        var exprTransformer = CreateExpressionTransformer(semanticModel);
+
+        IReadOnlyList<TsStatement> body;
+        if (syntaxNode is MethodDeclarationSyntax methodSyntax)
+            body = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody);
+        else if (syntaxNode is ArrowExpressionClauseSyntax arrow)
+            body = [new TsReturnStatement(exprTransformer.TransformExpression(arrow.Expression))];
+        else
+            return null;
+
+        return new TsFunction(name, parameters, returnType, body, Exported: true, Async: isAsync,
+            TypeParameters: ExtractMethodTypeParameters(method));
+    }
+
+    // ─── Record / Struct / Class ────────────────────────────
+
+    private void TransformRecordOrClass(INamedTypeSymbol type, List<TsTopLevel> statements)
+    {
+        // Resolve base class (if transpilable)
+        TsType? extendsType = null;
+        var baseParams = Array.Empty<TsConstructorParam>();
+
+        if (type.BaseType is not null
+            && type.BaseType.SpecialType == SpecialType.None
+            && type.BaseType.ToDisplayString() != "System.Object"
+            && type.BaseType.ToDisplayString() != "System.ValueType"
+            && SymbolHelper.IsTranspilable(type.BaseType.OriginalDefinition, _assemblyWideTranspile, _currentAssembly))
+        {
+            extendsType = TypeMapper.Map(type.BaseType);
+            baseParams = GetConstructorParams(type.BaseType.OriginalDefinition).ToArray();
+        }
+
+        var ownParams = GetOwnConstructorParams(type);
+        // All params for equals/hashCode/with (conceptual fields — both inherited and own)
+        var allParams = baseParams.Concat(ownParams).ToList();
+        // Constructor signature: only own params (base properties are declared in parent)
+        var ctorParamsForSignature = ownParams.ToList();
+
+        // Detect multiple constructors
+        var explicitCtors = type.Constructors
+            .Where(c => c.DeclaredAccessibility == Accessibility.Public)
+            .Where(c => !c.IsImplicitlyDeclared || c.Parameters.Length > 0)
+            .ToList();
+
+        TsConstructor constructor;
+
+        if (explicitCtors.Count > 1)
+        {
+            constructor = GenerateConstructorDispatcher(type, explicitCtors, extendsType);
+        }
+        else
+        {
+            // Single constructor (original behavior)
+            var ctorBody = new List<TsStatement>();
+            if (extendsType is not null)
+            {
+                var superArgs = ResolveSuperArguments(type, baseParams);
+                if (superArgs.Count > 0)
+                {
+                    ctorBody.Add(new TsExpressionStatement(
+                        new TsCallExpression(new TsIdentifier("super"), superArgs)
+                    ));
+                }
+            }
+
+            constructor = new TsConstructor(ctorParamsForSignature, ctorBody);
+        }
+        var classMembers = new List<TsClassMember>();
+
+        // Fields, properties, operators
+        var ordinaryMethods = new List<IMethodSymbol>();
+
+        foreach (var member in type.GetMembers())
+        {
+            if (SymbolHelper.HasIgnore(member))
+                continue;
+
+            switch (member)
+            {
+                case IFieldSymbol field:
+                    var fieldMember = TransformField(type, field);
+                    if (fieldMember is not null)
+                        classMembers.Add(fieldMember);
+                    break;
+
+                case IPropertySymbol prop when !IsConstructorParam(prop, ctorParamsForSignature):
+                    var propMembers = TransformProperty(type, prop);
+                    classMembers.AddRange(propMembers);
+                    break;
+
+                case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary
+                    && !method.IsImplicitlyDeclared
+                    && method.DeclaredAccessibility is not (Accessibility.Internal or Accessibility.NotApplicable)
+                    && !SymbolHelper.HasEmit(method)
+                    && method.AssociatedSymbol is not IPropertySymbol:
+                    ordinaryMethods.Add(method);
+                    break;
+
+                case IMethodSymbol method when method.MethodKind == MethodKind.UserDefinedOperator:
+                    classMembers.AddRange(TransformClassOperator(type, method));
+                    break;
+            }
+        }
+
+        // Process ordinary methods — detect overloads (same name, different signatures)
+        var methodGroups = ordinaryMethods
+            .GroupBy(m => m.Name)
+            .ToList();
+
+        foreach (var group in methodGroups)
+        {
+            var methods = group.ToList();
+            if (methods.Count == 1)
+            {
+                // Single method — no dispatcher needed
+                var classMember = TransformClassMethod(type, methods[0]);
+                if (classMember is not null)
+                    classMembers.Add(classMember);
+            }
+            else
+            {
+                // Multiple overloads — generate dispatcher
+                var overloadMembers = GenerateMethodOverloadDispatcher(type, methods);
+                classMembers.AddRange(overloadMembers);
+            }
+        }
+
+        // Generate equals, hashCode, with for records (using ALL params including inherited)
+        if (type.IsRecord)
+        {
+            classMembers.Add(GenerateEquals(type, allParams));
+            classMembers.Add(GenerateHashCode(allParams));
+            classMembers.Add(GenerateWith(type, allParams));
+        }
+
+        var implementsList = GetImplementedInterfaces(type);
+        var typeParams = ExtractTypeParameters(type);
+
+        statements.Add(new TsClass(
+            type.Name,
+            constructor,
+            classMembers,
+            Extends: extendsType,
+            Implements: implementsList.Count > 0 ? implementsList : null,
+            TypeParameters: typeParams
+        ));
+    }
+
+    private IReadOnlyList<TsConstructorParam> GetConstructorParams(INamedTypeSymbol type)
+    {
+        var primaryCtorParamDefaults = GetPrimaryConstructorParamDefaults(type);
+        var ctorParams = new List<TsConstructorParam>();
+
+        foreach (var member in type.GetMembers().OfType<IPropertySymbol>())
+        {
+            if (member.IsImplicitlyDeclared) continue;
+            if (member.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
+            if (SymbolHelper.HasIgnore(member)) continue;
+            if (!primaryCtorParamDefaults.ContainsKey(member.Name)) continue;
+
+            var name = SymbolHelper.GetNameOverride(member) ?? SymbolHelper.ToCamelCase(member.Name);
+            var tsType = TypeMapper.Map(member.Type);
+            var isReadonly = member.SetMethod is null || member.SetMethod.IsInitOnly;
+            var accessibility = MapAccessibility(member.DeclaredAccessibility);
+            var defaultValue = primaryCtorParamDefaults[member.Name];
+
+            ctorParams.Add(new TsConstructorParam(name, tsType, isReadonly, accessibility, defaultValue));
+        }
+
+        return ctorParams;
+    }
+
+    /// <summary>
+    /// Returns only properties declared directly on this type (not inherited).
+    /// </summary>
+    private IReadOnlyList<TsConstructorParam> GetOwnConstructorParams(INamedTypeSymbol type)
+    {
+        var primaryCtorParamDefaults = GetPrimaryConstructorParamDefaults(type);
+        var ctorParams = new List<TsConstructorParam>();
+
+        foreach (var member in type.GetMembers().OfType<IPropertySymbol>())
+        {
+            if (member.IsImplicitlyDeclared) continue;
+            if (member.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
+            if (SymbolHelper.HasIgnore(member)) continue;
+            if (member.IsOverride) continue;
+            if (!primaryCtorParamDefaults.ContainsKey(member.Name)) continue;
+
+            var name = SymbolHelper.GetNameOverride(member) ?? SymbolHelper.ToCamelCase(member.Name);
+            var tsType = TypeMapper.Map(member.Type);
+            var isReadonly = member.SetMethod is null || member.SetMethod.IsInitOnly;
+            var accessibility = MapAccessibility(member.DeclaredAccessibility);
+            var defaultValue = primaryCtorParamDefaults[member.Name];
+
+            ctorParams.Add(new TsConstructorParam(name, tsType, isReadonly, accessibility, defaultValue));
+        }
+
+        return ctorParams;
+    }
+
+    /// <summary>
+    /// Gets the parameter names of the primary constructor (record or class).
+    /// </summary>
+    /// <summary>
+    /// Gets the primary constructor parameter names and their default values (if any).
+    /// Includes all constructors — for C# 12+ primary constructor classes,
+    /// the constructor is IsImplicitlyDeclared (unlike records where it's explicit).
+    /// </summary>
+    private Dictionary<string, TsExpression?> GetPrimaryConstructorParamDefaults(INamedTypeSymbol type)
+    {
+        var result = new Dictionary<string, TsExpression?>(StringComparer.OrdinalIgnoreCase);
+        var primaryCtor = type.Constructors
+            .OrderByDescending(c => c.Parameters.Length)
+            .FirstOrDefault();
+
+        if (primaryCtor is null) return result;
+
+        foreach (var p in primaryCtor.Parameters)
+        {
+            TsExpression? defaultValue = null;
+            if (p.HasExplicitDefaultValue)
+            {
+                // Check if the parameter type is a StringEnum — resolve to string literal
+                if (p.Type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
+                    && SymbolHelper.HasStringEnum(enumType)
+                    && p.ExplicitDefaultValue is int enumOrdinal)
+                {
+                    var enumMember = enumType.GetMembers().OfType<IFieldSymbol>()
+                        .Where(f => f.HasConstantValue)
+                        .FirstOrDefault(f => (int)f.ConstantValue! == enumOrdinal);
+
+                    if (enumMember is not null)
+                    {
+                        var memberName = SymbolHelper.GetNameOverride(enumMember) ?? enumMember.Name;
+                        defaultValue = new TsStringLiteral(memberName);
+                    }
+                    else
+                    {
+                        defaultValue = new TsLiteral(enumOrdinal.ToString());
+                    }
+                }
+                else
+                {
+                    defaultValue = p.ExplicitDefaultValue switch
+                    {
+                        null => new TsLiteral("null"),
+                        string s => new TsStringLiteral(s),
+                        bool b => new TsLiteral(b ? "true" : "false"),
+                        int i => new TsLiteral(i.ToString()),
+                        long l => new TsLiteral(l.ToString()),
+                        double d => new TsLiteral(d.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+                        _ => new TsLiteral(p.ExplicitDefaultValue.ToString()!)
+                    };
+                }
+            }
+
+            result[p.Name] = defaultValue;
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Checks if a property is already represented as a constructor parameter.
+    /// </summary>
+    /// <summary>
+    /// Transforms a C# field into a TsFieldMember.
+    /// Handles private/protected/public fields with initializers.
+    /// </summary>
+    private TsFieldMember? TransformField(INamedTypeSymbol containingType, IFieldSymbol field)
+    {
+        if (field.IsImplicitlyDeclared) return null;
+        if (field.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) return null;
+        if (SymbolHelper.HasIgnore(field)) return null;
+        // Skip backing fields for auto-properties (compiler-generated)
+        if (field.AssociatedSymbol is not null) return null;
+
+        var name = SymbolHelper.GetNameOverride(field) ?? SymbolHelper.ToCamelCase(field.Name);
+        var tsType = TypeMapper.Map(field.Type);
+        var isReadonly = field.IsReadOnly;
+        var accessibility = MapAccessibility(field.DeclaredAccessibility);
+
+        // Try to get initializer from syntax
+        TsExpression? initializer = null;
+        var syntax = field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+        if (syntax is VariableDeclaratorSyntax { Initializer: not null } varDecl)
+        {
+            var semanticModel = compilation.GetSemanticModel(varDecl.SyntaxTree);
+            var exprTransformer = CreateExpressionTransformer(semanticModel);
+            initializer = exprTransformer.TransformExpression(varDecl.Initializer.Value);
+        }
+
+        return new TsFieldMember(name, tsType, initializer, isReadonly, accessibility);
+    }
+
+    private static bool IsConstructorParam(IPropertySymbol prop, IReadOnlyList<TsConstructorParam> ctorParams)
+    {
+        var name = SymbolHelper.GetNameOverride(prop) ?? SymbolHelper.ToCamelCase(prop.Name);
+        return ctorParams.Any(p => p.Name == name);
+    }
+
+    /// <summary>
+    /// Transforms a non-constructor property into getter/setter/field AST members.
+    /// </summary>
+    private IReadOnlyList<TsClassMember> TransformProperty(
+        INamedTypeSymbol containingType,
+        IPropertySymbol prop)
+    {
+        if (prop.IsImplicitlyDeclared) return [];
+        if (prop.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) return [];
+        if (SymbolHelper.HasIgnore(prop)) return [];
+
+        var name = SymbolHelper.GetNameOverride(prop) ?? SymbolHelper.ToCamelCase(prop.Name);
+        var tsType = TypeMapper.Map(prop.Type);
+        var accessibility = MapAccessibility(prop.DeclaredAccessibility);
+        var results = new List<TsClassMember>();
+
+        // Check if the property has explicit accessor bodies
+        var syntax = prop.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as PropertyDeclarationSyntax;
+
+        var hasGetterBody = syntax?.ExpressionBody is not null
+            || syntax?.AccessorList?.Accessors.Any(a => a.IsKind(SyntaxKind.GetAccessorDeclaration) && (a.Body is not null || a.ExpressionBody is not null)) == true;
+        var hasSetterBody = syntax?.AccessorList?.Accessors.Any(a =>
+            a.IsKind(SyntaxKind.SetAccessorDeclaration) && (a.Body is not null || a.ExpressionBody is not null)) == true;
+
+        if (hasGetterBody || syntax?.ExpressionBody is not null)
+        {
+            // Computed property → getter
+            var semanticModel = compilation.GetSemanticModel(syntax!.SyntaxTree);
+            var exprTransformer = CreateExpressionTransformer(semanticModel); exprTransformer.SelfParameterName = "this";
+
+            IReadOnlyList<TsStatement> getterBody;
+            if (syntax.ExpressionBody is not null)
+            {
+                getterBody = [new TsReturnStatement(exprTransformer.TransformExpression(syntax.ExpressionBody.Expression))];
+            }
+            else
+            {
+                var getAccessor = syntax.AccessorList!.Accessors.First(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+                getterBody = exprTransformer.TransformBody(getAccessor.Body, getAccessor.ExpressionBody);
+            }
+
+            results.Add(new TsGetterMember(name, tsType, getterBody));
+        }
+
+        if (hasSetterBody)
+        {
+            var setAccessor = syntax!.AccessorList!.Accessors.First(a => a.IsKind(SyntaxKind.SetAccessorDeclaration));
+            var semanticModel = compilation.GetSemanticModel(syntax.SyntaxTree);
+            var exprTransformer = CreateExpressionTransformer(semanticModel); exprTransformer.SelfParameterName = "this";
+            var setterBody = exprTransformer.TransformBody(setAccessor.Body, setAccessor.ExpressionBody);
+            var valueParam = new TsParameter("value", tsType);
+
+            results.Add(new TsSetterMember(name, valueParam, setterBody));
+        }
+
+        // Auto-property (no custom bodies) that isn't a ctor param → field
+        if (!hasGetterBody && syntax?.ExpressionBody is null)
+        {
+            var isReadonly = prop.SetMethod is null || prop.SetMethod.IsInitOnly;
+            TsExpression? initializer = null;
+
+            if (syntax?.Initializer is not null)
+            {
+                var semanticModel = compilation.GetSemanticModel(syntax.SyntaxTree);
+                var exprTransformer = CreateExpressionTransformer(semanticModel); exprTransformer.SelfParameterName = "this";
+                initializer = exprTransformer.TransformExpression(syntax.Initializer.Value);
+            }
+
+            results.Add(new TsFieldMember(name, tsType, initializer, isReadonly, accessibility));
+        }
+
+        return results;
+    }
+
+    private TsClassMember? TransformClassMethod(
+        INamedTypeSymbol containingType,
+        IMethodSymbol method
+    )
+    {
+        if (method.IsImplicitlyDeclared)
+            return null;
+        // [Emit] methods are consumed inline at call sites, not generated as methods
+        if (SymbolHelper.HasEmit(method))
+            return null;
+        // Skip compiler-generated or internal/unsupported access levels
+        if (method.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable)
+            return null;
+
+        var syntax =
+            method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            as MethodDeclarationSyntax;
+        if (syntax is null)
+            return null;
+
+        var name = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
+        var returnType = TypeMapper.Map(method.ReturnType);
+        var isAsync = method.IsAsync;
+
+        var parameters = method
+            .Parameters.Select(p => new TsParameter(
+                SymbolHelper.ToCamelCase(p.Name),
+                TypeMapper.Map(p.Type)
+            ))
+            .ToList();
+
+        var semanticModel = compilation.GetSemanticModel(syntax.SyntaxTree);
+        var exprTransformer = CreateExpressionTransformer(semanticModel);
+
+        // Instance methods use 'this' — set self parameter name to "this"
+        if (!method.IsStatic)
+            exprTransformer.SelfParameterName = "this";
+
+        var body = exprTransformer.TransformBody(syntax.Body, syntax.ExpressionBody);
+
+        return new TsMethodMember(
+            name,
+            parameters,
+            returnType,
+            body,
+            Static: method.IsStatic,
+            Async: isAsync,
+            Accessibility: MapAccessibility(method.DeclaredAccessibility),
+            TypeParameters: ExtractMethodTypeParameters(method)
+        );
+    }
+
+    private IReadOnlyList<TsTypeParameter>? ExtractTypeParameters(INamedTypeSymbol type)
+    {
+        if (type.TypeParameters.Length == 0) return null;
+        return type.TypeParameters.Select(tp =>
+        {
+            TsType? constraint = null;
+            if (tp.ConstraintTypes.Length > 0)
+                constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
+            return new TsTypeParameter(tp.Name, constraint);
+        }).ToList();
+    }
+
+    private IReadOnlyList<TsTypeParameter>? ExtractMethodTypeParameters(IMethodSymbol method)
+    {
+        if (method.TypeParameters.Length == 0) return null;
+        return method.TypeParameters.Select(tp =>
+        {
+            TsType? constraint = null;
+            if (tp.ConstraintTypes.Length > 0)
+                constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
+            return new TsTypeParameter(tp.Name, constraint);
+        }).ToList();
+    }
+
+    private static TsAccessibility MapAccessibility(Accessibility accessibility) => accessibility switch
+    {
+        Accessibility.Private => TsAccessibility.Private,
+        Accessibility.Protected or Accessibility.ProtectedOrInternal => TsAccessibility.Protected,
+        _ => TsAccessibility.Public,
+    };
+
+    private IReadOnlyList<TsClassMember> TransformClassOperator(
+        INamedTypeSymbol containingType,
+        IMethodSymbol method
+    )
+    {
+        var nameOverride = SymbolHelper.GetNameOverride(method);
+        if (nameOverride is null)
+            return [];
+
+        var syntax =
+            method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            as OperatorDeclarationSyntax;
+        if (syntax is null)
+            return [];
+
+        var returnType = TypeMapper.Map(method.ReturnType);
+
+        var parameters = method
+            .Parameters.Select(p => new TsParameter(
+                SymbolHelper.ToCamelCase(p.Name),
+                TypeMapper.Map(p.Type)
+            ))
+            .ToList();
+
+        var semanticModel = compilation.GetSemanticModel(syntax.SyntaxTree);
+        var exprTransformer = CreateExpressionTransformer(semanticModel);
+        var body = exprTransformer.TransformBody(syntax.Body, syntax.ExpressionBody);
+
+        var staticName = $"__{nameOverride}";
+        var isUnary = method.Parameters.Length == 1;
+        var results = new List<TsClassMember>();
+
+        // Static operator method: static __add(left, right) or static __negate(operand)
+        results.Add(new TsMethodMember(staticName, parameters, returnType, body, Static: true));
+
+        // Instance helper: $add(right) or $negate()
+        if (isUnary)
+        {
+            // Unary: $negate(): Type { return ClassName.__negate(this); }
+            var helperBody = new TsReturnStatement(
+                new TsCallExpression(
+                    new TsPropertyAccess(new TsIdentifier(containingType.Name), staticName),
+                    [new TsIdentifier("this")]
+                )
+            );
+            results.Add(new TsMethodMember($"${nameOverride}", [], returnType, [helperBody]));
+        }
+        else
+        {
+            // Binary: $add(right): Type { return ClassName.__add(this, right); }
+            var rightParam = parameters.Last();
+            var helperBody = new TsReturnStatement(
+                new TsCallExpression(
+                    new TsPropertyAccess(new TsIdentifier(containingType.Name), staticName),
+                    [new TsIdentifier("this"), new TsIdentifier(rightParam.Name)]
+                )
+            );
+            results.Add(new TsMethodMember($"${nameOverride}", [rightParam], returnType, [helperBody]));
+        }
+
+        return results;
+    }
+
+    // ─── Record generated members ───────────────────────────
+
+    private static TsMethodMember GenerateEquals(
+        INamedTypeSymbol type,
+        IReadOnlyList<TsConstructorParam> ctorParams
+    )
+    {
+        // equals(other: any): boolean {
+        //   return other instanceof Type && this.x === other.x && ...
+        // }
+        TsExpression condition = new TsBinaryExpression(
+            new TsIdentifier("other"),
+            "instanceof",
+            new TsIdentifier(type.Name)
+        );
+
+        foreach (var param in ctorParams)
+        {
+            condition = new TsBinaryExpression(
+                condition,
+                "&&",
+                new TsBinaryExpression(
+                    new TsPropertyAccess(new TsIdentifier("this"), param.Name),
+                    "===",
+                    new TsPropertyAccess(new TsIdentifier("other"), param.Name)
+                )
+            );
+        }
+
+        return new TsMethodMember(
+            "equals",
+            [new TsParameter("other", new TsAnyType())],
+            new TsBooleanType(),
+            [new TsReturnStatement(condition)]
+        );
+    }
+
+    private static TsMethodMember GenerateHashCode(IReadOnlyList<TsConstructorParam> ctorParams)
+    {
+        // hashCode(): number {
+        //   const hc = new HashCode();
+        //   hc.add(this.x);
+        //   hc.add(this.y);
+        //   return hc.toHashCode();
+        // }
+        var body = new List<TsStatement>();
+
+        body.Add(
+            new TsVariableDeclaration("hc", new TsNewExpression(new TsIdentifier("HashCode"), []))
+        );
+
+        foreach (var param in ctorParams)
+        {
+            body.Add(
+                new TsExpressionStatement(
+                    new TsCallExpression(
+                        new TsPropertyAccess(new TsIdentifier("hc"), "add"),
+                        [new TsPropertyAccess(new TsIdentifier("this"), param.Name)]
+                    )
+                )
+            );
+        }
+
+        body.Add(
+            new TsReturnStatement(
+                new TsCallExpression(new TsPropertyAccess(new TsIdentifier("hc"), "toHashCode"), [])
+            )
+        );
+
+        return new TsMethodMember("hashCode", [], new TsNumberType(), body);
+    }
+
+    private static TsMethodMember GenerateWith(
+        INamedTypeSymbol type,
+        IReadOnlyList<TsConstructorParam> ctorParams
+    )
+    {
+        var selfType = MakeSelfType(type);
+        var args = ctorParams
+            .Select<TsConstructorParam, TsExpression>(p => new TsBinaryExpression(
+                new TsPropertyAccess(new TsIdentifier("overrides?"), p.Name),
+                "??",
+                new TsPropertyAccess(new TsIdentifier("this"), p.Name)
+            ))
+            .ToList();
+
+        return new TsMethodMember(
+            "with",
+            [new TsParameter("overrides?", new TsNamedType("Partial", [selfType]))],
+            selfType,
+            [new TsReturnStatement(new TsNewExpression(new TsIdentifier(type.Name), args))]
+        );
+    }
+
+    /// <summary>
+    /// Creates a TsNamedType for the type including its type parameters.
+    /// e.g., Pair with K,V → TsNamedType("Pair", [TsNamedType("K"), TsNamedType("V")])
+    /// </summary>
+    /// <summary>
+    /// Resolves the actual arguments passed to the base constructor.
+    /// For `record Ok(T Value) : Result(Value, true)`, returns [Identifier("value"), Literal("true")].
+    /// Falls back to passing base param names if syntax can't be resolved.
+    /// </summary>
+    private IReadOnlyList<TsExpression> ResolveSuperArguments(
+        INamedTypeSymbol type,
+        IReadOnlyList<TsConstructorParam> baseParams)
+    {
+        // Try to find PrimaryConstructorBaseTypeSyntax in the type's declaration
+        foreach (var syntaxRef in type.DeclaringSyntaxReferences)
+        {
+            if (syntaxRef.GetSyntax() is not TypeDeclarationSyntax typeDecl) continue;
+            if (typeDecl.BaseList is null) continue;
+
+            foreach (var baseType in typeDecl.BaseList.Types)
+            {
+                if (baseType is PrimaryConstructorBaseTypeSyntax primaryBase)
+                {
+                    var semanticModel = compilation.GetSemanticModel(primaryBase.SyntaxTree);
+                    var exprTransformer = CreateExpressionTransformer(semanticModel);
+                    return primaryBase.ArgumentList.Arguments
+                        .Select(a => exprTransformer.TransformExpression(a.Expression))
+                        .ToList();
+                }
+            }
+        }
+
+        // Fallback: pass base param names
+        return baseParams
+            .Select<TsConstructorParam, TsExpression>(p => new TsIdentifier(p.Name))
+            .ToList();
+    }
+
+    private static TsNamedType MakeSelfType(INamedTypeSymbol type)
+    {
+        if (type.TypeParameters.Length == 0)
+            return new TsNamedType(type.Name);
+
+        var args = type.TypeParameters
+            .Select<Microsoft.CodeAnalysis.ITypeParameterSymbol, TsType>(tp => new TsNamedType(tp.Name))
+            .ToList();
+
+        return new TsNamedType(type.Name, args);
+    }
+
+    // ─── Constructor/Method Overload Dispatch ─────────────
+
+    /// <summary>
+    /// Generates a constructor with overload signatures and a dispatcher body.
+    /// </summary>
+    private TsConstructor GenerateConstructorDispatcher(
+        INamedTypeSymbol type,
+        List<IMethodSymbol> constructors,
+        TsType? extendsType)
+    {
+        // Sort: most specific first (more params first, then by type specificity)
+        var sorted = constructors.OrderByDescending(c => c.Parameters.Length).ToList();
+
+        // Generate overload signatures
+        var overloads = sorted.Select(ctor =>
+        {
+            var @params = ctor.Parameters
+                .Select(p => new TsConstructorParam(
+                    SymbolHelper.ToCamelCase(p.Name),
+                    TypeMapper.Map(p.Type)))
+                .ToList();
+            return new TsConstructorOverload(@params);
+        }).ToList();
+
+        // Generate dispatcher body
+        var body = new List<TsStatement>();
+
+        foreach (var ctor in sorted)
+        {
+            var paramCount = ctor.Parameters.Length;
+
+            // Build condition: args.length === N && typeCheck(args[0]) && ...
+            TsExpression condition = new TsBinaryExpression(
+                new TsPropertyAccess(new TsIdentifier("args"), "length"),
+                "===",
+                new TsLiteral(paramCount.ToString()));
+
+            for (var i = 0; i < paramCount; i++)
+            {
+                var check = GenerateTypeCheckForParam(ctor.Parameters[i].Type, i);
+                condition = new TsBinaryExpression(condition, "&&", check);
+            }
+
+            // Build assignment body for this overload
+            var assignStatements = new List<TsStatement>();
+
+            // If extending, call super — try to resolve from syntax
+            if (extendsType is not null)
+            {
+                var syntax = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+                if (syntax is ConstructorDeclarationSyntax ctorSyntax && ctorSyntax.Initializer is not null
+                    && ctorSyntax.Initializer.ThisOrBaseKeyword.Text == "base")
+                {
+                    var semanticModel = compilation.GetSemanticModel(ctorSyntax.SyntaxTree);
+                    var exprTransformer = CreateExpressionTransformer(semanticModel);
+                    var superArgs = ctorSyntax.Initializer.ArgumentList.Arguments
+                        .Select(a => exprTransformer.TransformExpression(a.Expression))
+                        .ToList();
+                    assignStatements.Add(new TsExpressionStatement(
+                        new TsCallExpression(new TsIdentifier("super"), superArgs)));
+                }
+            }
+
+            // Transform constructor body
+            var ctorSyntaxNode = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+            if (ctorSyntaxNode is ConstructorDeclarationSyntax ctorDecl && ctorDecl.Body is not null)
+            {
+                var semanticModel = compilation.GetSemanticModel(ctorDecl.SyntaxTree);
+                var exprTransformer = CreateExpressionTransformer(semanticModel);
+
+                // Map ctor params to args[i] — replace param names in body
+                foreach (var stmt in ctorDecl.Body.Statements)
+                {
+                    assignStatements.Add(exprTransformer.TransformStatement(stmt));
+                }
+            }
+            else if (ctorSyntaxNode is ConstructorDeclarationSyntax ctorExpr && ctorExpr.ExpressionBody is not null)
+            {
+                var semanticModel = compilation.GetSemanticModel(ctorExpr.SyntaxTree);
+                var exprTransformer = CreateExpressionTransformer(semanticModel);
+                assignStatements.Add(new TsExpressionStatement(
+                    exprTransformer.TransformExpression(ctorExpr.ExpressionBody.Expression)));
+            }
+
+            body.Add(new TsIfStatement(condition, assignStatements));
+        }
+
+        // Dispatcher constructor: (...args: unknown[])
+        var dispatcherParams = new List<TsConstructorParam>
+        {
+            new("...args", new TsNamedType("unknown[]"))
+        };
+
+        return new TsConstructor(dispatcherParams, body, overloads);
+    }
+
+    /// <summary>
+    /// Generates a runtime type check for a C# parameter type at a specific args index.
+    /// Uses specialized type checks from @meta-sharp/runtime for primitive types.
+    /// </summary>
+    /// <summary>
+    /// Generates a method with overload signatures and a dispatcher body for methods with same name.
+    /// </summary>
+    private IReadOnlyList<TsClassMember> GenerateMethodOverloadDispatcher(
+        INamedTypeSymbol type, List<IMethodSymbol> methods)
+    {
+        var sorted = methods.OrderByDescending(m => m.Parameters.Length).ToList();
+        var firstName = sorted[0];
+        var name = SymbolHelper.GetNameOverride(firstName) ?? SymbolHelper.ToCamelCase(firstName.Name);
+        var isStatic = firstName.IsStatic;
+        var accessibility = MapAccessibility(firstName.DeclaredAccessibility);
+
+        // Determine a common return type (use unknown if they differ)
+        var returnTypes = sorted.Select(m => TypeMapper.Map(m.ReturnType)).ToList();
+        var commonReturn = returnTypes.All(t => t == returnTypes[0]) ? returnTypes[0] : new TsAnyType();
+
+        // Generate overload signatures
+        var overloads = sorted.Select(m =>
+        {
+            var @params = m.Parameters
+                .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+                .ToList();
+            return new TsMethodOverload(@params, TypeMapper.Map(m.ReturnType));
+        }).ToList();
+
+        // Generate dispatcher body
+        var body = new List<TsStatement>();
+
+        foreach (var method in sorted)
+        {
+            var paramCount = method.Parameters.Length;
+
+            // Build condition: args.length === N && typeCheck(args[0]) && ...
+            TsExpression condition = new TsBinaryExpression(
+                new TsPropertyAccess(new TsIdentifier("args"), "length"),
+                "===",
+                new TsLiteral(paramCount.ToString()));
+
+            for (var i = 0; i < paramCount; i++)
+            {
+                var check = GenerateTypeCheckForParam(method.Parameters[i].Type, i);
+                condition = new TsBinaryExpression(condition, "&&", check);
+            }
+
+            // Generate variable declarations: const paramName = args[i] as Type;
+            var methodStatements = new List<TsStatement>();
+            for (var i = 0; i < paramCount; i++)
+            {
+                var paramName = SymbolHelper.ToCamelCase(method.Parameters[i].Name);
+                var paramType = TypeMapper.Map(method.Parameters[i].Type);
+                methodStatements.Add(new TsVariableDeclaration(
+                    paramName,
+                    new TsCastExpression(new TsIdentifier($"args[{i}]"), paramType)));
+            }
+
+            // Transform method body
+            var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+            if (syntax is MethodDeclarationSyntax methodSyntax)
+            {
+                var semanticModel = compilation.GetSemanticModel(methodSyntax.SyntaxTree);
+                var exprTransformer = CreateExpressionTransformer(semanticModel);
+                if (!method.IsStatic) exprTransformer.SelfParameterName = "this";
+                var stmts = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody);
+
+                // For void methods, convert return statements to expression statements + add return
+                if (method.ReturnsVoid)
+                {
+                    foreach (var stmt in stmts)
+                    {
+                        methodStatements.Add(stmt is TsReturnStatement { Expression: not null } ret
+                            ? new TsExpressionStatement(ret.Expression)
+                            : stmt);
+                    }
+                    // Add bare return to exit the dispatcher branch
+                    methodStatements.Add(new TsReturnStatement());
+                }
+                else
+                {
+                    methodStatements.AddRange(stmts);
+                }
+            }
+
+            body.Add(new TsIfStatement(condition, methodStatements));
+        }
+
+        // Add throw at the end for unmatched overloads
+        body.Add(new TsThrowStatement(
+            new TsNewExpression(new TsIdentifier("Error"),
+                [new TsStringLiteral($"No matching overload for {name}")])));
+
+        // Dispatcher params: ...args: unknown[]
+        var dispatcherParams = new List<TsParameter>
+        {
+            new("...args", new TsNamedType("unknown[]"))
+        };
+
+        return [new TsMethodMember(name, dispatcherParams, commonReturn, body,
+            Static: isStatic, Accessibility: accessibility, Overloads: overloads)];
+    }
+
+    /// <summary>
+    /// Generates an exhaustive check for StringEnum values: (v === "a" || v === "b" || v === "c")
+    /// </summary>
+    private static TsExpression GenerateStringEnumCheck(INamedTypeSymbol enumType, TsExpression argAccess)
+    {
+        var members = enumType.GetMembers().OfType<IFieldSymbol>()
+            .Where(f => f.HasConstantValue)
+            .ToList();
+
+        if (members.Count == 0)
+            return new TsCallExpression(new TsIdentifier("isString"), [argAccess]);
+
+        TsExpression check = members
+            .Select<IFieldSymbol, TsExpression>(m =>
+            {
+                var name = SymbolHelper.GetNameOverride(m) ?? m.Name;
+                return new TsBinaryExpression(argAccess, "===", new TsStringLiteral(name));
+            })
+            .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
+
+        return new TsParenthesized(check);
+    }
+
+    private TsExpression GenerateTypeCheckForParam(ITypeSymbol csharpType, int argIndex)
+    {
+        var argAccess = new TsIdentifier($"args[{argIndex}]");
+
+        var fullName = csharpType.ToDisplayString();
+
+        // Specialized runtime type checks for numeric types
+        return fullName switch
+        {
+            "char" => new TsCallExpression(new TsIdentifier("isChar"), [argAccess]),
+            "string" => new TsCallExpression(new TsIdentifier("isString"), [argAccess]),
+            "byte" => new TsCallExpression(new TsIdentifier("isByte"), [argAccess]),
+            "sbyte" => new TsCallExpression(new TsIdentifier("isSByte"), [argAccess]),
+            "short" or "System.Int16" => new TsCallExpression(new TsIdentifier("isInt16"), [argAccess]),
+            "ushort" or "System.UInt16" => new TsCallExpression(new TsIdentifier("isUInt16"), [argAccess]),
+            "int" or "System.Int32" => new TsCallExpression(new TsIdentifier("isInt32"), [argAccess]),
+            "uint" or "System.UInt32" => new TsCallExpression(new TsIdentifier("isUInt32"), [argAccess]),
+            "long" or "System.Int64" => new TsCallExpression(new TsIdentifier("isInt64"), [argAccess]),
+            "ulong" or "System.UInt64" => new TsCallExpression(new TsIdentifier("isUInt64"), [argAccess]),
+            "float" or "System.Single" => new TsCallExpression(new TsIdentifier("isFloat32"), [argAccess]),
+            "double" or "System.Double" => new TsCallExpression(new TsIdentifier("isFloat64"), [argAccess]),
+            "bool" or "System.Boolean" => new TsCallExpression(new TsIdentifier("isBool"), [argAccess]),
+            "decimal" or "System.Decimal" => new TsCallExpression(new TsIdentifier("isFloat64"), [argAccess]),
+            "System.Numerics.BigInteger" => new TsCallExpression(new TsIdentifier("isBigInt"), [argAccess]),
+
+            // Enums with [StringEnum] → exhaustive value check
+            _ when csharpType is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
+                && SymbolHelper.HasStringEnum(enumType) =>
+                GenerateStringEnumCheck(enumType, argAccess),
+
+            // Numeric enums → typeof number
+            _ when csharpType is INamedTypeSymbol { TypeKind: TypeKind.Enum } =>
+                new TsCallExpression(new TsIdentifier("isInt32"), [argAccess]),
+
+            // Interfaces → shape check (typeof object, can't use instanceof)
+            _ when csharpType is INamedTypeSymbol { TypeKind: TypeKind.Interface } =>
+                new TsBinaryExpression(
+                    new TsUnaryExpression("typeof ", argAccess),
+                    "===", new TsStringLiteral("object")),
+
+            // Classes/records → instanceof
+            _ when csharpType is INamedTypeSymbol named
+                && SymbolHelper.IsTranspilable(named, _assemblyWideTranspile, _currentAssembly) =>
+                new TsBinaryExpression(argAccess, "instanceof", new TsIdentifier(named.Name)),
+
+            // Arrays
+            _ when csharpType is IArrayTypeSymbol =>
+                new TsCallExpression(
+                    new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
+                    [argAccess]),
+
+            // Default: typeof check based on TS type
+            _ => new TsBinaryExpression(
+                new TsUnaryExpression("typeof ", argAccess),
+                "===",
+                new TsStringLiteral("object"))
+        };
+    }
+
+    // ─── Type Guards ────────────────────────────────────────
+
+    /// <summary>
+    /// Generates a type guard function for a transpiled type.
+    /// Returns null for types that don't need guards (e.g., ExportedAsModule).
+    /// </summary>
+    private TsFunction? GenerateTypeGuard(INamedTypeSymbol type)
+    {
+        // Skip types that don't need guards
+        if (IsExceptionType(type)) return null;
+        if (SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) return null;
+        if (SymbolHelper.HasImport(type)) return null;
+
+        var tsName = GetTsTypeName(type);
+        var guardName = $"is{tsName}";
+        var valueParam = new TsParameter("value", new TsNamedType("unknown"));
+        var returnType = new TsNamedType(tsName); // TS "value is TypeName" predicate
+
+        if (type.TypeKind == TypeKind.Enum)
+            return GenerateEnumGuard(type, guardName, tsName, valueParam);
+
+        if (type.TypeKind == TypeKind.Interface)
+            return GenerateShapeGuard(type, guardName, tsName, valueParam, useInstanceof: false);
+
+        if (type.IsRecord || type.TypeKind is TypeKind.Struct or TypeKind.Class)
+            return GenerateShapeGuard(type, guardName, tsName, valueParam, useInstanceof: true);
+
+        return null;
+    }
+
+    private TsFunction GenerateEnumGuard(
+        INamedTypeSymbol type, string guardName, string tsName, TsParameter valueParam)
+    {
+        var isStringEnum = SymbolHelper.HasStringEnum(type);
+        var members = type.GetMembers().OfType<IFieldSymbol>().Where(f => f.HasConstantValue).ToList();
+
+        TsExpression condition;
+
+        if (isStringEnum)
+        {
+            // value === "BRL" || value === "USD" || ...
+            condition = members
+                .Select<IFieldSymbol, TsExpression>(m =>
+                {
+                    var name = SymbolHelper.GetNameOverride(m) ?? m.Name;
+                    return new TsBinaryExpression(
+                        new TsIdentifier("value"), "===", new TsStringLiteral(name));
+                })
+                .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
+        }
+        else
+        {
+            // typeof value === "number" && (value === 0 || value === 1 || ...)
+            var valueChecks = members
+                .Select<IFieldSymbol, TsExpression>(m =>
+                    new TsBinaryExpression(
+                        new TsIdentifier("value"), "===", new TsLiteral(m.ConstantValue!.ToString()!)))
+                .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
+
+            condition = new TsBinaryExpression(
+                new TsBinaryExpression(
+                    new TsUnaryExpression("typeof ", new TsIdentifier("value")),
+                    "===", new TsStringLiteral("number")),
+                "&&",
+                new TsParenthesized(valueChecks));
+        }
+
+        // The return type annotation "value is TypeName" is expressed as a named type
+        // that the Printer will handle via a special TypePredicate representation.
+        // For now, we use TsNamedType and handle it in the function signature.
+        return new TsFunction(guardName, [valueParam],
+            new TsTypePredicateType("value", new TsNamedType(tsName)),
+            [new TsReturnStatement(condition)]);
+    }
+
+    private TsFunction GenerateShapeGuard(
+        INamedTypeSymbol type, string guardName, string tsName, TsParameter valueParam,
+        bool useInstanceof)
+    {
+        var body = new List<TsStatement>();
+
+        // instanceof fast path (for classes/records only)
+        if (useInstanceof)
+        {
+            body.Add(new TsIfStatement(
+                new TsBinaryExpression(new TsIdentifier("value"), "instanceof", new TsIdentifier(tsName)),
+                [new TsReturnStatement(new TsLiteral("true"))]
+            ));
+        }
+
+        // Null/object check
+        body.Add(new TsIfStatement(
+            new TsBinaryExpression(
+                new TsBinaryExpression(new TsIdentifier("value"), "==", new TsLiteral("null")),
+                "||",
+                new TsBinaryExpression(
+                    new TsUnaryExpression("typeof ", new TsIdentifier("value")),
+                    "!==", new TsStringLiteral("object"))),
+            [new TsReturnStatement(new TsLiteral("false"))]
+        ));
+
+        // const v = value as any;
+        body.Add(new TsVariableDeclaration("v",
+            new TsCastExpression(new TsIdentifier("value"), new TsAnyType())));
+
+        // Field checks
+        var fields = GetAllFieldsForGuard(type);
+        if (fields.Count > 0)
+        {
+            TsExpression fieldChecks = fields
+                .Select(f => GenerateFieldCheck(new TsPropertyAccess(new TsIdentifier("v"), f.Name), f.Type))
+                .Aggregate((a, b) => new TsBinaryExpression(a, "&&", b));
+
+            body.Add(new TsReturnStatement(fieldChecks));
+        }
+        else
+        {
+            body.Add(new TsReturnStatement(new TsLiteral("true")));
+        }
+
+        return new TsFunction(guardName, [valueParam],
+            new TsTypePredicateType("value", new TsNamedType(tsName)), body);
+    }
+
+    /// <summary>
+    /// Gets all fields (own + inherited) for guard validation.
+    /// </summary>
+    private IReadOnlyList<(string Name, TsType Type)> GetAllFieldsForGuard(INamedTypeSymbol type)
+    {
+        var fields = new List<(string Name, TsType Type)>();
+
+        // Collect from all levels of hierarchy
+        var current = type;
+        while (current is not null && current.SpecialType == SpecialType.None
+            && current.ToDisplayString() is not "System.Object" and not "System.ValueType")
+        {
+            foreach (var member in current.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (member.IsImplicitlyDeclared) continue;
+                if (member.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
+                if (SymbolHelper.HasIgnore(member)) continue;
+
+                var name = SymbolHelper.GetNameOverride(member) ?? SymbolHelper.ToCamelCase(member.Name);
+                var tsType = TypeMapper.Map(member.Type);
+
+                // Avoid duplicates (from overrides)
+                if (fields.All(f => f.Name != name))
+                    fields.Add((name, tsType));
+            }
+
+            current = current.BaseType;
+        }
+
+        return fields;
+    }
+
+    /// <summary>
+    /// Generates a runtime type check expression for a single field.
+    /// </summary>
+    private TsExpression GenerateFieldCheck(TsExpression fieldAccess, TsType fieldType)
+    {
+        return fieldType switch
+        {
+            TsNumberType => TypeofCheck(fieldAccess, "number"),
+            TsStringType => TypeofCheck(fieldAccess, "string"),
+            TsBooleanType => TypeofCheck(fieldAccess, "boolean"),
+            TsBigIntType => TypeofCheck(fieldAccess, "bigint"),
+
+            TsArrayType => new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
+                [fieldAccess]),
+
+            TsNamedType { Name: "Map" } => new TsBinaryExpression(
+                fieldAccess, "instanceof", new TsIdentifier("Map")),
+
+            TsNamedType { Name: "Set" } => new TsBinaryExpression(
+                fieldAccess, "instanceof", new TsIdentifier("Set")),
+
+            // Temporal types
+            TsNamedType { Name: var n } when n.StartsWith("Temporal.") =>
+                new TsBinaryExpression(fieldAccess, "instanceof", new TsIdentifier(n)),
+
+            // Transpilable named type → call guard recursively
+            TsNamedType { Name: var n } when _transpilableTypeMap.ContainsKey(n) =>
+                new TsCallExpression(new TsIdentifier($"is{n}"), [fieldAccess]),
+
+            // Union with null (nullable) → field == null || innerCheck
+            TsUnionType { Types: var types } when types.Any(t => t is TsNamedType { Name: "null" }) =>
+                NullableFieldCheck(fieldAccess, types),
+
+            // String literal union (from StringEnum that's not transpilable)
+            TsUnionType { Types: var types } when types.All(t => t is TsStringLiteralType) =>
+                types.Cast<TsStringLiteralType>()
+                    .Select<TsStringLiteralType, TsExpression>(t =>
+                        new TsBinaryExpression(fieldAccess, "===", new TsStringLiteral(t.Value)))
+                    .Aggregate((a, b) => new TsBinaryExpression(a, "||", b)),
+
+            TsTupleType { Elements: var elements } =>
+                new TsBinaryExpression(
+                    new TsCallExpression(
+                        new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
+                        [fieldAccess]),
+                    "&&",
+                    new TsBinaryExpression(
+                        new TsPropertyAccess(fieldAccess, "length"),
+                        "===",
+                        new TsLiteral(elements.Count.ToString()))),
+
+            TsAnyType or TsVoidType or TsPromiseType => new TsLiteral("true"),
+
+            // Unknown type — accept anything
+            _ => new TsLiteral("true"),
+        };
+    }
+
+    private static TsExpression TypeofCheck(TsExpression expr, string typeName) =>
+        new TsBinaryExpression(
+            new TsUnaryExpression("typeof ", expr),
+            "===",
+            new TsStringLiteral(typeName));
+
+    private TsExpression NullableFieldCheck(TsExpression fieldAccess, IReadOnlyList<TsType> unionTypes)
+    {
+        var nonNullTypes = unionTypes.Where(t => t is not TsNamedType { Name: "null" }).ToList();
+        if (nonNullTypes.Count == 0) return new TsLiteral("true");
+
+        var innerCheck = nonNullTypes.Count == 1
+            ? GenerateFieldCheck(fieldAccess, nonNullTypes[0])
+            : nonNullTypes
+                .Select(t => GenerateFieldCheck(fieldAccess, t))
+                .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
+
+        return new TsBinaryExpression(
+            new TsBinaryExpression(fieldAccess, "==", new TsLiteral("null")),
+            "||",
+            innerCheck);
+    }
+
+    // ─── Imports ────────────────────────────────────────────
+
+    private IReadOnlyList<TsImport> CollectImports(
+        INamedTypeSymbol currentType,
+        List<TsTopLevel> statements
+    )
+    {
+        var referencedTypes = new HashSet<string>();
+        var valueTypes = new HashSet<string>(); // types used via `new` or `extends` (need runtime import)
+        CollectReferencedTypeNames(statements, referencedTypes, valueTypes);
+
+        var tsTypeName = GetTsTypeName(currentType);
+        referencedTypes.Remove(currentType.Name);
+        referencedTypes.Remove(tsTypeName);
+        referencedTypes.Remove($"is{tsTypeName}"); // own guard — don't import
+
+        var imports = new List<TsImport>();
+        var currentNs = GetNamespace(currentType);
+
+        // Runtime imports (HashCode for records)
+        if (currentType.IsRecord)
+        {
+            imports.Add(new TsImport(["HashCode"], "@meta-sharp/runtime"));
+        }
+
+        // Temporal polyfill import (if any Temporal types are referenced)
+        if (referencedTypes.Any(t => t.StartsWith("Temporal.")))
+        {
+            imports.Add(new TsImport(["Temporal"], "@js-temporal/polyfill"));
+        }
+
+        // Runtime type check imports (isString, isInt32, etc.)
+        var runtimeTypeChecks = referencedTypes
+            .Where(IsRuntimeTypeCheck)
+            .OrderBy(n => n)
+            .ToArray();
+
+        if (runtimeTypeChecks.Length > 0)
+        {
+            imports.Add(new TsImport(runtimeTypeChecks, "@meta-sharp/runtime"));
+        }
+
+        // LINQ Enumerable import
+        if (referencedTypes.Contains("Enumerable"))
+        {
+            imports.Add(new TsImport(["Enumerable"], "@meta-sharp/runtime"));
+        }
+
+        // Track what we've already imported to avoid duplicates
+        var importedNames = new HashSet<string>(runtimeTypeChecks) { "Enumerable" };
+
+        foreach (var typeName in referencedTypes.OrderBy(n => n))
+        {
+            // Skip built-in types and runtime identifiers that don't need imports
+            if (typeName.StartsWith("Temporal.") || IsRuntimeTypeCheck(typeName)
+                || typeName is "Map" or "Set"
+                or "unknown" or "any" or "null" or "Partial" or "Error" or "HashCode"
+                or "Array" or "v" or "value" or "true" or "false" or "undefined"
+                or "console" or "Math" or "crypto" or "Object" or "typeof"
+                or "unknown[]")
+                continue;
+
+            // BCL export mapping (e.g., decimal → Decimal from "decimal.js")
+            var bclEntry = _bclExportMap.Values.FirstOrDefault(e => e.ExportedName == typeName);
+            if (bclEntry.ExportedName is not null && bclEntry.FromPackage.Length > 0
+                && importedNames.Add(typeName))
+            {
+                imports.Add(new TsImport([bclEntry.ExportedName], bclEntry.FromPackage));
+                continue;
+            }
+
+            // External import mapping ([Import] attribute)
+            if (_externalImportMap.TryGetValue(typeName, out var extImport)
+                && importedNames.Add(typeName))
+            {
+                imports.Add(new TsImport([extImport.Name], extImport.From));
+                continue;
+            }
+
+            // Guard function reference (e.g., isCurrency → import from Currency's file)
+            if (_guardNameToTypeMap.TryGetValue(typeName, out var guardedTypeName)
+                && _transpilableTypeMap.TryGetValue(guardedTypeName, out var guardedSymbol)
+                && importedNames.Add(typeName))
+            {
+                var guardNs = GetNamespace(guardedSymbol);
+                var guardTsName = GetTsTypeName(guardedSymbol);
+                var guardPath = ComputeRelativeImportPath(currentNs, guardNs, guardTsName);
+                imports.Add(new TsImport([typeName], guardPath));
+                continue;
+            }
+
+            // Transpilable type within the project
+            if (!_transpilableTypeMap.TryGetValue(typeName, out var referencedSymbol))
+                continue;
+
+            if (!importedNames.Add(typeName)) continue;
+
+            var targetNs = GetNamespace(referencedSymbol);
+            var targetTsName = GetTsTypeName(referencedSymbol);
+            var importPath = ComputeRelativeImportPath(currentNs, targetNs, targetTsName);
+            var typeOnly = !valueTypes.Contains(typeName);
+            imports.Add(new TsImport([targetTsName], importPath, TypeOnly: typeOnly));
+        }
+
+        return imports;
+    }
+
+    private static void CollectReferencedTypeNames(
+        IEnumerable<TsTopLevel> statements,
+        HashSet<string> names,
+        HashSet<string> valueNames
+    )
+    {
+        foreach (var stmt in statements)
+        {
+            CollectFromTopLevel(stmt, names, valueNames);
+        }
+    }
+
+    private static void CollectFromTopLevel(TsTopLevel node, HashSet<string> names, HashSet<string> valueNames)
+    {
+        switch (node)
+        {
+            case TsInterface iface:
+                CollectFromTypeParameters(iface.TypeParameters, names);
+                foreach (var prop in iface.Properties)
+                    CollectFromType(prop.Type, names);
+                break;
+            case TsFunction func:
+                CollectFromTypeParameters(func.TypeParameters, names);
+                foreach (var param in func.Parameters)
+                    CollectFromType(param.Type, names);
+                CollectFromType(func.ReturnType, names);
+                CollectFromStatements(func.Body, names, valueNames);
+                break;
+            case TsClass cls:
+                CollectFromTypeParameters(cls.TypeParameters, names);
+                if (cls.Extends is not null)
+                {
+                    CollectFromType(cls.Extends, names);
+                    if (cls.Extends is TsNamedType extendsNamed)
+                        valueNames.Add(extendsNamed.Name);
+                }
+                if (cls.Implements is not null)
+                    foreach (var iface in cls.Implements)
+                        CollectFromType(iface, names);
+                if (cls.Constructor is not null)
+                {
+                    foreach (var p in cls.Constructor.Parameters)
+                        CollectFromType(p.Type, names);
+                    CollectFromStatements(cls.Constructor.Body, names, valueNames);
+                }
+                foreach (var member in cls.Members)
+                {
+                    switch (member)
+                    {
+                        case TsMethodMember m:
+                            CollectFromTypeParameters(m.TypeParameters, names);
+                            foreach (var p in m.Parameters)
+                                CollectFromType(p.Type, names);
+                            CollectFromType(m.ReturnType, names);
+                            CollectFromStatements(m.Body, names, valueNames);
+                            // Collect from overload signatures too
+                            if (m.Overloads is not null)
+                                foreach (var overload in m.Overloads)
+                                {
+                                    foreach (var p in overload.Parameters)
+                                        CollectFromType(p.Type, names);
+                                    CollectFromType(overload.ReturnType, names);
+                                }
+                            break;
+                        case TsGetterMember g:
+                            CollectFromType(g.ReturnType, names);
+                            CollectFromStatements(g.Body, names, valueNames);
+                            break;
+                    }
+                }
+                break;
+        }
+    }
+
+    private static void CollectFromTypeParameters(IReadOnlyList<TsTypeParameter>? typeParams, HashSet<string> names)
+    {
+        if (typeParams is null) return;
+        foreach (var tp in typeParams)
+        {
+            if (tp.Constraint is not null)
+                CollectFromType(tp.Constraint, names);
+        }
+    }
+
+    private static void CollectFromType(TsType type, HashSet<string> names)
+    {
+        switch (type)
+        {
+            case TsNamedType named:
+                names.Add(named.Name);
+                if (named.TypeArguments is not null)
+                    foreach (var arg in named.TypeArguments)
+                        CollectFromType(arg, names);
+                break;
+            case TsArrayType array:
+                CollectFromType(array.ElementType, names);
+                break;
+            case TsPromiseType promise:
+                CollectFromType(promise.Inner, names);
+                break;
+            case TsUnionType union:
+                foreach (var t in union.Types)
+                    CollectFromType(t, names);
+                break;
+        }
+    }
+
+    private static void CollectFromStatements(IReadOnlyList<TsStatement> statements, HashSet<string> names, HashSet<string> valueNames)
+    {
+        foreach (var stmt in statements)
+            CollectFromStatement(stmt, names, valueNames);
+    }
+
+    private static void CollectFromStatement(TsStatement stmt, HashSet<string> names, HashSet<string> valueNames)
+    {
+        switch (stmt)
+        {
+            case TsReturnStatement ret:
+                if (ret.Expression is not null) CollectFromExpression(ret.Expression, names, valueNames);
+                break;
+            case TsThrowStatement thr:
+                CollectFromExpression(thr.Expression, names, valueNames);
+                break;
+            case TsExpressionStatement expr:
+                CollectFromExpression(expr.Expression, names, valueNames);
+                break;
+            case TsIfStatement ifStmt:
+                CollectFromExpression(ifStmt.Condition, names, valueNames);
+                CollectFromStatements(ifStmt.Then, names, valueNames);
+                if (ifStmt.Else is not null) CollectFromStatements(ifStmt.Else, names, valueNames);
+                break;
+            case TsVariableDeclaration varDecl:
+                CollectFromExpression(varDecl.Initializer, names, valueNames);
+                break;
+        }
+    }
+
+    private static void CollectFromExpression(TsExpression expr, HashSet<string> names, HashSet<string> valueNames)
+    {
+        switch (expr)
+        {
+            case TsNewExpression newExpr:
+                if (newExpr.Callee is TsIdentifier id)
+                {
+                    names.Add(id.Name);
+                    valueNames.Add(id.Name); // used as value (constructor call)
+                }
+                foreach (var arg in newExpr.Arguments)
+                    CollectFromExpression(arg, names, valueNames);
+                break;
+            case TsCallExpression call:
+                // Function calls may reference guard functions (e.g., isCurrency)
+                if (call.Callee is TsIdentifier callId)
+                {
+                    names.Add(callId.Name);
+                    valueNames.Add(callId.Name);
+                }
+                // Static method calls like Enumerable.from(...)
+                else if (call.Callee is TsPropertyAccess { Object: TsIdentifier { Name: var rootName } }
+                    && char.IsUpper(rootName[0]))
+                {
+                    names.Add(rootName);
+                    valueNames.Add(rootName);
+                    CollectFromExpression(call.Callee, names, valueNames);
+                }
+                else
+                {
+                    CollectFromExpression(call.Callee, names, valueNames);
+                }
+                foreach (var arg in call.Arguments)
+                    CollectFromExpression(arg, names, valueNames);
+                break;
+            case TsPropertyAccess access:
+                CollectFromExpression(access.Object, names, valueNames);
+                break;
+            case TsBinaryExpression bin:
+                CollectFromExpression(bin.Left, names, valueNames);
+                CollectFromExpression(bin.Right, names, valueNames);
+                break;
+            case TsObjectLiteral obj:
+                foreach (var prop in obj.Properties)
+                    CollectFromExpression(prop.Value, names, valueNames);
+                break;
+            case TsTemplateLiteral tmpl:
+                foreach (var e in tmpl.Expressions)
+                    CollectFromExpression(e, names, valueNames);
+                break;
+            case TsConditionalExpression cond:
+                CollectFromExpression(cond.Condition, names, valueNames);
+                CollectFromExpression(cond.WhenTrue, names, valueNames);
+                CollectFromExpression(cond.WhenFalse, names, valueNames);
+                break;
+            case TsAwaitExpression await_:
+                CollectFromExpression(await_.Expression, names, valueNames);
+                break;
+            case TsParenthesized paren:
+                CollectFromExpression(paren.Expression, names, valueNames);
+                break;
+            case TsSpreadExpression spread:
+                CollectFromExpression(spread.Expression, names, valueNames);
+                break;
+        }
+    }
+
+    // ─── Namespace / path helpers ───────────────────────────
+
+    /// <summary>
+    /// Checks if a name is a runtime type check function from @meta-sharp/runtime.
+    /// </summary>
+    private static bool IsRuntimeTypeCheck(string name) => name is
+        "isChar" or "isString" or "isByte" or "isSByte"
+        or "isInt16" or "isUInt16" or "isInt32" or "isUInt32"
+        or "isInt64" or "isUInt64" or "isFloat32" or "isFloat64"
+        or "isBool" or "isBigInt";
+
+    private ExpressionTransformer CreateExpressionTransformer(SemanticModel semanticModel) =>
+        new(semanticModel) { AssemblyWideTranspile = _assemblyWideTranspile, CurrentAssembly = _currentAssembly };
+
+    private static string GetNamespace(INamedTypeSymbol type)
+    {
+        var ns = type.ContainingNamespace;
+        return ns.IsGlobalNamespace ? "" : ns.ToDisplayString();
+    }
+
+    /// <summary>
+    /// Strips the root namespace and converts remaining segments to a file path.
+    /// e.g., root="Orzano.Shared", ns="Orzano.Shared.Models", name="Money" → "Models/Money.ts"
+    /// </summary>
+    private string GetRelativePath(string ns, string typeName)
+    {
+        var relative = StripRootNamespace(ns);
+        var segments = relative.Length > 0
+            ? relative.Split('.')
+            : [];
+
+        var path = segments.Length > 0
+            ? string.Join("/", segments) + "/" + typeName + ".ts"
+            : typeName + ".ts";
+
+        return path;
+    }
+
+    private string StripRootNamespace(string ns)
+    {
+        if (_rootNamespace.Length == 0 || ns.Length == 0) return ns;
+        if (ns == _rootNamespace) return "";
+        if (ns.StartsWith(_rootNamespace + "."))
+            return ns[(_rootNamespace.Length + 1)..];
+        return ns;
+    }
+
+    /// <summary>
+    /// Computes a relative import path from one namespace to another.
+    /// e.g., from "Orzano.Shared" to "Orzano.Shared.Models" for type "Foo" → "./Models/Foo"
+    /// </summary>
+    private string ComputeRelativeImportPath(string fromNs, string toNs, string typeName)
+    {
+        var fromRelative = StripRootNamespace(fromNs);
+        var toRelative = StripRootNamespace(toNs);
+
+        var fromParts = fromRelative.Length > 0 ? fromRelative.Split('.') : [];
+        var toParts = toRelative.Length > 0 ? toRelative.Split('.') : [];
+
+        // Find common prefix length
+        var common = 0;
+        while (common < fromParts.Length && common < toParts.Length && fromParts[common] == toParts[common])
+            common++;
+
+        // Go up from 'from' to common ancestor
+        var ups = fromParts.Length - common;
+        var parts = new List<string>();
+
+        if (ups == 0 && toParts.Length == common)
+        {
+            // Same namespace
+            parts.Add(".");
+        }
+        else
+        {
+            for (var i = 0; i < ups; i++)
+                parts.Add("..");
+
+            if (parts.Count == 0)
+                parts.Add(".");
+        }
+
+        // Go down to 'to' from common ancestor
+        for (var i = common; i < toParts.Length; i++)
+            parts.Add(toParts[i]);
+
+        parts.Add(typeName);
+        return string.Join("/", parts);
+    }
+
+    /// <summary>
+    /// Finds the longest common dot-separated namespace prefix.
+    /// </summary>
+    private static string FindCommonNamespacePrefix(IReadOnlyList<string> namespaces)
+    {
+        if (namespaces.Count == 0) return "";
+        if (namespaces.Count == 1) return namespaces[0];
+
+        var parts = namespaces[0].Split('.');
+        var commonLength = parts.Length;
+
+        for (var i = 1; i < namespaces.Count; i++)
+        {
+            var otherParts = namespaces[i].Split('.');
+            commonLength = Math.Min(commonLength, otherParts.Length);
+
+            for (var j = 0; j < commonLength; j++)
+            {
+                if (parts[j] != otherParts[j])
+                {
+                    commonLength = j;
+                    break;
+                }
+            }
+        }
+
+        return string.Join(".", parts.Take(commonLength));
+    }
+
+    /// <summary>
+    /// Generates index.ts barrel files for each namespace directory.
+    /// </summary>
+    private IReadOnlyList<TsSourceFile> GenerateIndexFiles(IReadOnlyList<TsSourceFile> typeFiles)
+    {
+        // Group files by their directory
+        var dirToFiles = new Dictionary<string, List<TsSourceFile>>();
+
+        foreach (var file in typeFiles)
+        {
+            var dir = Path.GetDirectoryName(file.FileName)?.Replace('\\', '/') ?? "";
+            if (!dirToFiles.TryGetValue(dir, out var list))
+            {
+                list = [];
+                dirToFiles[dir] = list;
+            }
+
+            list.Add(file);
+        }
+
+        var indexFiles = new List<TsSourceFile>();
+
+        foreach (var (dir, files) in dirToFiles)
+        {
+            var exports = new List<TsTopLevel>();
+
+            foreach (var file in files.OrderBy(f => f.FileName))
+            {
+                var moduleName = Path.GetFileNameWithoutExtension(file.FileName);
+
+                // Separate type-only exports from value exports
+                var typeOnlyNames = new List<string>();
+                var valueNames = new List<string>();
+
+                foreach (var stmt in file.Statements)
+                {
+                    var name = GetExportedName(stmt);
+                    if (name is null) continue;
+
+                    if (IsTypeOnlyExport(stmt))
+                        typeOnlyNames.Add(name);
+                    else
+                        valueNames.Add(name);
+                }
+
+                if (valueNames.Count > 0)
+                    exports.Add(new TsReExport([.. valueNames], $"./{moduleName}"));
+
+                if (typeOnlyNames.Count > 0)
+                    exports.Add(new TsReExport([.. typeOnlyNames], $"./{moduleName}", TypeOnly: true));
+            }
+
+            // Also re-export subdirectories
+            var currentDirPrefix = dir.Length > 0 ? dir + "/" : "";
+            foreach (var subDir in dirToFiles.Keys.Where(d => d.StartsWith(currentDirPrefix) && d != dir))
+            {
+                // Only immediate children
+                var relative = dir.Length > 0 ? subDir[(dir.Length + 1)..] : subDir;
+                if (!relative.Contains('/'))
+                {
+                    exports.Add(new TsReExport(["*"], $"./{relative}"));
+                }
+            }
+
+            if (exports.Count > 0)
+            {
+                var indexPath = dir.Length > 0 ? $"{dir}/index.ts" : "index.ts";
+                indexFiles.Add(new TsSourceFile(indexPath, exports, ""));
+            }
+        }
+
+        return indexFiles;
+    }
+
+    private static string? GetExportedName(TsTopLevel node) => node switch
+    {
+        TsClass { Exported: true } c => c.Name,
+        TsFunction { Exported: true } f => f.Name,
+        TsEnum { Exported: true } e => e.Name,
+        TsTypeAlias { Exported: true } t => t.Name,
+        TsInterface { Exported: true } i => i.Name,
+        _ => null
+    };
+
+    /// <summary>
+    /// Returns true if the export is type-only (no runtime value).
+    /// Type aliases and interfaces are type-only. Classes, functions, and enums are values.
+    /// </summary>
+    private static bool IsTypeOnlyExport(TsTopLevel node) => node is TsTypeAlias or TsInterface;
+}

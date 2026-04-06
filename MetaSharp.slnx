@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="MetaSharp.Annotations/MetaSharp.Annotations.csproj" />
+    <Project Path="MetaSharp.Compiler/MetaSharp.Compiler.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="MetaSharp.Tests/MetaSharp.Tests.csproj" />
+  </Folder>
+  <Folder Name="/samples/">
+    <Project Path="SampleTodo/SampleTodo.csproj" />
+  </Folder>
+</Solution>

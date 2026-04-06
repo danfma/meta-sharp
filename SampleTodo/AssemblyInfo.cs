@@ -1,0 +1,3 @@
+using MetaSharp;
+
+[assembly: TranspileAssembly]

@@ -1,0 +1,17 @@
+{
+  "private": true,
+  "workspaces": [
+    "*"
+  ],
+  "devDependencies": {
+    "@biomejs/biome": "2.4.4",
+    "@typescript/native-preview": "^7.0.0-dev.20260306.1"
+  },
+  "scripts": {
+    "dev": "bun run --parallel ts:watch website:dev",
+    "ts:watch": "tsgo -b --watch -v"
+  },
+  "dependencies": {
+    "upgrade": "^1.1.0"
+  }
+}
