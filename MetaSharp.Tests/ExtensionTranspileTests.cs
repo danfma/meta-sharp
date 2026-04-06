@@ -79,11 +79,68 @@ public class ExtensionTranspileTests
     }
 
     // ─── C# 14 extension blocks ─────────────────────────────
-    // NOTE: C# 14 extension blocks are supported by the compiler when processing real .csproj files
-    // (MSBuildWorkspace resolves language version from the project). The inline TranspileHelper
-    // compilation may not fully support them. These tests are pending proper compilation setup.
-    // The detection (HasExtensionMembers) and transformation (TransformAsModule) are implemented
-    // and work with MSBuildWorkspace-based compilation.
 
-    // TODO: Add C# 14 extension block tests when TranspileHelper supports full C# 14 compilation
+    [Test]
+    public async Task ExtensionBlock_WithMethod_GeneratesFunction()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class IntExtensions
+            {
+                extension(int value)
+                {
+                    public int Squared() => value * value;
+                }
+            }
+            """
+        );
+
+        var output = result["IntExtensions.ts"];
+        await Assert.That(output).Contains("export function squared(value: number): number");
+        await Assert.That(output).Contains("value * value");
+    }
+
+    [Test]
+    public async Task ExtensionBlock_WithProperty_GeneratesFunction()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class IntExtensions
+            {
+                extension(int value)
+                {
+                    public bool IsEven => value % 2 == 0;
+                }
+            }
+            """
+        );
+
+        var output = result["IntExtensions.ts"];
+        await Assert.That(output).Contains("export function isEven(value: number): boolean");
+        await Assert.That(output).Contains("value % 2 === 0");
+    }
+
+    [Test]
+    public async Task ExtensionBlock_MultipleMembers()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class StringExtensions
+            {
+                extension(string text)
+                {
+                    public bool IsBlank => string.IsNullOrWhiteSpace(text);
+                    public string Repeat(int times) => string.Concat(System.Linq.Enumerable.Repeat(text, times));
+                }
+            }
+            """
+        );
+
+        var output = result["StringExtensions.ts"];
+        await Assert.That(output).Contains("export function isBlank(text: string): boolean");
+        await Assert.That(output).Contains("export function repeat(text: string, times: number): string");
+    }
 }

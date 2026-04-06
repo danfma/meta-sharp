@@ -213,10 +213,10 @@ Projeto B (consome A via NuGet)
 - [x] Void methods: converte returns em expression statements + bare return
 - [x] Return types diferentes: usa `unknown` como tipo comum do dispatcher
 - [x] Static e instance methods suportados
-- [ ] **Futuro — Fast path**: tipo conhecido em compile-time → chamada direta ao método com hash
-    - Naming: `methodName` + nomes dos params (ex: `addXY`, `addPoint`)
-    - Se conflito: `addNumberX_NumberY`, `addPointOther`
-- [ ] Futuro: abordagem mista (dispatch estático + fallback dinâmico)
+- [x] **Fast path**: cada overload vira um método privado especializado (`addXY`, `addPoint`)
+- [x] Dispatcher delega ao fast-path em vez de duplicar o body
+- [x] Naming: nome + nomes dos params capitalizados; conflito → tipos primitivos como sufixo
+- [ ] Futuro: chamadas estáticas (compile-time-known) gerar `obj.addXY()` direto, sem passar pelo dispatcher
 
 ---
 
@@ -266,8 +266,9 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] Auto-detect: static classes com extension methods tratadas como módulo
 - [x] Generic extension methods
 - [x] Infraestrutura para C# 14 extension blocks (`HasExtensionMembers` + `TransformAsModule`)
-- [ ] C# 14 extension blocks — testes inline pendentes (funciona via MSBuildWorkspace)
-- [ ] C# 14 extension properties em blocos
+- [x] C# 14 extension blocks — `TransformExtensionBlock` percorre syntax tree
+- [x] C# 14 extension methods em blocos (com receiver auto-injetado)
+- [x] C# 14 extension properties em blocos (gera função com receiver)
 
 ### ~~Collections Ricas~~ ✅
 

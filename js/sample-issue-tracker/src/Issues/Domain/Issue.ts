@@ -73,46 +73,52 @@ export class Issue {
     this.touch(Temporal.Now.zonedDateTimeISO());
   }
 
+  private addCommentAuthorIdMessageCreatedAt(authorId: UserId, message: string, createdAt: Temporal.ZonedDateTime): void {
+    this._comments.push(new Comment(authorId, message, createdAt));
+    this.touch(createdAt);
+  }
+
+  private addCommentAuthorIdMessage(authorId: UserId, message: string): void {
+    this.addComment(authorId, message, Temporal.Now.zonedDateTimeISO());
+  }
+
   addComment(authorId: UserId, message: string, createdAt: Temporal.ZonedDateTime): void;
   addComment(authorId: UserId, message: string): void;
   addComment(...args: unknown[]): void {
     if (args.length === 3 && typeof args[0] === "string" && isString(args[1]) && typeof args[2] === "object") {
-      const authorId = args[0] as UserId;
-      const message = args[1] as string;
-      const createdAt = args[2] as Temporal.ZonedDateTime;
-      this._comments.push(new Comment(authorId, message, createdAt));
-      this.touch(createdAt);
+      this.addCommentAuthorIdMessageCreatedAt(args[0] as UserId, args[1] as string, args[2] as Temporal.ZonedDateTime);
       return;
     }
     if (args.length === 2 && typeof args[0] === "string" && isString(args[1])) {
-      const authorId = args[0] as UserId;
-      const message = args[1] as string;
-      this.addComment(authorId, message, Temporal.Now.zonedDateTimeISO());
+      this.addCommentAuthorIdMessage(args[0] as UserId, args[1] as string);
       return;
     }
     throw new Error("No matching overload for addComment");
+  }
+
+  private transitionToNextStatusActorIdChangedAt(nextStatus: IssueStatus, actorId: UserId, changedAt: Temporal.ZonedDateTime): void {
+    let previousStatus = this.status;
+    if (!IssueWorkflow.canTransition(previousStatus, nextStatus)) {
+      throw new Error(`Cannot transition issue from ${previousStatus} to ${nextStatus}.`);
+    }
+    this.status = nextStatus;
+    this._comments.push(Comment.system(`Status changed from ${previousStatus} to ${nextStatus} by ${actorId}.`, changedAt));
+    this.touch(changedAt);
+  }
+
+  private transitionToNextStatusActorId(nextStatus: IssueStatus, actorId: UserId): void {
+    this.transitionTo(nextStatus, actorId, Temporal.Now.zonedDateTimeISO());
   }
 
   transitionTo(nextStatus: IssueStatus, actorId: UserId, changedAt: Temporal.ZonedDateTime): void;
   transitionTo(nextStatus: IssueStatus, actorId: UserId): void;
   transitionTo(...args: unknown[]): void {
     if (args.length === 3 && (args[0] === "backlog" || args[0] === "ready" || args[0] === "in-progress" || args[0] === "in-review" || args[0] === "done" || args[0] === "cancelled") && typeof args[1] === "string" && typeof args[2] === "object") {
-      const nextStatus = args[0] as IssueStatus;
-      const actorId = args[1] as UserId;
-      const changedAt = args[2] as Temporal.ZonedDateTime;
-      let previousStatus = this.status;
-      if (!IssueWorkflow.canTransition(previousStatus, nextStatus)) {
-        throw new Error(`Cannot transition issue from ${previousStatus} to ${nextStatus}.`);
-      }
-      this.status = nextStatus;
-      this._comments.push(Comment.system(`Status changed from ${previousStatus} to ${nextStatus} by ${actorId}.`, changedAt));
-      this.touch(changedAt);
+      this.transitionToNextStatusActorIdChangedAt(args[0] as IssueStatus, args[1] as UserId, args[2] as Temporal.ZonedDateTime);
       return;
     }
     if (args.length === 2 && (args[0] === "backlog" || args[0] === "ready" || args[0] === "in-progress" || args[0] === "in-review" || args[0] === "done" || args[0] === "cancelled") && typeof args[1] === "string") {
-      const nextStatus = args[0] as IssueStatus;
-      const actorId = args[1] as UserId;
-      this.transitionTo(nextStatus, actorId, Temporal.Now.zonedDateTimeISO());
+      this.transitionToNextStatusActorId(args[0] as IssueStatus, args[1] as UserId);
       return;
     }
     throw new Error("No matching overload for transitionTo");

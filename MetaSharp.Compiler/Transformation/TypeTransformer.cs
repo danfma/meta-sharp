@@ -553,6 +553,7 @@ public sealed class TypeTransformer(Compilation compilation)
 
     private void TransformAsModule(INamedTypeSymbol type, List<TsTopLevel> statements)
     {
+        // Process direct members (classic extension methods, plain static functions)
         foreach (var member in type.GetMembers())
         {
             if (SymbolHelper.HasIgnore(member)) continue;
@@ -564,13 +565,102 @@ public sealed class TypeTransformer(Compilation compilation)
                     if (func is not null) statements.Add(func);
                     break;
 
-                // Extension properties (C# 14) — Roslyn exposes the getter as a method
-                // but the property itself as IPropertySymbol. Generate a function.
+                // Extension properties on classic style (parameters via Roslyn)
                 case IPropertySymbol prop when prop.Parameters.Length > 0:
-                    // Extension property has receiver as parameter
                     var propFunc = TransformExtensionProperty(type, prop);
                     if (propFunc is not null) statements.Add(propFunc);
                     break;
+            }
+        }
+
+        // Process C# 14 extension blocks via syntax tree
+        // (Roslyn exposes them as nested anonymous types with TypeKind=Extension,
+        //  but it's simpler to walk the syntax directly)
+        foreach (var syntaxRef in type.DeclaringSyntaxReferences)
+        {
+            var syntax = syntaxRef.GetSyntax();
+            foreach (var node in syntax.DescendantNodes())
+            {
+                if (node.Kind().ToString() != "ExtensionBlockDeclaration") continue;
+                TransformExtensionBlock(node, statements);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Transforms a C# 14 extension block syntax into top-level functions.
+    /// The block syntax is: `extension(Type receiver) { members... }`
+    /// </summary>
+    private void TransformExtensionBlock(SyntaxNode extensionBlock, List<TsTopLevel> statements)
+    {
+        // ExtensionBlockDeclarationSyntax has ParameterList and Members
+        var paramListProp = extensionBlock.GetType().GetProperty("ParameterList");
+        var membersProp = extensionBlock.GetType().GetProperty("Members");
+        if (paramListProp?.GetValue(extensionBlock) is not ParameterListSyntax paramList) return;
+        if (membersProp?.GetValue(extensionBlock) is not SyntaxList<MemberDeclarationSyntax> members) return;
+        if (paramList.Parameters.Count == 0) return;
+
+        var receiverParamSyntax = paramList.Parameters[0];
+        var semanticModel = compilation.GetSemanticModel(extensionBlock.SyntaxTree);
+
+        var receiverName = SymbolHelper.ToCamelCase(receiverParamSyntax.Identifier.Text);
+        var receiverTypeSymbol = receiverParamSyntax.Type is null
+            ? null
+            : semanticModel.GetTypeInfo(receiverParamSyntax.Type).Type;
+        if (receiverTypeSymbol is null) return;
+        var receiverType = TypeMapper.Map(receiverTypeSymbol);
+        var receiverParam = new TsParameter(receiverName, receiverType);
+
+        var exprTransformer = CreateExpressionTransformer(semanticModel);
+
+        foreach (var member in members)
+        {
+            switch (member)
+            {
+                case MethodDeclarationSyntax methodSyntax:
+                {
+                    var methodSymbol = semanticModel.GetDeclaredSymbol(methodSyntax) as IMethodSymbol;
+                    if (methodSymbol is null) continue;
+                    if (methodSymbol.DeclaredAccessibility != Accessibility.Public) continue;
+
+                    var name = SymbolHelper.GetNameOverride(methodSymbol)
+                        ?? SymbolHelper.ToCamelCase(methodSymbol.Name);
+                    var returnType = TypeMapper.Map(methodSymbol.ReturnType);
+                    var parameters = new List<TsParameter> { receiverParam };
+                    parameters.AddRange(methodSymbol.Parameters.Select(p =>
+                        new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type))));
+
+                    var body = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody,
+                        isVoid: methodSymbol.ReturnsVoid);
+                    statements.Add(new TsFunction(name, parameters, returnType, body, Exported: true));
+                    break;
+                }
+                case PropertyDeclarationSyntax propSyntax:
+                {
+                    var propSymbol = semanticModel.GetDeclaredSymbol(propSyntax) as IPropertySymbol;
+                    if (propSymbol is null) continue;
+                    if (propSymbol.DeclaredAccessibility != Accessibility.Public) continue;
+
+                    var name = SymbolHelper.GetNameOverride(propSymbol)
+                        ?? SymbolHelper.ToCamelCase(propSymbol.Name);
+                    var returnType = TypeMapper.Map(propSymbol.Type);
+                    var parameters = new List<TsParameter> { receiverParam };
+
+                    IReadOnlyList<TsStatement> body;
+                    if (propSyntax.ExpressionBody is not null)
+                        body = [new TsReturnStatement(exprTransformer.TransformExpression(propSyntax.ExpressionBody.Expression))];
+                    else if (propSyntax.AccessorList is not null)
+                    {
+                        var getAccessor = propSyntax.AccessorList.Accessors
+                            .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+                        if (getAccessor is null) continue;
+                        body = exprTransformer.TransformBody(getAccessor.Body, getAccessor.ExpressionBody);
+                    }
+                    else continue;
+
+                    statements.Add(new TsFunction(name, parameters, returnType, body, Exported: true));
+                    break;
+                }
             }
         }
     }
@@ -1554,7 +1644,6 @@ public sealed class TypeTransformer(Compilation compilation)
         }
         else if (isAsync)
         {
-            // Async methods must return Promise<T> — use Promise<unknown> as fallback
             commonReturn = new TsNamedType("Promise", [new TsNamedType("unknown")]);
         }
         else
@@ -1562,7 +1651,7 @@ public sealed class TypeTransformer(Compilation compilation)
             commonReturn = new TsAnyType();
         }
 
-        // Generate overload signatures
+        // Generate overload signatures (kept on the dispatcher for backward compat)
         var overloads = sorted.Select(m =>
         {
             var @params = m.Parameters
@@ -1571,11 +1660,25 @@ public sealed class TypeTransformer(Compilation compilation)
             return new TsMethodOverload(@params, TypeMapper.Map(m.ReturnType));
         }).ToList();
 
-        // Generate dispatcher body
-        var body = new List<TsStatement>();
+        // Compute fast-path names (one per overload, unique within the group)
+        var fastPathNames = ComputeFastPathNames(name, sorted);
 
-        foreach (var method in sorted)
+        // Generate fast-path methods (specialized, one per overload, with the real body)
+        var members = new List<TsClassMember>();
+        for (var i = 0; i < sorted.Count; i++)
         {
+            var method = sorted[i];
+            var fastPathName = fastPathNames[i];
+            var fastPathMethod = GenerateFastPathMethod(method, fastPathName, isStatic, accessibility);
+            if (fastPathMethod is not null) members.Add(fastPathMethod);
+        }
+
+        // Generate dispatcher body that delegates to fast-paths
+        var body = new List<TsStatement>();
+        for (var i = 0; i < sorted.Count; i++)
+        {
+            var method = sorted[i];
+            var fastPathName = fastPathNames[i];
             var paramCount = method.Parameters.Length;
 
             // Build condition: args.length === N && typeCheck(args[0]) && ...
@@ -1584,51 +1687,42 @@ public sealed class TypeTransformer(Compilation compilation)
                 "===",
                 new TsLiteral(paramCount.ToString()));
 
-            for (var i = 0; i < paramCount; i++)
+            for (var j = 0; j < paramCount; j++)
             {
-                var check = GenerateTypeCheckForParam(method.Parameters[i].Type, i);
+                var check = GenerateTypeCheckForParam(method.Parameters[j].Type, j);
                 condition = new TsBinaryExpression(condition, "&&", check);
             }
 
-            // Generate variable declarations: const paramName = args[i] as Type;
-            var methodStatements = new List<TsStatement>();
-            for (var i = 0; i < paramCount; i++)
+            // Build delegating call: this.fastPathName(args[0] as T0, args[1] as T1, ...)
+            // or for static: ClassName.fastPathName(args[0] as T0, ...)
+            var callArgs = new List<TsExpression>();
+            for (var j = 0; j < paramCount; j++)
             {
-                var paramName = SymbolHelper.ToCamelCase(method.Parameters[i].Name);
-                var paramType = TypeMapper.Map(method.Parameters[i].Type);
-                methodStatements.Add(new TsVariableDeclaration(
-                    paramName,
-                    new TsCastExpression(new TsIdentifier($"args[{i}]"), paramType)));
+                var paramType = TypeMapper.Map(method.Parameters[j].Type);
+                callArgs.Add(new TsCastExpression(
+                    new TsIdentifier($"args[{j}]"),
+                    paramType));
             }
 
-            // Transform method body
-            var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-            if (syntax is MethodDeclarationSyntax methodSyntax)
-            {
-                var semanticModel = compilation.GetSemanticModel(methodSyntax.SyntaxTree);
-                var exprTransformer = CreateExpressionTransformer(semanticModel);
-                if (!method.IsStatic) exprTransformer.SelfParameterName = "this";
-                var stmts = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody);
+            var receiver = isStatic
+                ? (TsExpression)new TsIdentifier(type.Name)
+                : new TsIdentifier("this");
+            var delegateCall = new TsCallExpression(
+                new TsPropertyAccess(receiver, fastPathName),
+                callArgs);
 
-                // For void methods, convert return statements to expression statements + add return
-                if (method.ReturnsVoid)
-                {
-                    foreach (var stmt in stmts)
-                    {
-                        methodStatements.Add(stmt is TsReturnStatement { Expression: not null } ret
-                            ? new TsExpressionStatement(ret.Expression)
-                            : stmt);
-                    }
-                    // Add bare return to exit the dispatcher branch
-                    methodStatements.Add(new TsReturnStatement());
-                }
-                else
-                {
-                    methodStatements.AddRange(stmts);
-                }
+            var branchStatements = new List<TsStatement>();
+            if (method.ReturnsVoid)
+            {
+                branchStatements.Add(new TsExpressionStatement(delegateCall));
+                branchStatements.Add(new TsReturnStatement());
+            }
+            else
+            {
+                branchStatements.Add(new TsReturnStatement(delegateCall));
             }
 
-            body.Add(new TsIfStatement(condition, methodStatements));
+            body.Add(new TsIfStatement(condition, branchStatements));
         }
 
         // Add throw at the end for unmatched overloads
@@ -1642,8 +1736,83 @@ public sealed class TypeTransformer(Compilation compilation)
             new("...args", new TsNamedType("unknown[]"))
         };
 
-        return [new TsMethodMember(name, dispatcherParams, commonReturn, body,
-            Static: isStatic, Async: isAsync, Accessibility: accessibility, Overloads: overloads)];
+        members.Add(new TsMethodMember(name, dispatcherParams, commonReturn, body,
+            Static: isStatic, Async: isAsync, Accessibility: accessibility, Overloads: overloads));
+
+        return members;
+    }
+
+    /// <summary>
+    /// Generates a specialized method for one specific overload (fast path).
+    /// Has the real body (not wrapped in a runtime check).
+    /// </summary>
+    private TsMethodMember? GenerateFastPathMethod(
+        IMethodSymbol method, string fastPathName, bool isStatic, TsAccessibility accessibility)
+    {
+        var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as MethodDeclarationSyntax;
+        if (syntax is null) return null;
+
+        var semanticModel = compilation.GetSemanticModel(syntax.SyntaxTree);
+        var exprTransformer = CreateExpressionTransformer(semanticModel);
+        if (!method.IsStatic) exprTransformer.SelfParameterName = "this";
+
+        var parameters = method.Parameters
+            .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+            .ToList();
+        var returnType = TypeMapper.Map(method.ReturnType);
+        var body = exprTransformer.TransformBody(syntax.Body, syntax.ExpressionBody, isVoid: method.ReturnsVoid);
+
+        return new TsMethodMember(
+            fastPathName,
+            parameters,
+            returnType,
+            body,
+            Static: isStatic,
+            Async: method.IsAsync,
+            Accessibility: TsAccessibility.Private,  // fast paths are internal — dispatcher is the public API
+            TypeParameters: ExtractMethodTypeParameters(method)
+        );
+    }
+
+    /// <summary>
+    /// Computes a unique fast-path name for each overload in a group.
+    /// Strategy: name + capitalized param names (e.g., addXY). On conflict, append type names.
+    /// </summary>
+    private static IReadOnlyList<string> ComputeFastPathNames(string baseName, IReadOnlyList<IMethodSymbol> methods)
+    {
+        var firstAttempt = methods
+            .Select(m => baseName + string.Concat(m.Parameters.Select(p => Capitalize(p.Name))))
+            .ToList();
+
+        if (firstAttempt.Distinct().Count() == firstAttempt.Count)
+            return firstAttempt;
+
+        // Conflict — fall back to type-based naming
+        return methods.Select(m =>
+        {
+            var typeSuffix = string.Concat(m.Parameters.Select(p =>
+                Capitalize(SimpleTypeName(p.Type))));
+            return baseName + typeSuffix;
+        }).ToList();
+    }
+
+    private static string Capitalize(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
+
+    private static string SimpleTypeName(ITypeSymbol type)
+    {
+        var name = type.Name;
+        // Use a clean primitive alias
+        return type.SpecialType switch
+        {
+            SpecialType.System_Int32 => "Int",
+            SpecialType.System_Int64 => "Long",
+            SpecialType.System_String => "String",
+            SpecialType.System_Boolean => "Bool",
+            SpecialType.System_Double => "Double",
+            SpecialType.System_Single => "Float",
+            _ => name,
+        };
     }
 
     /// <summary>
