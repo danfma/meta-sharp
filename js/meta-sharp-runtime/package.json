@@ -20,5 +20,8 @@
   },
   "peerDependencies": {
     "@typescript/native-preview": "^7"
+  },
+  "dependencies": {
+    "@js-temporal/polyfill": "^0.5.1"
   }
 }
