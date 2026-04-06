@@ -3,15 +3,13 @@ namespace MetaSharp.Tests;
 public class InlineWrapperTranspileTests
 {
     [Test]
-    public async Task InlineWrapper_GeneratesBrandedTypeAndCompanion()
+    public async Task InlineWrapper_GeneratesBrandedTypeAndNamespace()
     {
         var result = TranspileHelper.Transpile(
             """
             [Transpile, InlineWrapper]
-            public readonly struct UserId
+            public readonly record struct UserId(string Value)
             {
-                public string Value { get; }
-                public UserId(string value) { Value = value; }
                 public static UserId System() => new("system");
             }
             """
@@ -19,10 +17,28 @@ public class InlineWrapperTranspileTests
 
         var output = result["UserId.ts"];
         await Assert.That(output).Contains("export type UserId = string & { readonly __brand: \"UserId\" };");
-        await Assert.That(output).Contains("export const UserId =");
-        await Assert.That(output).Contains("create: (value: string) => value as UserId");
-        await Assert.That(output).Contains("system: () => UserId.create(\"system\")");
+        await Assert.That(output).Contains("export namespace UserId");
+        await Assert.That(output).Contains("function create(value: string): UserId");
+        await Assert.That(output).Contains("function system(): UserId");
         await Assert.That(output).DoesNotContain("class UserId");
+        // String wrappers don't need toString
+        await Assert.That(output).DoesNotContain("function toString");
+    }
+
+    [Test]
+    public async Task InlineWrapper_NonStringPrimitive_IncludesToString()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, InlineWrapper]
+            public readonly record struct Amount(int Value);
+            """
+        );
+
+        var output = result["Amount.ts"];
+        await Assert.That(output).Contains("export type Amount = number & { readonly __brand: \"Amount\" };");
+        await Assert.That(output).Contains("function create(value: number): Amount");
+        await Assert.That(output).Contains("function toString(value: Amount): string");
     }
 
     [Test]
@@ -31,11 +47,7 @@ public class InlineWrapperTranspileTests
         var result = TranspileHelper.Transpile(
             """
             [Transpile, InlineWrapper]
-            public readonly struct UserId
-            {
-                public string Value { get; }
-                public UserId(string value) { Value = value; }
-            }
+            public readonly record struct UserId(string Value);
 
             [Transpile]
             public class UserFactory
@@ -56,21 +68,12 @@ public class InlineWrapperTranspileTests
         var result = TranspileHelper.Transpile(
             """
             [Transpile, InlineWrapper]
-            public readonly struct CompositeId
-            {
-                public string Prefix { get; }
-                public string Value { get; }
-                public CompositeId(string prefix, string value)
-                {
-                    Prefix = prefix;
-                    Value = value;
-                }
-            }
+            public readonly record struct CompositeId(string Prefix, string Value);
             """
         );
 
         var output = result["CompositeId.ts"];
         await Assert.That(output).Contains("class CompositeId");
-        await Assert.That(output).DoesNotContain("export const CompositeId =");
+        await Assert.That(output).DoesNotContain("export namespace CompositeId");
     }
 }

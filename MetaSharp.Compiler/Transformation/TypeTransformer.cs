@@ -433,20 +433,35 @@ public sealed class TypeTransformer(Compilation compilation)
         if (!TryGetInlineWrapperPrimitiveType(type, out var primitiveType))
             return false;
 
+        // export type UserId = string & { readonly __brand: "UserId" };
         var brandType = new TsNamedType($"{{ readonly __brand: \"{tsTypeName}\" }}");
         statements.Add(new TsTypeAlias(tsTypeName, new TsIntersectionType([primitiveType, brandType])));
 
-        var entries = new List<(string Key, TsExpression Value)>
-        {
-            (
-                "create",
-                new TsArrowFunction(
-                    [new TsParameter("value", primitiveType)],
-                    [new TsReturnStatement(new TsCastExpression(new TsIdentifier("value"), new TsNamedType(tsTypeName)))]
-                )
-            ),
-        };
+        // Build companion namespace functions
+        var functions = new List<TsFunction>();
 
+        // create(value: T): TypeName
+        functions.Add(new TsFunction(
+            "create",
+            [new TsParameter("value", primitiveType)],
+            new TsNamedType(tsTypeName),
+            [new TsReturnStatement(new TsCastExpression(new TsIdentifier("value"), new TsNamedType(tsTypeName)))],
+            Exported: true
+        ));
+
+        // toString(value: TypeName): string — only for non-string primitives
+        if (primitiveType is not TsStringType)
+        {
+            functions.Add(new TsFunction(
+                "toString",
+                [new TsParameter("value", new TsNamedType(tsTypeName))],
+                new TsStringType(),
+                [new TsReturnStatement(new TsCallExpression(new TsIdentifier("String"), [new TsIdentifier("value")]))],
+                Exported: true
+            ));
+        }
+
+        // Static methods from the struct
         foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
         {
             if (method.MethodKind != MethodKind.Ordinary) continue;
@@ -461,16 +476,20 @@ public sealed class TypeTransformer(Compilation compilation)
 
             var semanticModel = compilation.GetSemanticModel(methodSyntax.SyntaxTree);
             var exprTransformer = CreateExpressionTransformer(semanticModel);
-            var body = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody);
+            var body = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody,
+                isVoid: method.ReturnsVoid);
             var parameters = method.Parameters
                 .Select(p => new TsParameter(SymbolHelper.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
                 .ToList();
 
-            var key = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
-            entries.Add((key, new TsArrowFunction(parameters, body, Async: method.IsAsync)));
+            var methodName = SymbolHelper.GetNameOverride(method) ?? SymbolHelper.ToCamelCase(method.Name);
+            var returnType = TypeMapper.Map(method.ReturnType);
+            functions.Add(new TsFunction(methodName, parameters, returnType, body,
+                Exported: true, Async: method.IsAsync));
         }
 
-        statements.Add(new TsConstObject(tsTypeName, entries));
+        // export namespace TypeName { ... }
+        statements.Add(new TsNamespaceDeclaration(tsTypeName, functions));
         return true;
     }
 
@@ -2135,6 +2154,15 @@ public sealed class TypeTransformer(Compilation compilation)
             case TsConstObject constObj:
                 foreach (var (_, value) in constObj.Entries)
                     CollectFromExpression(value, names, valueNames);
+                break;
+            case TsNamespaceDeclaration ns:
+                foreach (var func in ns.Functions)
+                {
+                    foreach (var p in func.Parameters)
+                        CollectFromType(p.Type, names);
+                    CollectFromType(func.ReturnType, names);
+                    CollectFromStatements(func.Body, names, valueNames);
+                }
                 break;
             case TsClass cls:
                 CollectFromTypeParameters(cls.TypeParameters, names);

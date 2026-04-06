@@ -24,7 +24,7 @@ export class IssueService {
       const description = args[1] as string;
       const type = args[2] as IssueType;
       const priority = args[3] as IssuePriority;
-      let issue = new Issue(IssueId.new(), title, description, type, priority);
+      let issue = new Issue(IssueId.new_(), title, description, type, priority);
       await this._repository.saveAsync(issue);
       return OperationResult.ok(issue);
     }

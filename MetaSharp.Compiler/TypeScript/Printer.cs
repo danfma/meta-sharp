@@ -30,6 +30,7 @@ public sealed class Printer(string indent = "  ")
             case TsFunction n: PrintFunction(n); break;
             case TsEnum n: PrintEnum(n); break;
             case TsConstObject n: PrintConstObject(n); break;
+            case TsNamespaceDeclaration n: PrintNamespace(n); break;
             case TsClass n: PrintClass(n); break;
         }
     }
@@ -141,6 +142,21 @@ public sealed class Printer(string indent = "  ")
                 }
 
                 _sb.Write(",");
+                _sb.WriteLn();
+            }
+        });
+    }
+
+    private void PrintNamespace(TsNamespaceDeclaration ns)
+    {
+        if (ns.Exported) _sb.Write("export ");
+        _sb.Write("namespace ");
+        _sb.Write(ns.Name);
+        _sb.WriteBlock(() =>
+        {
+            foreach (var func in ns.Functions)
+            {
+                PrintFunction(func);
                 _sb.WriteLn();
             }
         });
