@@ -1,4 +1,5 @@
 import { EnumerableBase } from "./enumerable-base.ts";
+import { compareKeys } from "./compare-keys.ts";
 
 /** Secondary sort: sorts elements by a key, preserving the order of the previous sort for equal keys. */
 export class ThenByEnumerable<T, K> extends EnumerableBase<T> {
@@ -59,9 +60,7 @@ function materializeSource<T>(node: EnumerableBase<T>): T[] {
 
 function makeComparator<T>(keySelector: (item: T) => unknown, descending: boolean): (a: T, b: T) => number {
   return (a, b) => {
-    const ka = keySelector(a);
-    const kb = keySelector(b);
-    const cmp = (ka as any) < (kb as any) ? -1 : (ka as any) > (kb as any) ? 1 : 0;
+    const cmp = compareKeys(keySelector(a), keySelector(b));
     return descending ? -cmp : cmp;
   };
 }

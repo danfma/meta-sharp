@@ -1,4 +1,5 @@
 import { EnumerableBase } from "./enumerable-base.ts";
+import { compareKeys } from "./compare-keys.ts";
 
 /** Sorts elements by a key. Materializes the source on first iteration. */
 export class OrderByEnumerable<T, K> extends EnumerableBase<T> {
@@ -13,9 +14,7 @@ export class OrderByEnumerable<T, K> extends EnumerableBase<T> {
   *[Symbol.iterator](): Iterator<T> {
     const items = [...this.source];
     items.sort((a, b) => {
-      const ka = this.keySelector(a);
-      const kb = this.keySelector(b);
-      const cmp = ka < kb ? -1 : ka > kb ? 1 : 0;
+      const cmp = compareKeys(this.keySelector(a), this.keySelector(b));
       return this.descending ? -cmp : cmp;
     });
     yield* items;
