@@ -27,8 +27,8 @@ public static class BclMapper
         if (containing == "string" && symbol.Name == "Length")
             return new TsPropertyAccess(obj, "length");
 
-        // List<T>.Count, ICollection<T>.Count, IReadOnlyCollection<T>.Count → .length
-        if (symbol.Name == "Count" && IsCollectionType(containing))
+        // List<T>.Count, Queue<T>.Count, Stack<T>.Count → .length
+        if (symbol.Name == "Count" && (IsCollectionType(containing) || IsQueueType(containing) || IsStackType(containing)))
             return new TsPropertyAccess(obj, "length");
 
         // Dictionary<K,V>.Count, HashSet<T>.Count → .size
@@ -152,6 +152,37 @@ public static class BclMapper
                     new TsPropertyAccess(obj, "length"),
                     "=",
                     new TsLiteral("0"));
+        }
+
+        // Queue<T> instance methods
+        if (IsQueueType(containing) && invocation.Expression is MemberAccessExpressionSyntax queueAccess)
+        {
+            var obj = transformer.TransformExpression(queueAccess.Expression);
+            return name switch
+            {
+                "Enqueue" => new TsCallExpression(new TsPropertyAccess(obj, "push"), args),
+                "Dequeue" => new TsCallExpression(new TsPropertyAccess(obj, "shift"), []),
+                "Peek" => new TsElementAccess(obj, new TsLiteral("0")),
+                "Contains" => new TsCallExpression(new TsPropertyAccess(obj, "includes"), args),
+                "Clear" => new TsBinaryExpression(new TsPropertyAccess(obj, "length"), "=", new TsLiteral("0")),
+                _ => null,
+            };
+        }
+
+        // Stack<T> instance methods
+        if (IsStackType(containing) && invocation.Expression is MemberAccessExpressionSyntax stackAccess)
+        {
+            var obj = transformer.TransformExpression(stackAccess.Expression);
+            return name switch
+            {
+                "Push" => new TsCallExpression(new TsPropertyAccess(obj, "push"), args),
+                "Pop" => new TsCallExpression(new TsPropertyAccess(obj, "pop"), []),
+                "Peek" => new TsElementAccess(obj,
+                    new TsBinaryExpression(new TsPropertyAccess(obj, "length"), "-", new TsLiteral("1"))),
+                "Contains" => new TsCallExpression(new TsPropertyAccess(obj, "includes"), args),
+                "Clear" => new TsBinaryExpression(new TsPropertyAccess(obj, "length"), "=", new TsLiteral("0")),
+                _ => null,
+            };
         }
 
         // LINQ extension methods → lazy Enumerable chain via @meta-sharp/runtime
@@ -327,6 +358,18 @@ public static class BclMapper
             || fullName.StartsWith("System.Collections.Generic.HashSet")
             || fullName.StartsWith("System.Collections.Generic.ISet")
             || fullName.StartsWith("System.Collections.Generic.SortedSet");
+    }
+
+    private static bool IsQueueType(string? fullName)
+    {
+        if (fullName is null) return false;
+        return fullName.StartsWith("System.Collections.Generic.Queue");
+    }
+
+    private static bool IsStackType(string? fullName)
+    {
+        if (fullName is null) return false;
+        return fullName.StartsWith("System.Collections.Generic.Stack");
     }
 
     private static bool IsLinqExtensionMethod(string? fullName)

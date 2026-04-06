@@ -233,6 +233,8 @@ public static class TypeMapper
             || fullName.StartsWith("System.Collections.Generic.IEnumerable")
             || fullName.StartsWith("System.Collections.Generic.ICollection")
             || fullName.StartsWith("System.Collections.Immutable.ImmutableList")
-            || fullName.StartsWith("System.Collections.Immutable.ImmutableArray");
+            || fullName.StartsWith("System.Collections.Immutable.ImmutableArray")
+            || fullName.StartsWith("System.Collections.Generic.Queue")
+            || fullName.StartsWith("System.Collections.Generic.Stack");
     }
 }
