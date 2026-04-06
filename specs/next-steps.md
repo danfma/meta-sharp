@@ -3,6 +3,7 @@
 ## Concluído ✅
 
 ### Core
+
 - [x] Records → classes com `constructor(readonly ...)`, `equals()`, `hashCode()`, `with()`
 - [x] Enums → string union (`[StringEnum]`) ou numeric enum
 - [x] Interfaces C# → interfaces TS (com `[Transpile]`)
@@ -19,6 +20,7 @@
 - [x] `@meta-sharp/runtime` com `HashCode` (xxHash32)
 
 ### Atributos
+
 - [x] `[Transpile]` — marca tipo para transpilação
 - [x] `[StringEnum]` — enum como string union
 - [x] `[Name("x")]` — override de nome no output
@@ -26,12 +28,14 @@
 - [x] `[ExportedAsModule]` — static class → funções top-level
 
 ### Atributos
+
 - [x] `[Transpile]`, `[StringEnum]`, `[Name]`, `[Ignore]`, `[ExportedAsModule]`
 - [x] `[ExportFromBcl]` — assembly-level BCL → package JS
 - [x] `[Import]` — tipo/membro externo de módulo JS
 - [x] `[Emit]` — JS inline com placeholders
 
 ### AST & Printer
+
 - [x] Generics na AST: `TsTypeParameter`, `TsNamedType.TypeArguments`
 - [x] `TsClass.Extends` / `Implements` como `TsType` (não string)
 - [x] `TsUnaryExpression` para operadores unários
@@ -44,6 +48,7 @@
 ## Alta Prioridade
 
 ### Value Wrappers — `[Inline]` attribute
+
 > Structs que encapsulam um único valor primitivo (ex: `UserId`, `IssueId`) geram classes
 > completas com equals/hashCode/with, mas no TS isso é overhead desnecessário.
 >
@@ -75,6 +80,7 @@
 > tree-shakeable, idiomático em TS.
 >
 > **Detecção:** Struct com `[Inline]` e exatamente 1 campo primitivo.
+
 - [ ] Definir atributo `[Inline]` no MetaSharp.Annotations
 - [ ] Detectar no TypeTransformer: struct com [Inline] + 1 campo → branded type
 - [ ] Gerar `type X = primitive & { readonly __brand: "X" }` + namespace com static methods
@@ -84,6 +90,7 @@
 - [ ] Testes inline + SampleIssueTracker validation
 
 ### ~~Generics~~ ✅
+
 - [x] Record genérico simples (`Result<T>`) com `Partial<Result<T>>` no `with()`
 - [x] Múltiplos type params (`Pair<K, V>`)
 - [x] Constraints (`where T : IEntity` → `T extends IEntity`) com import do constraint
@@ -96,6 +103,7 @@
 - [x] Constructor de classes derivadas: só params próprios, `super()` com args explícitos
 
 ### ~~Nullable Types~~ ✅
+
 - [x] `int?` / `bool?` / `Nullable<T>` → `number | null`, `boolean | null`
 - [x] `string?` / `CustomType?` → `string | null`, `Type | null` (nullable reference types)
 - [x] `T?` onde `T : class` → `T | null` (generic nullable)
@@ -105,7 +113,10 @@
 - [ ] Futuro: distinguir `null` vs `undefined` para parâmetros opcionais
 
 ### ~~Mapeamento de Tipos Externos~~ ✅
-- [x] Temporal API: `DateTime` → `Temporal.PlainDateTime`, `DateOnly` → `Temporal.PlainDate`, `TimeOnly` → `Temporal.PlainTime`, `DateTimeOffset` → `Temporal.ZonedDateTime`, `TimeSpan` → `Temporal.Duration` (com import automático de `@js-temporal/polyfill`)
+
+- [x] Temporal API: `DateTime` → `Temporal.PlainDateTime`, `DateOnly` → `Temporal.PlainDate`, `TimeOnly` →
+  `Temporal.PlainTime`, `DateTimeOffset` → `Temporal.ZonedDateTime`, `TimeSpan` → `Temporal.Duration` (com import
+  automático de `@js-temporal/polyfill`)
 - [x] `Dictionary<K,V>` → `Map<K, V>`, `HashSet<T>` → `Set<T>` (globais, sem import)
 - [x] `Guid` → `string`, `Uri` → `string`, `object` → `unknown`
 - [x] `Tuple<T1,T2>` / `ValueTuple` / `KeyValuePair<K,V>` → `[T1, T2]` (TsTupleType)
@@ -119,11 +130,13 @@
 **Design aprovado:** opção 1 — arquivo binário de metadados (similar ao `.klib` do Kotlin).
 
 O `.metalib` contém:
+
 - Assinaturas dos tipos transpilados (contratos, não código)
 - Metadata: namespace → package JS mapping, type guards info
 - Formato: JSON, MessagePack ou MemoryPack (a definir)
 
 **Fluxo:**
+
 ```
 Projeto A (lib)
   → meta-sharp compile → gera .ts + .metalib
@@ -135,10 +148,12 @@ Projeto B (consome A via NuGet)
 ```
 
 **Resolução de referências:**
+
 - `ProjectReference` (source disponível) → Roslyn resolve direto
 - `PackageReference` (NuGet, sem source) → lê `.metalib` do package
 
 **Tarefas:**
+
 - [ ] Definir formato do `.metalib` (schema de assinaturas, metadata)
 - [ ] Gerar `.metalib` durante `meta-sharp compile`
 - [ ] Embutir `.metalib` no NuGet package (via `.csproj` targets)
@@ -148,6 +163,7 @@ Projeto B (consome A via NuGet)
 - [ ] Cada assembly .NET → um package JS
 
 **Futuro:**
+
 - [ ] Compiler plugins para targets customizados (SolidJS JSX, React, etc.)
 - [ ] Source maps cross-project
 
@@ -156,6 +172,7 @@ Projeto B (consome A via NuGet)
 ## Validação e Verificação de Tipos em Runtime
 
 ### ~~Type Guards / Shape Validation~~ ✅
+
 - [x] `isMoney(value: unknown): value is Money` — standalone function por tipo
 - [x] instanceof fast path + shape validation fallback
 - [x] Records/classes: valida todos os campos (typeof para primitivos, guard recursivo para tipos transpilados)
@@ -193,8 +210,8 @@ Projeto B (consome A via NuGet)
 - [x] Return types diferentes: usa `unknown` como tipo comum do dispatcher
 - [x] Static e instance methods suportados
 - [ ] **Futuro — Fast path**: tipo conhecido em compile-time → chamada direta ao método com hash
-  - Naming: `methodName` + nomes dos params (ex: `addXY`, `addPoint`)
-  - Se conflito: `addNumberX_NumberY`, `addPointOther`
+    - Naming: `methodName` + nomes dos params (ex: `addXY`, `addPoint`)
+    - Se conflito: `addNumberX_NumberY`, `addPointOther`
 - [ ] Futuro: abordagem mista (dispatch estático + fallback dinâmico)
 
 ---
@@ -213,6 +230,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [ ] Revisar output gerado para legibilidade e cobertura das features-alvo
 
 ### ~~Properties com Getter/Setter Custom~~ ✅
+
 - [x] Computed property (expression-bodied `=>`) → `get name(): Type { ... }`
 - [x] Property com getter block → `get name(): Type { ... }`
 - [x] Property com getter + setter → `get`/`set` pair
@@ -223,6 +241,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] Primary constructor param detection (não confunde computed props com ctor params)
 
 ### ~~Switch / Pattern Matching~~ ✅
+
 - [x] Switch statement (`switch/case/default`) → `switch` TS
 - [x] Switch expression (`x switch { ... }`) → ternary chain
 - [x] `is null` → `=== null`
@@ -237,6 +256,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] `_` discard → default/else
 
 ### Extension Methods ✅ (parcial)
+
 - [x] Classic extension methods (`this` param) → funções com receiver como primeiro parâmetro
 - [x] Auto-detect: static classes com extension methods tratadas como módulo
 - [x] Generic extension methods
@@ -245,19 +265,23 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [ ] C# 14 extension properties em blocos
 
 ### ~~Collections Ricas~~ ✅
+
 - [x] `List<T>` → `T[]`
 - [x] `Dictionary<K,V>` → `Map<K,V>`
 - [x] `HashSet<T>` → `Set<T>`
 - [x] LINQ methods → Array methods (BclMapper) — API direta de coleção (.push, .includes, etc.)
 - [x] LINQ runtime lazy (`EnumerableBase<T>` com hierarquia de classes compostas)
 - [x] LINQ via `System.Linq.Enumerable` → `Enumerable.from(x).where(...)` lazy chains
-- [x] Composição: where, select, selectMany, orderBy, orderByDescending, take, skip, distinct, groupBy, concat, takeWhile, skipWhile, distinctBy, reverse, zip, append, prepend, union, intersect, except
-- [x] Terminais: toArray, toMap (ToDictionary), toSet (ToHashSet), first, firstOrDefault, last, lastOrDefault, single, singleOrDefault, any, all, count, sum, average, min, max, minBy, maxBy, contains, aggregate
+- [x] Composição: where, select, selectMany, orderBy, orderByDescending, take, skip, distinct, groupBy, concat,
+  takeWhile, skipWhile, distinctBy, reverse, zip, append, prepend, union, intersect, except
+- [x] Terminais: toArray, toMap (ToDictionary), toSet (ToHashSet), first, firstOrDefault, last, lastOrDefault, single,
+  singleOrDefault, any, all, count, sum, average, min, max, minBy, maxBy, contains, aggregate
 - [x] Detecção automática: `IsLinqExtensionMethod` vs `IsCollectionType` via Roslyn semantic model
 - [x] Anti-double-wrapping: `IsAlreadyLinqChain()` para chains compostas
 - [ ] `Queue<T>`, `Stack<T>` → arrays com helpers
 
 ### Enums Avançados
+
 - [ ] Enum com métodos de extensão → funções auxiliares
 - [ ] `[Flags]` enum → bitwise operations
 - [ ] Enum parsing: `Enum.Parse<T>()` → lookup table
@@ -267,13 +291,16 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 ## Infraestrutura
 
 ### Mapeamentos Declarativos (substituir BclMapper hardcoded)
+
 > Atualmente os mapeamentos BCL→JS estão hardcoded no `BclMapper.cs`.
 > Migrar para um sistema declarativo via atributos assembly-level:
+
 ```csharp
 [assembly: MapMethod(typeof(List<>), "Add", JsMethod = "push")]
 [assembly: MapProperty(typeof(List<>), "Count", JsProperty = "length")]
 [assembly: MapMethod(typeof(Enumerable), "Any", JsMethod = "some")]
 ```
+
 - [ ] Definir atributos `[MapMethod]`, `[MapProperty]` no MetaSharp.Annotations
 - [ ] Ler mapeamentos no TypeTransformer (similar a `[ExportFromBcl]`)
 - [ ] Packages externos podem definir seus próprios mapeamentos
@@ -281,6 +308,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [ ] Mapeamentos default no `@meta-sharp/runtime` (assembly C# companion)
 
 ### Config File (`meta-sharp.json`)
+
 - [ ] Output directory
 - [ ] Type mappings globais
 - [ ] Naming conventions (camelCase, PascalCase)
@@ -288,25 +316,30 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [ ] Exclude patterns
 
 ### Watch Mode
+
 - [ ] `--watch` flag na CLI
 - [ ] FileSystemWatcher nos .cs do projeto
 - [ ] Recompilação incremental (só arquivos alterados)
 - [ ] Integração com Vite/Bun dev server
 
 ### Developer Experience
+
 - [ ] Source maps (.cs → .ts) para debugging
 - [ ] Warnings para constructs C# não suportados (em vez de silent fail)
 - [ ] `--dry-run` para preview do output
 - [ ] `--verbose` para log detalhado da transformação
 
 ### @meta-sharp/runtime
+
 - [x] `HashCode` (xxHash32)
-- [x] Runtime type checks: `isChar`, `isString`, `isByte`, `isSByte`, `isInt16`, `isUInt16`, `isInt32`, `isUInt32`, `isInt64`, `isUInt64`, `isFloat32`, `isFloat64`, `isBool`, `isBigInt`
+- [x] Runtime type checks: `isChar`, `isString`, `isByte`, `isSByte`, `isInt16`, `isUInt16`, `isInt32`, `isUInt32`,
+  `isInt64`, `isUInt64`, `isFloat32`, `isFloat64`, `isBool`, `isBigInt`
 - [ ] `Decimal` wrapper (ou integração com decimal.js)
 - [ ] `equals()` / `hashCode()` utilities para comparação deep
 - [ ] Serialization helpers: `toJSON()` / `fromJSON()` com validação
 
 ### LINQ Runtime — Migração para pipe-based (tree-shaking)
+
 > A implementação atual usa factory registration (`_registerFactories`) que puxa todos os
 > operadores LINQ ao importar qualquer coisa do módulo. Isso impede tree-shaking.
 >
@@ -326,6 +359,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 > **Impacto no transpiler:** BclMapper geraria `pipe()` chains + imports granulares por operador.
 > **Quando migrar:** quando o runtime crescer (serialização, type guards, etc.) ou tree-shaking
 > se tornar requisito real. Refactor localizado (BclMapper + runtime, sem afetar C# do usuário).
+
 - [ ] Definir tipo `OperatorFn<T, R>` e função `pipe()` com overloads tipados
 - [ ] Converter cada operador para função standalone: `where(pred)` retorna `OperatorFn`
 - [ ] `EnumerableBase.pipe(...operators)` aplica a cadeia
@@ -338,6 +372,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 ## Bugs Conhecidos (encontrados via SampleTodo)
 
 ### ~~Lambda expressions~~ ✅
+
 - [x] `SimpleLambdaExpression` → `(param) => { return expr; }`
 - [x] `ParenthesizedLambdaExpression` → `(x, y) => { return expr; }`
 - [x] Expression body e block body suportados
@@ -345,11 +380,13 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] Type inference para parâmetros de lambda
 
 ### ~~Private fields~~ ✅
+
 - [x] `IFieldSymbol` �� `TsFieldMember` com accessibility, readonly, initializer
 - [x] Backing fields de auto-properties filtrados (sem duplicação)
 - [x] C# 12 collection expressions: `[]` → `[]`
 
 ### ~~LINQ / Collection methods no BclMapper~~ ✅
+
 - [x] `List<T>.Count` → `.length`, `Dictionary.Count` → `.size`
 - [x] `List<T>.Add` → `.push`, `.Contains` → `.includes`, `.Clear` → `.length = 0`
 - [x] `.Any()` → `.some()`, `.All()` → `.every()`, `.Where()` → `.filter()`
@@ -362,6 +399,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] `Dictionary.ContainsKey` → `.has()`, `.Add` → `.set()`, `.Remove` → `.delete()`
 
 ### ~~Method overloads de instância não detectados~~ ✅
+
 - [x] `TodoList.Add(TodoItem)`, `Add(string)`, `Add(string, Priority)` → gera dispatcher com type guards
 - [x] Mesmo pattern dos constructor overloads (overload signatures + dispatcher body)
 
@@ -370,18 +408,22 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 ## Futuro / Exploratório
 
 ### Serialização
+
 - [ ] Imitar o serializador do C# no TS (JSON roundtrip com classes)
 - [ ] `toJSON()` method gerado (class → plain object)
 - [ ] `fromJSON()` static method gerado (plain object → class instance, com validação)
 - [ ] Suporte a `[JsonPropertyName]`, `[JsonIgnore]`
 
 ### Outros Targets
+
 - [ ] Gerar Dart (para Flutter) — mesma AST intermediária, Printer diferente
 - [ ] Gerar Kotlin — para uso Android nativo
 
 ### Lambda / Expression Tree Optimization
+
 > Atualmente lambdas geram arrow functions TS diretamente. Para o futuro,
 > considerar separar a representação de lambdas para permitir:
+
 - [ ] Expression trees capturadas como objetos AST (similar a `Expression<Func<T>>` no C#)
 - [ ] Visitor que traduz expression trees para SQL, GraphQL, etc. (IQueryable pattern)
 - [ ] Build-time compilation: gerar um grande JS bundle a partir das árvores de expressão
@@ -389,6 +431,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [ ] Avaliar se string + eval é viável para cenários dinâmicos (provavelmente não — segurança)
 
 ### Tooling
+
 - [ ] Plugin para Rider/VS Code: highlight de tipos transpilados
 - [ ] MSBuild integration: gerar TS no `dotnet build`
 - [ ] NuGet package para distribuição do compiler como tool

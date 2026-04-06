@@ -16,7 +16,8 @@ public class TodoList(string name)
 
     public void Add(string title) => _items.Add(new TodoItem(title));
 
-    public void Add(string title, Priority priority) => _items.Add(new TodoItem(title, Priority: priority));
+    public void Add(string title, Priority priority) =>
+        _items.Add(new TodoItem(title, Priority: priority));
 
     public TodoItem? FindByTitle(string title) => _items.FirstOrDefault(i => i.Title == title);
 

@@ -29,6 +29,8 @@ public static class SymbolHelper
 
     public static bool HasStringEnum(ISymbol symbol) => HasAttribute(symbol, "StringEnum");
 
+    public static bool HasFlags(ISymbol symbol) => HasAttribute(symbol, "Flags") || HasAttribute(symbol, "FlagsAttribute");
+
     public static bool HasIgnore(ISymbol symbol) => HasAttribute(symbol, "Ignore");
 
     public static bool HasModule(ISymbol symbol) => HasAttribute(symbol, "Module");

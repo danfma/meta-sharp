@@ -235,6 +235,34 @@ public static class BclMapper
             };
         }
 
+        // Enum.HasFlag(flag) → (value & flag) === flag
+        if (name == "HasFlag"
+            && (containing == "System.Enum" || method.ContainingType is { TypeKind: TypeKind.Enum })
+            && invocation.Expression is MemberAccessExpressionSyntax hasFlagAccess
+            && args.Count == 1)
+        {
+            var enumValue = transformer.TransformExpression(hasFlagAccess.Expression);
+            var flag = args[0];
+            return new TsBinaryExpression(
+                new TsParenthesized(new TsBinaryExpression(enumValue, "&", flag)),
+                "===",
+                flag);
+        }
+
+        // Enum.Parse<T>(text) → T[text as keyof typeof T]  (for numeric enums)
+        if (containing == "System.Enum" && name == "Parse"
+            && method.TypeArguments.Length == 1
+            && args.Count >= 1)
+        {
+            var enumType = method.TypeArguments[0];
+            var enumName = enumType.Name;
+            var textArg = args[0];
+            // For numeric enums: EnumName[text as keyof typeof EnumName]
+            return new TsElementAccess(
+                new TsIdentifier(enumName),
+                new TsCastExpression(textArg, new TsNamedType($"keyof typeof {enumName}")));
+        }
+
         // Console.WriteLine → console.log
         if (containing == "System.Console" && name == "WriteLine")
             return new TsCallExpression(
