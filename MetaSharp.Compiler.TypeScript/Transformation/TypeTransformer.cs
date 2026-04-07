@@ -253,11 +253,11 @@ public sealed class TypeTransformer(Compilation compilation)
 
         if (type.TypeKind == TypeKind.Enum)
         {
-            TransformEnum(type, statements);
+            EnumTransformer.Transform(type, statements);
         }
         else if (type.TypeKind == TypeKind.Interface)
         {
-            TransformInterface(type, statements);
+            InterfaceTransformer.Transform(type, statements);
         }
         else if (IsExceptionType(type))
         {
@@ -308,47 +308,6 @@ public sealed class TypeTransformer(Compilation compilation)
         return new TsSourceFile(relativePath, statements, ns);
     }
 
-    // ─── Interface ──────────────────────────────────────────
-
-    private void TransformInterface(INamedTypeSymbol type, List<TsTopLevel> statements)
-    {
-        var properties = new List<TsProperty>();
-        var interfaceMethods = new List<TsInterfaceMethod>();
-
-        foreach (var member in type.GetMembers())
-        {
-            if (member.IsImplicitlyDeclared) continue;
-            if (member.DeclaredAccessibility != Accessibility.Public) continue;
-            if (SymbolHelper.HasIgnore(member)) continue;
-
-            switch (member)
-            {
-                case IPropertySymbol prop:
-                    var propName = SymbolHelper.GetNameOverride(prop) ?? TypeScriptNaming.ToCamelCase(prop.Name);
-                    var propType = TypeMapper.Map(prop.Type);
-                    var isReadonly = prop.SetMethod is null || prop.SetMethod.IsInitOnly;
-                    properties.Add(new TsProperty(propName, propType, isReadonly));
-                    break;
-
-                case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary:
-                    var name = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
-                    var returnType = TypeMapper.Map(method.ReturnType);
-                    var parameters = method.Parameters
-                        .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
-                        .ToList();
-                    var methodTypeParams = ExtractMethodTypeParameters(method);
-                    interfaceMethods.Add(new TsInterfaceMethod(name, parameters, returnType, methodTypeParams));
-                    break;
-            }
-        }
-
-        // Strip 'I' prefix convention for TS (IShape → Shape)
-        var tsName = GetTsTypeName(type);
-        var typeParams = ExtractTypeParameters(type);
-        statements.Add(new TsInterface(tsName, properties, TypeParameters: typeParams,
-            Methods: interfaceMethods.Count > 0 ? interfaceMethods : null));
-    }
-
     /// <summary>
     /// Returns the TypeScript name for a type. Uses [Name] override if present, otherwise the C# name as-is.
     /// </summary>
@@ -382,47 +341,6 @@ public sealed class TypeTransformer(Compilation compilation)
         return result;
     }
 
-    // ─── Enum ───────────────────────────────────────────────
-
-    private void TransformEnum(INamedTypeSymbol type, List<TsTopLevel> statements)
-    {
-        var isStringEnum = SymbolHelper.HasStringEnum(type);
-
-        if (isStringEnum)
-        {
-            var literalTypes = new List<TsType>();
-            var entries = new List<(string Key, TsExpression Value)>();
-            foreach (var member in type.GetMembers().OfType<IFieldSymbol>())
-            {
-                if (!member.HasConstantValue)
-                    continue;
-                var name = SymbolHelper.GetNameOverride(member) ?? member.Name;
-                literalTypes.Add(new TsStringLiteralType(name));
-                entries.Add((member.Name, new TsStringLiteral(name)));
-            }
-
-            // Generate: export const EnumName = { Member: "value", ... } as const;
-            statements.Add(new TsConstObject(type.Name, entries));
-            // Generate: export type EnumName = typeof EnumName[keyof typeof EnumName];
-            statements.Add(new TsTypeAlias(type.Name,
-                new TsNamedType($"typeof {type.Name}[keyof typeof {type.Name}]")));
-        }
-        else
-        {
-            var members = new List<TsEnumMember>();
-            foreach (var member in type.GetMembers().OfType<IFieldSymbol>())
-            {
-                if (!member.HasConstantValue)
-                    continue;
-                var name = SymbolHelper.GetNameOverride(member) ?? member.Name;
-                members.Add(
-                    new TsEnumMember(name, new TsLiteral(member.ConstantValue!.ToString()!))
-                );
-            }
-
-            statements.Add(new TsEnum(type.Name, members));
-        }
-    }
 
     // ─── Exception (class extending Error) ───────────────────
 
@@ -1278,7 +1196,7 @@ public sealed class TypeTransformer(Compilation compilation)
         );
     }
 
-    private IReadOnlyList<TsTypeParameter>? ExtractTypeParameters(INamedTypeSymbol type)
+    internal static IReadOnlyList<TsTypeParameter>? ExtractTypeParameters(INamedTypeSymbol type)
     {
         if (type.TypeParameters.Length == 0) return null;
         return type.TypeParameters.Select(tp =>
