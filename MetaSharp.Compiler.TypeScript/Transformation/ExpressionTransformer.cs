@@ -38,6 +38,9 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private LambdaHandler? _lambdas;
     private LambdaHandler Lambdas => _lambdas ??= new LambdaHandler(this);
 
+    private ObjectCreationHandler? _objectCreation;
+    private ObjectCreationHandler ObjectCreation => _objectCreation ??= new ObjectCreationHandler(this);
+
     private TsExpression Unsupported(SyntaxNode node, string message)
     {
         ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
@@ -189,9 +192,9 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
             InvocationExpressionSyntax invocation => TransformInvocation(invocation),
 
-            ObjectCreationExpressionSyntax creation => TransformObjectCreation(creation),
+            ObjectCreationExpressionSyntax creation => ObjectCreation.TransformObjectCreation(creation),
             ImplicitObjectCreationExpressionSyntax implicitCreation =>
-                TransformImplicitObjectCreation(implicitCreation),
+                ObjectCreation.TransformImplicitObjectCreation(implicitCreation),
 
             InterpolatedStringExpressionSyntax interp => TransformInterpolatedString(interp),
 
@@ -207,7 +210,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
             CastExpressionSyntax cast => TransformExpression(cast.Expression),
 
-            WithExpressionSyntax withExpr => TransformWithExpression(withExpr),
+            WithExpressionSyntax withExpr => ObjectCreation.TransformWithExpression(withExpr),
 
             ThrowExpressionSyntax throwExpr =>
             // In TS, throw is a statement, but we can wrap it in an IIFE for expression context
@@ -366,64 +369,11 @@ public sealed class ExpressionTransformer(SemanticModel model)
         return new TsCallExpression(callee, args);
     }
 
-    private TsExpression TransformObjectCreation(ObjectCreationExpressionSyntax creation)
-    {
-        var typeInfo = model.GetTypeInfo(creation);
-        var type = typeInfo.Type;
-
-        // Inline wrapper structs are emitted as companion objects, not classes:
-        // new UserId(v) -> UserId.create(v)
-        if (type is INamedTypeSymbol inlineWrapperType && SymbolHelper.HasInlineWrapper(inlineWrapperType))
-        {
-            var args = ResolveArguments(creation.ArgumentList, creation);
-            var tsTypeName = SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
-            return new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier(tsTypeName), "create"),
-                args
-            );
-        }
-
-        // Record struct/record → new Type(args)
-        if (type is INamedTypeSymbol { IsRecord: true } recordType)
-            return CreateNewFromArgs(recordType, creation.ArgumentList);
-
-        // Exception → new ErrorSubclass(...) or new Error(...)
-        if (IsExceptionType(type))
-        {
-            var args = ResolveArguments(creation.ArgumentList, creation);
-            var errorName = type is INamedTypeSymbol named && SymbolHelper.IsTranspilable(named, AssemblyWideTranspile, CurrentAssembly)
-                ? named.Name
-                : "Error";
-            return new TsNewExpression(new TsIdentifier(errorName), args);
-        }
-
-        // Default: new Type(args) — resolve named arguments to positional
-        var ctorArgs = ResolveArguments(creation.ArgumentList, creation);
-        var typeName = type is INamedTypeSymbol nt ? BuildQualifiedTypeName(nt) : (type?.Name ?? "Object");
-        return new TsNewExpression(new TsIdentifier(typeName), ctorArgs);
-    }
-
-    /// <summary>
-    /// Builds the TS-side qualified name for a type. Nested types become `Outer.Inner`.
-    /// </summary>
-    private static string BuildQualifiedTypeName(INamedTypeSymbol type)
-    {
-        if (type.ContainingType is null) return type.Name;
-        var parts = new List<string> { type.Name };
-        var current = type.ContainingType;
-        while (current is not null)
-        {
-            parts.Insert(0, current.Name);
-            current = current.ContainingType;
-        }
-        return string.Join(".", parts);
-    }
-
     /// <summary>
     /// Resolves arguments (including named arguments) to positional order,
     /// filling in default values for skipped parameters.
     /// </summary>
-    private List<TsExpression> ResolveArguments(ArgumentListSyntax? argumentList, ExpressionSyntax callSite)
+    internal List<TsExpression> ResolveArguments(ArgumentListSyntax? argumentList, ExpressionSyntax callSite)
     {
         if (argumentList is null || argumentList.Arguments.Count == 0)
             return [];
@@ -511,78 +461,6 @@ public sealed class ExpressionTransformer(SemanticModel model)
         }
 
         return result.Take(lastProvided + 1).ToList();
-    }
-
-    private TsExpression TransformImplicitObjectCreation(
-        ImplicitObjectCreationExpressionSyntax creation
-    )
-    {
-        var typeInfo = model.GetTypeInfo(creation);
-        var type = typeInfo.ConvertedType;
-
-        if (type is INamedTypeSymbol inlineWrapperType && SymbolHelper.HasInlineWrapper(inlineWrapperType))
-        {
-            var inlineArgs = creation
-                .ArgumentList.Arguments.Select(a => TransformExpression(a.Expression))
-                .ToList();
-            var tsTypeName = SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
-            return new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier(tsTypeName), "create"),
-                inlineArgs
-            );
-        }
-
-        if (type is INamedTypeSymbol { IsRecord: true } recordType)
-            return CreateNewFromArgs(recordType, creation.ArgumentList);
-
-        var args = creation
-            .ArgumentList.Arguments.Select(a => TransformExpression(a.Expression))
-            .ToList();
-
-        return new TsNewExpression(new TsIdentifier(type?.Name ?? "Object"), args);
-    }
-
-    private TsNewExpression CreateNewFromArgs(
-        INamedTypeSymbol recordType,
-        ArgumentListSyntax? argumentList
-    )
-    {
-        // Use ResolveArguments for named argument support
-        if (argumentList is not null)
-        {
-            // Find the syntax node that triggered this (for symbol resolution)
-            var parentExpr = argumentList.Parent as ExpressionSyntax;
-            if (parentExpr is not null)
-            {
-                var args = ResolveArguments(argumentList, parentExpr);
-                return new TsNewExpression(new TsIdentifier(recordType.Name), args);
-            }
-        }
-
-        var simpleArgs = argumentList?.Arguments.Select(a => TransformExpression(a.Expression)).ToList() ?? [];
-        return new TsNewExpression(new TsIdentifier(recordType.Name), simpleArgs);
-    }
-
-    private TsExpression TransformWithExpression(WithExpressionSyntax withExpr)
-    {
-        // record with { X = expr } → source.with({ x: expr })
-        var source = TransformExpression(withExpr.Expression);
-        var properties = new List<TsObjectProperty>();
-
-        foreach (var assignment in withExpr.Initializer.Expressions)
-        {
-            if (assignment is AssignmentExpressionSyntax assign)
-            {
-                var name = TypeScriptNaming.ToCamelCase(assign.Left.ToString());
-                var value = TransformExpression(assign.Right);
-                properties.Add(new TsObjectProperty(name, value));
-            }
-        }
-
-        return new TsCallExpression(
-            new TsPropertyAccess(source, "with"),
-            [new TsObjectLiteral(properties)]
-        );
     }
 
     private TsExpression TransformInterpolatedString(InterpolatedStringExpressionSyntax interp)
@@ -744,17 +622,4 @@ public sealed class ExpressionTransformer(SemanticModel model)
         TsPropertyAccess access => $"{ExprToString(access.Object)}.{access.Property}",
         _ => "unknown"
     };
-
-    private static bool IsExceptionType(ITypeSymbol? type)
-    {
-        var current = type;
-        while (current is not null)
-        {
-            if (current.ToDisplayString() == "System.Exception")
-                return true;
-            current = current.BaseType;
-        }
-
-        return false;
-    }
 }
