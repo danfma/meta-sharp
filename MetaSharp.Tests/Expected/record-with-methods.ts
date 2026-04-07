@@ -1,4 +1,5 @@
 import { HashCode } from "@meta-sharp/runtime";
+
 export class Amount {
   constructor(readonly value: number) { }
 

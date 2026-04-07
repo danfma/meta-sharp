@@ -1,4 +1,5 @@
 import { HashCode } from "@meta-sharp/runtime";
+
 export class PageRequest {
   constructor(readonly number: number = 1, readonly size: number = 20) { }
 

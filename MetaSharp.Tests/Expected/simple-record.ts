@@ -1,4 +1,5 @@
 import { HashCode } from "@meta-sharp/runtime";
+
 export class Point {
   constructor(readonly x: number, readonly y: number) { }
 

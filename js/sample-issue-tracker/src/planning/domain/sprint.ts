@@ -2,10 +2,11 @@ import { Temporal } from "@js-temporal/polyfill";
 import { dayNumber } from "@meta-sharp/runtime";
 import { HashSet } from "@meta-sharp/runtime";
 import type { IssueId } from "#/issues/domain/issue-id";
-export class Sprint {
-  constructor(readonly key: string, public name: string, public startDate: Temporal.PlainDate, public endDate: Temporal.PlainDate) { }
 
+export class Sprint {
   private readonly _plannedIssues: HashSet<IssueId> = new HashSet();
+
+  constructor(readonly key: string, public name: string, public startDate: Temporal.PlainDate, public endDate: Temporal.PlainDate) { }
 
   get plannedIssues(): Iterable<IssueId> {
     return this._plannedIssues;

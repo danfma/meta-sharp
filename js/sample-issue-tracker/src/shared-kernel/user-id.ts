@@ -1,5 +1,7 @@
 import { HashCode } from "@meta-sharp/runtime";
+
 export type UserId = string & { readonly __brand: "UserId" };
+
 export namespace UserId {
   export function create(value: string): UserId {
     return value as UserId;

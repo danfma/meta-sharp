@@ -5,6 +5,7 @@ import { IssueStatus } from "#/issues/domain/issue-status";
 import type { PageRequest } from "#/shared-kernel/page-request";
 import type { PageResult } from "#/shared-kernel/page-result";
 import type { UserId } from "#/shared-kernel/user-id";
+
 export interface IIssueRepository {
   getByIdAsync(id: IssueId): Promise<Issue | null>;
   listAsync(): Promise<Issue[]>;

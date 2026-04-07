@@ -7,10 +7,11 @@ import { IssueStatus } from "#/issues/domain/issue-status";
 import type { PageRequest } from "#/shared-kernel/page-request";
 import { PageResult } from "#/shared-kernel/page-result";
 import type { UserId } from "#/shared-kernel/user-id";
-export class InMemoryIssueRepository implements IIssueRepository {
-  constructor() { }
 
+export class InMemoryIssueRepository implements IIssueRepository {
   private readonly _issues: Issue[] = [];
+
+  constructor() { }
 
   getByIdAsync(id: IssueId): Promise<Issue | null> {
     return Promise.resolve(Enumerable.from(this._issues).firstOrDefault((issue: Issue) => issue.id === id));

@@ -13,8 +13,38 @@ public sealed class Printer(string indent = "  ")
     public string Print(TsSourceFile file)
     {
         _sb.Clear();
-        _sb.WriteLines(file.Statements, PrintTopLevel);
+        for (var i = 0; i < file.Statements.Count; i++)
+        {
+            var stmt = file.Statements[i];
+            if (i > 0)
+            {
+                var prev = file.Statements[i - 1];
+                if (NeedsBlankLineBetween(prev, stmt))
+                    _sb.WriteLn();
+            }
+            PrintTopLevel(stmt);
+            _sb.WriteLn();
+        }
         return _sb.ToString();
+    }
+
+    /// <summary>
+    /// Decides if a blank line should separate two consecutive top-level statements.
+    /// Imports/re-exports are grouped together with no blank lines. Distinct kinds
+    /// (types vs functions vs constants) get a blank line between them. Same-kind
+    /// items (e.g., consecutive functions) also get a blank line for readability.
+    /// </summary>
+    private static bool NeedsBlankLineBetween(TsTopLevel prev, TsTopLevel next)
+    {
+        // Import / re-export block: no blank line between them, but blank line before
+        // anything else.
+        var prevIsImport = prev is TsImport or TsReExport;
+        var nextIsImport = next is TsImport or TsReExport;
+        if (prevIsImport && nextIsImport) return false;
+        if (prevIsImport != nextIsImport) return true;
+
+        // For non-imports, separate everything by blank lines (types, functions, constants)
+        return true;
     }
 
     // ─── Top-level ──────────────────────────────────────────
@@ -180,7 +210,6 @@ public sealed class Printer(string indent = "  ")
             }
         });
         _sb.Write(" as const;");
-        _sb.WriteLn();
     }
 
     // ─── Class ──────────────────────────────────────────────
@@ -204,16 +233,49 @@ public sealed class Printer(string indent = "  ")
             _sb.WriteList(tsClass.Implements, PrintType);
         }
 
+        // Group members in idiomatic TS order: fields → constructor → getters/setters → methods
+        var fields = tsClass.Members.Where(m => m is TsFieldMember).ToList();
+        var accessors = tsClass.Members.Where(m => m is TsGetterMember or TsSetterMember).ToList();
+        var methods = tsClass.Members.Where(m => m is TsMethodMember).ToList();
+        var others = tsClass.Members
+            .Where(m => m is not (TsFieldMember or TsGetterMember or TsSetterMember or TsMethodMember))
+            .ToList();
+
         _sb.WriteBlock(() =>
         {
-            if (tsClass.Constructor is not null)
-                PrintConstructor(tsClass.Constructor);
+            var firstGroup = true;
 
-            foreach (var member in tsClass.Members)
+            void PrintGroup(IReadOnlyList<TsClassMember> members)
             {
-                _sb.WriteLn();
-                PrintClassMember(member);
+                if (members.Count == 0) return;
+                if (!firstGroup) _sb.WriteLn();
+                firstGroup = false;
+                for (var i = 0; i < members.Count; i++)
+                {
+                    if (i > 0) _sb.WriteLn();
+                    PrintClassMember(members[i]);
+                }
             }
+
+            // Fields first
+            PrintGroup(fields);
+
+            // Constructor
+            if (tsClass.Constructor is not null)
+            {
+                if (!firstGroup) _sb.WriteLn();
+                firstGroup = false;
+                PrintConstructor(tsClass.Constructor);
+            }
+
+            // Getters / setters
+            PrintGroup(accessors);
+
+            // Methods
+            PrintGroup(methods);
+
+            // Anything else
+            PrintGroup(others);
         });
     }
 

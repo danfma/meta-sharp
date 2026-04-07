@@ -9,12 +9,13 @@ import { OperationResult } from "#/shared-kernel/operation-result";
 import type { PageRequest } from "#/shared-kernel/page-request";
 import type { PageResult } from "#/shared-kernel/page-result";
 import type { UserId } from "#/shared-kernel/user-id";
+
 export class IssueService {
+  private readonly _repository: IIssueRepository;
+
   constructor(repository: IIssueRepository) {
     this._repository = repository;
   }
-
-  private readonly _repository: IIssueRepository;
 
   private async createAsyncTitleDescriptionTypePriority(title: string, description: string, type: IssueType, priority: IssuePriority): Promise<OperationResult<Issue>> {
     let issue = new Issue(IssueId.new_(), title, description, type, priority);

@@ -1,4 +1,5 @@
 import { HashCode } from "@meta-sharp/runtime";
+
 export class Result<T> {
   constructor(readonly value: T, readonly success: boolean) { }
 

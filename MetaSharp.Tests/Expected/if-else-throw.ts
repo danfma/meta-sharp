@@ -1,4 +1,5 @@
 import { HashCode } from "@meta-sharp/runtime";
+
 export class Pair {
   constructor(readonly a: number, readonly b: number) { }
 

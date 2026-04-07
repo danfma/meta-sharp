@@ -1,5 +1,6 @@
 import { HashCode } from "@meta-sharp/runtime";
 import { Shape } from "#/shape";
+
 export class Circle extends Shape {
   constructor(readonly radius: number) {
     super(x, y);

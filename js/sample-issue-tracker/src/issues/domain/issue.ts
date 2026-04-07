@@ -7,9 +7,8 @@ import { IssueStatus } from "#/issues/domain/issue-status";
 import { IssueType } from "#/issues/domain/issue-type";
 import { IssueWorkflow } from "#/issues/domain/issue-workflow";
 import type { UserId } from "#/shared-kernel/user-id";
-export class Issue {
-  constructor(readonly id: IssueId, public title: string, public description: string, readonly type: IssueType, public priority: IssuePriority = "medium") { }
 
+export class Issue {
   status: IssueStatus = IssueStatus.Backlog;
 
   assigneeId: UserId | null = null;
@@ -21,6 +20,8 @@ export class Issue {
   updatedAt: Temporal.ZonedDateTime = Temporal.Now.zonedDateTimeISO();
 
   private readonly _comments: Comment[] = [];
+
+  constructor(readonly id: IssueId, public title: string, public description: string, readonly type: IssueType, public priority: IssuePriority = "medium") { }
 
   get comments(): Comment[] {
     return this._comments;
