@@ -32,6 +32,9 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private PatternMatchingHandler? _patterns;
     private PatternMatchingHandler Patterns => _patterns ??= new PatternMatchingHandler(this);
 
+    private SwitchHandler? _switches;
+    private SwitchHandler Switches => _switches ??= new SwitchHandler(this, Patterns);
+
     private TsExpression Unsupported(SyntaxNode node, string message)
     {
         ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
@@ -73,7 +76,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
             LocalDeclarationStatementSyntax localDecl => TransformLocalDeclaration(localDecl),
 
-            SwitchStatementSyntax switchStmt => TransformSwitchStatement(switchStmt),
+            SwitchStatementSyntax switchStmt => Switches.TransformSwitchStatement(switchStmt),
 
             BlockSyntax block =>
             // Flatten single-statement blocks
@@ -229,7 +232,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             ConditionalAccessExpressionSyntax condAccess =>
                 TransformConditionalAccess(condAccess),
 
-            SwitchExpressionSyntax switchExpr => TransformSwitchExpression(switchExpr),
+            SwitchExpressionSyntax switchExpr => Switches.TransformSwitchExpression(switchExpr),
 
             IsPatternExpressionSyntax isPattern => Patterns.TransformIsPattern(isPattern),
 
@@ -653,73 +656,6 @@ public sealed class ExpressionTransformer(SemanticModel model)
     /// Expands an [Emit] expression, replacing $0, $1, etc. with the transformed arguments.
     /// Returns a TsLiteral with the expanded raw JS.
     /// </summary>
-    // ─── Switch ──────────────────────────────────────────────
-
-    private TsSwitchStatement TransformSwitchStatement(SwitchStatementSyntax switchStmt)
-    {
-        var discriminant = TransformExpression(switchStmt.Expression);
-        var cases = new List<TsSwitchCase>();
-
-        foreach (var section in switchStmt.Sections)
-        {
-            var body = section.Statements.Select(TransformStatement).ToList();
-
-            foreach (var label in section.Labels)
-            {
-                switch (label)
-                {
-                    case CaseSwitchLabelSyntax caseLabel:
-                        cases.Add(new TsSwitchCase(TransformExpression(caseLabel.Value), body));
-                        break;
-                    case DefaultSwitchLabelSyntax:
-                        cases.Add(new TsSwitchCase(null, body));
-                        break;
-                    case CasePatternSwitchLabelSyntax patternLabel:
-                        // Pattern-based case → convert pattern to condition and use if-like logic
-                        // For now, fall through to default
-                        cases.Add(new TsSwitchCase(null, body));
-                        break;
-                }
-            }
-        }
-
-        return new TsSwitchStatement(discriminant, cases);
-    }
-
-    private TsExpression TransformSwitchExpression(SwitchExpressionSyntax switchExpr)
-    {
-        var governing = TransformExpression(switchExpr.GoverningExpression);
-        var arms = switchExpr.Arms.ToList();
-
-        // Build a ternary chain: cond1 ? val1 : cond2 ? val2 : default
-        return BuildTernaryChain(governing, arms, 0);
-    }
-
-    private TsExpression BuildTernaryChain(TsExpression governing, List<SwitchExpressionArmSyntax> arms, int index)
-    {
-        if (index >= arms.Count)
-            return new TsIdentifier("undefined");
-
-        var arm = arms[index];
-        var value = TransformExpression(arm.Expression);
-
-        // Discard pattern (_) → this is the default/else
-        if (arm.Pattern is DiscardPatternSyntax)
-            return value;
-
-        var condition = Patterns.TransformPatternToCondition(governing, arm.Pattern);
-
-        // Add when clause if present
-        if (arm.WhenClause is not null)
-        {
-            var whenExpr = TransformExpression(arm.WhenClause.Condition);
-            condition = new TsBinaryExpression(condition, "&&", whenExpr);
-        }
-
-        var rest = BuildTernaryChain(governing, arms, index + 1);
-        return new TsConditionalExpression(condition, value, rest);
-    }
-
 
     private static string MapBinaryOperator(string op) => op switch
     {
