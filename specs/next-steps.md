@@ -315,12 +315,15 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] NÃO gera barrels agregadores pai
 - [x] Detecta colisão `index.ts` (type chamado `Index`) e pula o barrel
 - [x] StringEnum/InlineWrapper re-exportados como value (não type-only)
-- [ ] Marcar `"sideEffects": false` automaticamente no `package.json` gerado
+- [x] `"sideEffects": false` automaticamente no `package.json` gerado
 
 #### Imports
 - [x] **`#/` subpath imports** para todos os imports cross-file
 - [x] Sample configurado com `package.json#imports` e `tsconfig#paths`
-- [ ] Geração automática do `package.json#exports` baseado nos arquivos gerados
+- [x] **Geração automática do `package.json`** com `imports`, `exports`, `sideEffects`, `type`
+- [x] Conditional exports (`types`/`import`/`default`) apontando para dist com fallback src
+- [x] Merge não-destrutivo: preserva user fields (name, deps, scripts)
+- [x] CLI flags: `--package-root`, `--dist`, `--skip-package-json`
 
 #### Estrutura de testes
 - [x] Sample: testes em `test/` espelhando estrutura de `src/`
@@ -336,23 +339,17 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [ ] **Cache incremental**: hash de arquivos + dependências semânticas, pular regeração
 - [ ] **Cyclic references**: detectar e emitir warning/error claro com a cadeia problemática
 
-### Nested Types
+### ~~Nested Types~~ ✅
 
-> Tipos aninhados em C# (`class Outer { class Inner { ... } }`) atualmente não são suportados.
-> No TS, podemos representá-los de algumas formas:
->
-> 1. **Flatten para arquivos separados**: `outer.ts` e `outer-inner.ts`, com Inner exportado
->    no namespace folha (`outer/index.ts`).
-> 2. **Nested no mesmo arquivo**: `outer.ts` contém ambos, `Outer.Inner` no consumer.
-> 3. **Companion namespace**: `outer.ts` define `class Outer` + `namespace Outer { export class Inner }`.
->
-> Opção 3 é a mais idiomática TS e preserva a sintaxe de acesso `Outer.Inner` igual ao C#.
+> Implementado via **companion namespace** (declaration merging em TS).
+> `class Outer { class Inner }` → `export class Outer; export namespace Outer { export class Inner }`
 
-- [ ] Detectar nested types no TypeTransformer (`type.GetTypeMembers()`)
-- [ ] Avaliar abordagem (provavelmente companion namespace via declaration merging)
-- [ ] Suportar acesso ao tipo nested via `Outer.Inner` no call site
-- [ ] Considerar nested enums, nested records, nested classes
-- [ ] Testes inline cobrindo cada caso
+- [x] Detectar nested types no TypeTransformer (filtrados em `DiscoverTranspilableTypes`)
+- [x] Companion namespace via `TsNamespaceDeclaration.Members`
+- [x] Acesso `Outer.Inner` no call site (via `BuildQualifiedTypeName` no ExpressionTransformer)
+- [x] Nested classes, nested enums, nested records suportados
+- [x] Imports automáticos detectam o root type para nested references
+- [x] 4 testes em NestedTypesTests.cs
 
 ### Compiler Architecture (recomendações Gemini)
 
@@ -370,12 +367,14 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [ ] **Sistema de plugins/mappers**: usuários registram mappers customizados sem
   alterar o core (alinhado com "Mapeamentos Declarativos" abaixo)
 
-#### Diagnostics
-- [ ] **Sistema de Diagnostics próprio** (similar ao Roslyn): reportar warnings/errors
-  de transpilação com localização exata no source C#
-- [ ] Substituir `/* unsupported: ... */` silencioso por warnings explícitos no build
-- [ ] Categorias: "feature não suportada", "constructo ambíguo", "tipo não resolvido"
-- [ ] CLI deve falhar (exit != 0) em errors de transpilação (não só de C#)
+#### Diagnostics ✅
+- [x] **Sistema de Diagnostics próprio** (`MetaSharpDiagnostic`): reporta warnings/errors
+  com localização exata no source C# (Roslyn `Location`)
+- [x] `/* unsupported: ... */` silencioso substituído por warnings + placeholder
+- [x] Categorias: MS0001 UnsupportedFeature, MS0002 UnresolvedType, MS0003 AmbiguousConstruct, MS0004 ConflictingAttributes
+- [x] CLI imprime em formato Roslyn-style com cores (yellow/red)
+- [x] Errors causam exit code 1
+- [x] 4 testes em DiagnosticsTests.cs
 
 ### Mapeamentos Declarativos (substituir BclMapper hardcoded)
 
