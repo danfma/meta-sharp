@@ -33,7 +33,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private PatternMatchingHandler Patterns => _patterns ??= new PatternMatchingHandler(this);
 
     private SwitchHandler? _switches;
-    private SwitchHandler Switches => _switches ??= new SwitchHandler(this, Patterns);
+    internal SwitchHandler Switches => _switches ??= new SwitchHandler(this, Patterns);
 
     private LambdaHandler? _lambdas;
     private LambdaHandler Lambdas => _lambdas ??= new LambdaHandler(this);
@@ -65,6 +65,9 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private OperatorHandler? _operators;
     private OperatorHandler Operators => _operators ??= new OperatorHandler(this);
 
+    private StatementHandler? _statements;
+    private StatementHandler Statements => _statements ??= new StatementHandler(this);
+
     private TsExpression Unsupported(SyntaxNode node, string message)
     {
         ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
@@ -77,117 +80,14 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
     // ─── Statements ─────────────────────────────────────────
 
-    public TsStatement TransformStatement(StatementSyntax statement)
-    {
-        return statement switch
-        {
-            ReturnStatementSyntax ret => new TsReturnStatement(
-                ret.Expression is not null ? TransformExpression(ret.Expression) : null
-            ),
-
-            YieldStatementSyntax yieldReturn
-                when yieldReturn.IsKind(SyntaxKind.YieldReturnStatement)
-                    && yieldReturn.Expression is not null =>
-                new TsYieldStatement(TransformExpression(yieldReturn.Expression)),
-
-            YieldStatementSyntax yieldBreak
-                when yieldBreak.IsKind(SyntaxKind.YieldBreakStatement) =>
-                new TsYieldBreakStatement(),
-
-            IfStatementSyntax ifStmt => TransformIf(ifStmt),
-
-            ThrowStatementSyntax throwStmt => new TsThrowStatement(
-                TransformExpression(throwStmt.Expression!)
-            ),
-
-            ExpressionStatementSyntax exprStmt => new TsExpressionStatement(
-                TransformExpression(exprStmt.Expression)
-            ),
-
-            LocalDeclarationStatementSyntax localDecl => TransformLocalDeclaration(localDecl),
-
-            SwitchStatementSyntax switchStmt => Switches.TransformSwitchStatement(switchStmt),
-
-            BlockSyntax block =>
-            // Flatten single-statement blocks
-            block.Statements.Count == 1
-                ? TransformStatement(block.Statements[0])
-                : throw new NotSupportedException(
-                    "Multi-statement blocks should be handled by the caller"
-                ),
-
-            _ => UnsupportedStatement(statement),
-        };
-    }
-
-    private TsStatement UnsupportedStatement(StatementSyntax statement)
-    {
-        ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
-            MetaSharpDiagnosticSeverity.Warning,
-            DiagnosticCodes.UnsupportedFeature,
-            $"Statement '{statement.Kind()}' is not supported by the transpiler.",
-            statement.GetLocation()));
-        return new TsExpressionStatement(
-            new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier("console"), "warn"),
-                [new TsStringLiteral($"/* unsupported: {statement.Kind()} */")]
-            )
-        );
-    }
+    public TsStatement TransformStatement(StatementSyntax statement) =>
+        Statements.Transform(statement);
 
     public IReadOnlyList<TsStatement> TransformBody(
         BlockSyntax? block,
         ArrowExpressionClauseSyntax? arrow,
-        bool isVoid = false
-    )
-    {
-        if (arrow is not null)
-        {
-            var expr = TransformExpression(arrow.Expression);
-            return isVoid
-                ? [new TsExpressionStatement(expr)]
-                : [new TsReturnStatement(expr)];
-        }
-
-        if (block is not null)
-            return block.Statements.Select(TransformStatement).ToList();
-
-        return [];
-    }
-
-    private TsIfStatement TransformIf(IfStatementSyntax ifStmt)
-    {
-        var condition = TransformExpression(ifStmt.Condition);
-        var thenBody = TransformStatementBody(ifStmt.Statement);
-        var elseBody = ifStmt.Else?.Statement is not null
-            ? TransformStatementBody(ifStmt.Else.Statement)
-            : null;
-
-        return new TsIfStatement(condition, thenBody, elseBody);
-    }
-
-    private IReadOnlyList<TsStatement> TransformStatementBody(StatementSyntax statement)
-    {
-        if (statement is BlockSyntax block)
-            return block.Statements.Select(TransformStatement).ToList();
-
-        return [TransformStatement(statement)];
-    }
-
-    private TsVariableDeclaration TransformLocalDeclaration(LocalDeclarationStatementSyntax decl)
-    {
-        var variable = decl.Declaration.Variables[0];
-        var name = variable.Identifier.Text;
-        var init = variable.Initializer?.Value is not null
-            ? TransformExpression(variable.Initializer.Value)
-            : new TsIdentifier("undefined");
-
-        return new TsVariableDeclaration(
-            name,
-            init,
-            decl.IsConst || decl.Modifiers.Any(SyntaxKind.ReadOnlyKeyword)
-        );
-    }
+        bool isVoid = false) =>
+        Statements.TransformBody(block, arrow, isVoid);
 
     // ─── Expressions ────────────────────────────────────────
 
