@@ -4,7 +4,11 @@
   "private": true,
   "sideEffects": false,
   "imports": {
-    "#/*": "./src/*"
+    "#/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
   },
   "dependencies": {
     "@meta-sharp/runtime": "workspace:*"
@@ -17,5 +21,23 @@
     "generate": "dotnet run --project ../../MetaSharp.Compiler/MetaSharp.Compiler.csproj -- -p ../../SampleTodo/SampleTodo.csproj -o ./src --clean --time",
     "build": "tsgo -b .",
     "test": "bun test"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./priority": {
+      "types": "./dist/priority.d.ts",
+      "import": "./dist/priority.js"
+    },
+    "./todo-item": {
+      "types": "./dist/todo-item.d.ts",
+      "import": "./dist/todo-item.js"
+    },
+    "./todo-list": {
+      "types": "./dist/todo-list.d.ts",
+      "import": "./dist/todo-list.js"
+    }
   }
 }

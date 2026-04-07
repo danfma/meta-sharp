@@ -16,8 +16,18 @@ public class Commands
     /// <param name="output">-o, Output directory for generated TypeScript files</param>
     /// <param name="time">-t, Show compilation and transpilation timings</param>
     /// <param name="clean">-c, Clean output directory before generating</param>
+    /// <param name="packageRoot">Root directory of the consumer package (default: parent of --output)</param>
+    /// <param name="dist">Path (relative to packageRoot) where the JS build output lives (default: ./dist)</param>
+    /// <param name="skipPackageJson">Skip generating/updating package.json</param>
     [Command("")]
-    public async Task Transpile(string project, string output, bool time = false, bool clean = false)
+    public async Task Transpile(
+        string project,
+        string output,
+        bool time = false,
+        bool clean = false,
+        string? packageRoot = null,
+        string dist = "./dist",
+        bool skipPackageJson = false)
     {
         var projectPath = Path.GetFullPath(project);
         var outputDir = Path.GetFullPath(output);
@@ -112,6 +122,18 @@ public class Commands
         }
 
         emitSw.Stop();
+
+        // Update package.json with imports/exports/sideEffects
+        if (!skipPackageJson)
+        {
+            var resolvedPackageRoot = packageRoot is not null
+                ? Path.GetFullPath(packageRoot)
+                : Path.GetDirectoryName(outputDir)!;
+
+            PackageJsonWriter.UpdateOrCreate(resolvedPackageRoot, outputDir, files, dist);
+            Console.WriteLine($"  Updated: {Path.Combine(resolvedPackageRoot, "package.json")}");
+        }
+
         totalSw.Stop();
 
         if (time)
