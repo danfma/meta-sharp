@@ -263,7 +263,7 @@ public sealed class TypeTransformer(Compilation compilation)
         // Generate type guard function when [GenerateGuard] is present
         if (SymbolHelper.HasGenerateGuard(type))
         {
-            var guard = GenerateTypeGuard(type);
+            var guard = new TypeGuardBuilder(_transpilableTypeMap).Generate(type);
             if (guard is not null)
                 statements.Add(guard);
         }
@@ -327,7 +327,7 @@ public sealed class TypeTransformer(Compilation compilation)
     /// <summary>
     /// Returns the TypeScript name for a type. Uses [Name] override if present, otherwise the C# name as-is.
     /// </summary>
-    private static string GetTsTypeName(INamedTypeSymbol type)
+    internal static string GetTsTypeName(INamedTypeSymbol type)
     {
         return SymbolHelper.GetNameOverride(type) ?? type.Name;
     }
@@ -472,7 +472,7 @@ public sealed class TypeTransformer(Compilation compilation)
         statements.Add(new TsClass(type.Name, constructor, [], Extends: extendsType));
     }
 
-    private static bool IsExceptionType(INamedTypeSymbol type)
+    internal static bool IsExceptionType(INamedTypeSymbol type)
     {
         var current = type.BaseType;
         while (current is not null)
@@ -597,7 +597,7 @@ public sealed class TypeTransformer(Compilation compilation)
     /// <summary>
     /// Checks if a static class contains extension methods (classic or C# 14 blocks).
     /// </summary>
-    private static bool HasExtensionMembers(INamedTypeSymbol type)
+    internal static bool HasExtensionMembers(INamedTypeSymbol type)
     {
         // Classic extensions
         if (type.GetMembers().OfType<IMethodSymbol>()
@@ -1873,244 +1873,6 @@ public sealed class TypeTransformer(Compilation compilation)
                 "===",
                 new TsStringLiteral("object"))
         };
-    }
-
-    // ─── Type Guards ────────────────────────────────────────
-
-    /// <summary>
-    /// Generates a type guard function for a transpiled type.
-    /// Returns null for types that don't need guards (e.g., ExportedAsModule).
-    /// </summary>
-    private TsFunction? GenerateTypeGuard(INamedTypeSymbol type)
-    {
-        // Skip types that don't need guards
-        if (IsExceptionType(type)) return null;
-        if (SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) return null;
-        if (SymbolHelper.HasImport(type)) return null;
-
-        var tsName = GetTsTypeName(type);
-        var guardName = $"is{tsName}";
-        var valueParam = new TsParameter("value", new TsNamedType("unknown"));
-        var returnType = new TsNamedType(tsName); // TS "value is TypeName" predicate
-
-        if (type.TypeKind == TypeKind.Enum)
-            return GenerateEnumGuard(type, guardName, tsName, valueParam);
-
-        if (type.TypeKind == TypeKind.Interface)
-            return GenerateShapeGuard(type, guardName, tsName, valueParam, useInstanceof: false);
-
-        if (type.IsRecord || type.TypeKind is TypeKind.Struct or TypeKind.Class)
-            return GenerateShapeGuard(type, guardName, tsName, valueParam, useInstanceof: true);
-
-        return null;
-    }
-
-    private TsFunction GenerateEnumGuard(
-        INamedTypeSymbol type, string guardName, string tsName, TsParameter valueParam)
-    {
-        var isStringEnum = SymbolHelper.HasStringEnum(type);
-        var members = type.GetMembers().OfType<IFieldSymbol>().Where(f => f.HasConstantValue).ToList();
-
-        TsExpression condition;
-
-        if (isStringEnum)
-        {
-            // value === "BRL" || value === "USD" || ...
-            condition = members
-                .Select<IFieldSymbol, TsExpression>(m =>
-                {
-                    var name = SymbolHelper.GetNameOverride(m) ?? m.Name;
-                    return new TsBinaryExpression(
-                        new TsIdentifier("value"), "===", new TsStringLiteral(name));
-                })
-                .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
-        }
-        else
-        {
-            // typeof value === "number" && (value === 0 || value === 1 || ...)
-            var valueChecks = members
-                .Select<IFieldSymbol, TsExpression>(m =>
-                    new TsBinaryExpression(
-                        new TsIdentifier("value"), "===", new TsLiteral(m.ConstantValue!.ToString()!)))
-                .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
-
-            condition = new TsBinaryExpression(
-                new TsBinaryExpression(
-                    new TsUnaryExpression("typeof ", new TsIdentifier("value")),
-                    "===", new TsStringLiteral("number")),
-                "&&",
-                new TsParenthesized(valueChecks));
-        }
-
-        // The return type annotation "value is TypeName" is expressed as a named type
-        // that the Printer will handle via a special TypePredicate representation.
-        // For now, we use TsNamedType and handle it in the function signature.
-        return new TsFunction(guardName, [valueParam],
-            new TsTypePredicateType("value", new TsNamedType(tsName)),
-            [new TsReturnStatement(condition)]);
-    }
-
-    private TsFunction GenerateShapeGuard(
-        INamedTypeSymbol type, string guardName, string tsName, TsParameter valueParam,
-        bool useInstanceof)
-    {
-        var body = new List<TsStatement>();
-
-        // instanceof fast path (for classes/records only)
-        if (useInstanceof)
-        {
-            body.Add(new TsIfStatement(
-                new TsBinaryExpression(new TsIdentifier("value"), "instanceof", new TsIdentifier(tsName)),
-                [new TsReturnStatement(new TsLiteral("true"))]
-            ));
-        }
-
-        // Null/object check
-        body.Add(new TsIfStatement(
-            new TsBinaryExpression(
-                new TsBinaryExpression(new TsIdentifier("value"), "==", new TsLiteral("null")),
-                "||",
-                new TsBinaryExpression(
-                    new TsUnaryExpression("typeof ", new TsIdentifier("value")),
-                    "!==", new TsStringLiteral("object"))),
-            [new TsReturnStatement(new TsLiteral("false"))]
-        ));
-
-        // const v = value as any;
-        body.Add(new TsVariableDeclaration("v",
-            new TsCastExpression(new TsIdentifier("value"), new TsAnyType())));
-
-        // Field checks
-        var fields = GetAllFieldsForGuard(type);
-        if (fields.Count > 0)
-        {
-            TsExpression fieldChecks = fields
-                .Select(f => GenerateFieldCheck(new TsPropertyAccess(new TsIdentifier("v"), f.Name), f.Type))
-                .Aggregate((a, b) => new TsBinaryExpression(a, "&&", b));
-
-            body.Add(new TsReturnStatement(fieldChecks));
-        }
-        else
-        {
-            body.Add(new TsReturnStatement(new TsLiteral("true")));
-        }
-
-        return new TsFunction(guardName, [valueParam],
-            new TsTypePredicateType("value", new TsNamedType(tsName)), body);
-    }
-
-    /// <summary>
-    /// Gets all fields (own + inherited) for guard validation.
-    /// </summary>
-    private IReadOnlyList<(string Name, TsType Type)> GetAllFieldsForGuard(INamedTypeSymbol type)
-    {
-        var fields = new List<(string Name, TsType Type)>();
-
-        // Collect from all levels of hierarchy
-        var current = type;
-        while (current is not null && current.SpecialType == SpecialType.None
-            && current.ToDisplayString() is not "System.Object" and not "System.ValueType")
-        {
-            foreach (var member in current.GetMembers().OfType<IPropertySymbol>())
-            {
-                if (member.IsImplicitlyDeclared) continue;
-                if (member.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
-                if (SymbolHelper.HasIgnore(member)) continue;
-
-                var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
-                var tsType = TypeMapper.Map(member.Type);
-
-                // Avoid duplicates (from overrides)
-                if (fields.All(f => f.Name != name))
-                    fields.Add((name, tsType));
-            }
-
-            current = current.BaseType;
-        }
-
-        return fields;
-    }
-
-    /// <summary>
-    /// Generates a runtime type check expression for a single field.
-    /// </summary>
-    private TsExpression GenerateFieldCheck(TsExpression fieldAccess, TsType fieldType)
-    {
-        return fieldType switch
-        {
-            TsNumberType => TypeofCheck(fieldAccess, "number"),
-            TsStringType => TypeofCheck(fieldAccess, "string"),
-            TsBooleanType => TypeofCheck(fieldAccess, "boolean"),
-            TsBigIntType => TypeofCheck(fieldAccess, "bigint"),
-
-            TsArrayType => new TsCallExpression(
-                new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
-                [fieldAccess]),
-
-            TsNamedType { Name: "Map" } => new TsBinaryExpression(
-                fieldAccess, "instanceof", new TsIdentifier("Map")),
-
-            TsNamedType { Name: "Set" } => new TsBinaryExpression(
-                fieldAccess, "instanceof", new TsIdentifier("Set")),
-
-            // Temporal types
-            TsNamedType { Name: var n } when n.StartsWith("Temporal.") =>
-                new TsBinaryExpression(fieldAccess, "instanceof", new TsIdentifier(n)),
-
-            // Transpilable named type → call guard recursively
-            TsNamedType { Name: var n } when _transpilableTypeMap.ContainsKey(n) =>
-                new TsCallExpression(new TsIdentifier($"is{n}"), [fieldAccess]),
-
-            // Union with null (nullable) → field == null || innerCheck
-            TsUnionType { Types: var types } when types.Any(t => t is TsNamedType { Name: "null" }) =>
-                NullableFieldCheck(fieldAccess, types),
-
-            // String literal union (from StringEnum that's not transpilable)
-            TsUnionType { Types: var types } when types.All(t => t is TsStringLiteralType) =>
-                types.Cast<TsStringLiteralType>()
-                    .Select<TsStringLiteralType, TsExpression>(t =>
-                        new TsBinaryExpression(fieldAccess, "===", new TsStringLiteral(t.Value)))
-                    .Aggregate((a, b) => new TsBinaryExpression(a, "||", b)),
-
-            TsTupleType { Elements: var elements } =>
-                new TsBinaryExpression(
-                    new TsCallExpression(
-                        new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
-                        [fieldAccess]),
-                    "&&",
-                    new TsBinaryExpression(
-                        new TsPropertyAccess(fieldAccess, "length"),
-                        "===",
-                        new TsLiteral(elements.Count.ToString()))),
-
-            TsAnyType or TsVoidType or TsPromiseType => new TsLiteral("true"),
-
-            // Unknown type — accept anything
-            _ => new TsLiteral("true"),
-        };
-    }
-
-    private static TsExpression TypeofCheck(TsExpression expr, string typeName) =>
-        new TsBinaryExpression(
-            new TsUnaryExpression("typeof ", expr),
-            "===",
-            new TsStringLiteral(typeName));
-
-    private TsExpression NullableFieldCheck(TsExpression fieldAccess, IReadOnlyList<TsType> unionTypes)
-    {
-        var nonNullTypes = unionTypes.Where(t => t is not TsNamedType { Name: "null" }).ToList();
-        if (nonNullTypes.Count == 0) return new TsLiteral("true");
-
-        var innerCheck = nonNullTypes.Count == 1
-            ? GenerateFieldCheck(fieldAccess, nonNullTypes[0])
-            : nonNullTypes
-                .Select(t => GenerateFieldCheck(fieldAccess, t))
-                .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
-
-        return new TsBinaryExpression(
-            new TsBinaryExpression(fieldAccess, "==", new TsLiteral("null")),
-            "||",
-            innerCheck);
     }
 
     // ─── Imports ────────────────────────────────────────────
