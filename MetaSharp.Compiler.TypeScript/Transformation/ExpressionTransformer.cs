@@ -53,6 +53,15 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private InvocationHandler? _invocations;
     private InvocationHandler Invocations => _invocations ??= new InvocationHandler(this);
 
+    private InterpolatedStringHandler? _interpolatedStrings;
+    private InterpolatedStringHandler InterpolatedStrings => _interpolatedStrings ??= new InterpolatedStringHandler(this);
+
+    private OptionalChainingHandler? _optionalChaining;
+    private OptionalChainingHandler OptionalChaining => _optionalChaining ??= new OptionalChainingHandler(this);
+
+    private CollectionExpressionHandler? _collectionExpressions;
+    private CollectionExpressionHandler CollectionExpressions => _collectionExpressions ??= new CollectionExpressionHandler(this);
+
     private TsExpression Unsupported(SyntaxNode node, string message)
     {
         ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
@@ -208,7 +217,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             ImplicitObjectCreationExpressionSyntax implicitCreation =>
                 ObjectCreation.TransformImplicitObjectCreation(implicitCreation),
 
-            InterpolatedStringExpressionSyntax interp => TransformInterpolatedString(interp),
+            InterpolatedStringExpressionSyntax interp => InterpolatedStrings.Transform(interp),
 
             ParenthesizedExpressionSyntax paren => new TsParenthesized(
                 TransformExpression(paren.Expression)
@@ -248,7 +257,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
             // x?.Prop → x?.prop
             ConditionalAccessExpressionSyntax condAccess =>
-                TransformConditionalAccess(condAccess),
+                OptionalChaining.Transform(condAccess),
 
             SwitchExpressionSyntax switchExpr => Switches.TransformSwitchExpression(switchExpr),
 
@@ -275,7 +284,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             GenericNameSyntax genericName => GenericNames.Transform(genericName),
 
             // C# 12 collection expression: [] → []
-            CollectionExpressionSyntax collExpr => TransformCollectionExpression(collExpr),
+            CollectionExpressionSyntax collExpr => CollectionExpressions.Transform(collExpr),
 
             _ => Unsupported(expression, $"Expression '{expression.Kind()}' is not supported by the transpiler."),
         };
@@ -376,80 +385,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
         return result.Take(lastProvided + 1).ToList();
     }
 
-    private TsExpression TransformInterpolatedString(InterpolatedStringExpressionSyntax interp)
-    {
-        var quasis = new List<string>();
-        var expressions = new List<TsExpression>();
-        var current = "";
 
-        foreach (var content in interp.Contents)
-        {
-            switch (content)
-            {
-                case InterpolatedStringTextSyntax text:
-                    current += text.TextToken.ValueText;
-                    break;
-
-                case InterpolationSyntax interpolation:
-                    quasis.Add(current);
-                    current = "";
-                    expressions.Add(TransformExpression(interpolation.Expression));
-                    break;
-            }
-        }
-
-        quasis.Add(current);
-        return new TsTemplateLiteral(quasis, expressions);
-    }
-
-
-
-    /// <summary>
-    /// Transforms x?.Prop or x?.Method() into TS optional chaining.
-    /// </summary>
-    private TsExpression TransformConditionalAccess(ConditionalAccessExpressionSyntax condAccess)
-    {
-        var obj = TransformExpression(condAccess.Expression);
-
-        return condAccess.WhenNotNull switch
-        {
-            // x?.Prop → x?.prop
-            MemberBindingExpressionSyntax memberBinding =>
-                new TsPropertyAccess(
-                    new TsIdentifier(GetExpressionText(obj) + "?"),
-                    TypeScriptNaming.ToCamelCase(memberBinding.Name.Identifier.Text)
-                ),
-
-            // x?.Method() → x?.method()
-            InvocationExpressionSyntax { Expression: MemberBindingExpressionSyntax binding } invocation =>
-                new TsCallExpression(
-                    new TsPropertyAccess(
-                        new TsIdentifier(GetExpressionText(obj) + "?"),
-                        TypeScriptNaming.ToCamelCase(binding.Name.Identifier.Text)
-                    ),
-                    invocation.ArgumentList.Arguments
-                        .Select(a => TransformExpression(a.Expression))
-                        .ToList()
-                ),
-
-            _ => obj // fallback
-        };
-    }
-
-    /// <summary>
-    /// Gets a simple text representation of an expression for optional chaining composition.
-    /// </summary>
-    private static string GetExpressionText(TsExpression expr) => expr switch
-    {
-        TsIdentifier id => id.Name,
-        TsPropertyAccess access => GetExpressionText(access.Object) + "." + access.Property,
-        _ => "unknown"
-    };
-
-    /// <summary>
-    /// Expands an [Emit] expression, replacing $0, $1, etc. with the transformed arguments.
-    /// Returns a TsLiteral with the expanded raw JS.
-    /// </summary>
 
     private static string MapBinaryOperator(string op) => op switch
     {
@@ -464,32 +400,5 @@ public sealed class ExpressionTransformer(SemanticModel model)
         _ => op
     };
 
-
-    // ─── Collection expressions ─────────────────────────────
-
-    private TsExpression TransformCollectionExpression(CollectionExpressionSyntax collExpr)
-    {
-        // Check target type to distinguish Set vs Array
-        var convertedType = model.GetTypeInfo(collExpr).ConvertedType;
-        var isSetType = convertedType is INamedTypeSymbol named
-            && named.Name is "HashSet" or "ISet" or "SortedSet";
-
-        if (collExpr.Elements.Count == 0)
-            return isSetType
-                ? new TsNewExpression(new TsIdentifier("HashSet"), [])
-                : new TsLiteral("[]");
-
-        var elements = collExpr.Elements
-            .OfType<ExpressionElementSyntax>()
-            .Select(e => TransformExpression(e.Expression))
-            .ToList();
-
-        if (isSetType)
-            return new TsNewExpression(new TsIdentifier("HashSet"), [new TsArrayLiteral(elements)]);
-
-        return new TsCallExpression(
-            new TsPropertyAccess(new TsIdentifier("Array"), "of"),
-            elements);
-    }
 
 }
