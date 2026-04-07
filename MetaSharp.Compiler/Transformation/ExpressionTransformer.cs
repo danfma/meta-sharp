@@ -1,3 +1,4 @@
+using MetaSharp.Diagnostics;
 using MetaSharp.TypeScript;
 using MetaSharp.TypeScript.AST;
 using Microsoft.CodeAnalysis;
@@ -18,6 +19,17 @@ public sealed class ExpressionTransformer(SemanticModel model)
     public string? SelfParameterName { get; set; }
     public bool AssemblyWideTranspile { get; set; }
     public IAssemblySymbol? CurrentAssembly { get; set; }
+    public Action<MetaSharpDiagnostic>? ReportDiagnostic { get; set; }
+
+    private TsExpression Unsupported(SyntaxNode node, string message)
+    {
+        ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
+            MetaSharpDiagnosticSeverity.Warning,
+            DiagnosticCodes.UnsupportedFeature,
+            message,
+            node.GetLocation()));
+        return new TsIdentifier($"/* unsupported: {node.Kind()} */");
+    }
 
     // ─── Statements ─────────────────────────────────────────
 
@@ -60,13 +72,23 @@ public sealed class ExpressionTransformer(SemanticModel model)
                     "Multi-statement blocks should be handled by the caller"
                 ),
 
-            _ => new TsExpressionStatement(
-                new TsCallExpression(
-                    new TsPropertyAccess(new TsIdentifier("console"), "warn"),
-                    [new TsStringLiteral($"/* unsupported: {statement.Kind()} */")]
-                )
-            ),
+            _ => UnsupportedStatement(statement),
         };
+    }
+
+    private TsStatement UnsupportedStatement(StatementSyntax statement)
+    {
+        ReportDiagnostic?.Invoke(new MetaSharpDiagnostic(
+            MetaSharpDiagnosticSeverity.Warning,
+            DiagnosticCodes.UnsupportedFeature,
+            $"Statement '{statement.Kind()}' is not supported by the transpiler.",
+            statement.GetLocation()));
+        return new TsExpressionStatement(
+            new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("console"), "warn"),
+                [new TsStringLiteral($"/* unsupported: {statement.Kind()} */")]
+            )
+        );
     }
 
     public IReadOnlyList<TsStatement> TransformBody(
@@ -223,7 +245,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             // C# 12 collection expression: [] → []
             CollectionExpressionSyntax collExpr => TransformCollectionExpression(collExpr),
 
-            _ => new TsIdentifier($"/* unsupported: {expression.Kind()} */"),
+            _ => Unsupported(expression, $"Expression '{expression.Kind()}' is not supported by the transpiler."),
         };
     }
 

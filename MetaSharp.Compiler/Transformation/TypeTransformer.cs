@@ -1,3 +1,4 @@
+using MetaSharp.Diagnostics;
 using MetaSharp.TypeScript;
 using MetaSharp.TypeScript.AST;
 using Microsoft.CodeAnalysis;
@@ -11,6 +12,19 @@ namespace MetaSharp.Transformation;
 /// </summary>
 public sealed class TypeTransformer(Compilation compilation)
 {
+    private readonly List<MetaSharpDiagnostic> _diagnostics = [];
+
+    /// <summary>
+    /// Diagnostics collected during transformation. Includes warnings about unsupported
+    /// language features and other issues that the user should know about.
+    /// </summary>
+    public IReadOnlyList<MetaSharpDiagnostic> Diagnostics => _diagnostics;
+
+    internal void ReportDiagnostic(MetaSharpDiagnostic diagnostic)
+    {
+        _diagnostics.Add(diagnostic);
+    }
+
     /// <summary>
     /// Discovers all types with [Transpile] and transforms each into a TsSourceFile.
     /// Generates namespace-based folder structure and index.ts barrel files.
@@ -2553,7 +2567,12 @@ public sealed class TypeTransformer(Compilation compilation)
         or "isBool" or "isBigInt";
 
     private ExpressionTransformer CreateExpressionTransformer(SemanticModel semanticModel) =>
-        new(semanticModel) { AssemblyWideTranspile = _assemblyWideTranspile, CurrentAssembly = _currentAssembly };
+        new(semanticModel)
+        {
+            AssemblyWideTranspile = _assemblyWideTranspile,
+            CurrentAssembly = _currentAssembly,
+            ReportDiagnostic = _diagnostics.Add,
+        };
 
     private static string GetNamespace(INamedTypeSymbol type)
     {

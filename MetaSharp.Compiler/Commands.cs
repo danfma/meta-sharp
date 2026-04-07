@@ -94,6 +94,40 @@ public class Commands
         if (time)
             Console.WriteLine($"  Transpilation: {transpileSw.ElapsedMilliseconds}ms");
 
+        // Report transpiler diagnostics (warnings about unsupported features, etc.)
+        var diagnostics = transformer.Diagnostics;
+        var errorCount = 0;
+        var warningCount = 0;
+        foreach (var diag in diagnostics)
+        {
+            switch (diag.Severity)
+            {
+                case Diagnostics.MetaSharpDiagnosticSeverity.Error:
+                    Console.ForegroundColor = ConsoleColor.Red;
+                    Console.Error.WriteLine($"  {diag.Format()}");
+                    Console.ResetColor();
+                    errorCount++;
+                    break;
+                case Diagnostics.MetaSharpDiagnosticSeverity.Warning:
+                    Console.ForegroundColor = ConsoleColor.Yellow;
+                    Console.Error.WriteLine($"  {diag.Format()}");
+                    Console.ResetColor();
+                    warningCount++;
+                    break;
+                default:
+                    Console.WriteLine($"  {diag.Format()}");
+                    break;
+            }
+        }
+        if (warningCount > 0 || errorCount > 0)
+            Console.WriteLine($"MetaSharp: {warningCount} warning(s), {errorCount} error(s).");
+
+        if (errorCount > 0)
+        {
+            Environment.Exit(1);
+            return;
+        }
+
         if (files.Count == 0)
         {
             Console.WriteLine("MetaSharp: No transpilable types found.");
