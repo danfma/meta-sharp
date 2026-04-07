@@ -267,7 +267,7 @@ public sealed class TypeTransformer(Compilation compilation)
         {
             TransformAsModule(type, statements);
         }
-        else if (TransformInlineWrapper(type, statements))
+        else if (new InlineWrapperTransformer(_context!).Transform(type, statements))
         {
             // InlineWrapper handled by specialized pipeline.
         }
@@ -352,79 +352,6 @@ public sealed class TypeTransformer(Compilation compilation)
         }
 
         return false;
-    }
-
-    // ─── ExportedAsModule (static class → top-level functions) ─
-
-    private bool TransformInlineWrapper(INamedTypeSymbol type, List<TsTopLevel> statements)
-    {
-        if (!SymbolHelper.HasInlineWrapper(type))
-            return false;
-        if (type.TypeKind != TypeKind.Struct)
-            return false;
-
-        var tsTypeName = GetTsTypeName(type);
-        if (!TryGetInlineWrapperPrimitiveType(type, out var primitiveType))
-            return false;
-
-        // export type UserId = string & { readonly __brand: "UserId" };
-        var brandType = new TsNamedType($"{{ readonly __brand: \"{tsTypeName}\" }}");
-        statements.Add(new TsTypeAlias(tsTypeName, new TsIntersectionType([primitiveType, brandType])));
-
-        // Build companion namespace functions
-        var functions = new List<TsFunction>();
-
-        // create(value: T): TypeName
-        functions.Add(new TsFunction(
-            "create",
-            [new TsParameter("value", primitiveType)],
-            new TsNamedType(tsTypeName),
-            [new TsReturnStatement(new TsCastExpression(new TsIdentifier("value"), new TsNamedType(tsTypeName)))],
-            Exported: true
-        ));
-
-        // toString(value: TypeName): string — only for non-string primitives
-        if (primitiveType is not TsStringType)
-        {
-            functions.Add(new TsFunction(
-                "toString",
-                [new TsParameter("value", new TsNamedType(tsTypeName))],
-                new TsStringType(),
-                [new TsReturnStatement(new TsCallExpression(new TsIdentifier("String"), [new TsIdentifier("value")]))],
-                Exported: true
-            ));
-        }
-
-        // Static methods from the struct
-        foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
-        {
-            if (method.MethodKind != MethodKind.Ordinary) continue;
-            if (!method.IsStatic) continue;
-            if (method.IsImplicitlyDeclared) continue;
-            if (method.DeclaredAccessibility != Accessibility.Public) continue;
-            if (SymbolHelper.HasIgnore(method)) continue;
-            if (TypeScriptNaming.HasEmit(method)) continue;
-
-            var methodSyntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as MethodDeclarationSyntax;
-            if (methodSyntax is null) continue;
-
-            var semanticModel = compilation.GetSemanticModel(methodSyntax.SyntaxTree);
-            var exprTransformer = CreateExpressionTransformer(semanticModel);
-            var body = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody,
-                isVoid: method.ReturnsVoid);
-            var parameters = method.Parameters
-                .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
-                .ToList();
-
-            var methodName = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
-            var returnType = TypeMapper.Map(method.ReturnType);
-            functions.Add(new TsFunction(methodName, parameters, returnType, body,
-                Exported: true, Async: method.IsAsync));
-        }
-
-        // export namespace TypeName { ... }
-        statements.Add(new TsNamespaceDeclaration(tsTypeName, functions));
-        return true;
     }
 
     internal static bool TryGetInlineWrapperPrimitiveType(INamedTypeSymbol type, out TsType primitiveType)
