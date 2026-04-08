@@ -1,4 +1,4 @@
-namespace MetaSharp;
+namespace MetaSharp.Annotations;
 
 /// <summary>
 /// Excludes a type from transpilation even when [assembly: TranspileAssembly] is used.

@@ -1,4 +1,4 @@
-namespace MetaSharp;
+namespace MetaSharp.Annotations;
 
 /// <summary>
 /// Emits raw JavaScript at the call site. Use $0, $1, etc. for argument placeholders.

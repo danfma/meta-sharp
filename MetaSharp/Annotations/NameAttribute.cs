@@ -1,4 +1,4 @@
-namespace MetaSharp;
+namespace MetaSharp.Annotations;
 
 /// <summary>
 /// Overrides the name used in the TypeScript output.

@@ -1,4 +1,4 @@
-namespace MetaSharp;
+namespace MetaSharp.Annotations;
 
 /// <summary>
 /// Marks all public types in the assembly for transpilation.

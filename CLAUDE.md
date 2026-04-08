@@ -13,7 +13,7 @@ MetaSharp is a C# → TypeScript transpiler powered by Roslyn. It reads C# proje
 ```sh
 dotnet build                                          # build entire solution
 dotnet run --project MetaSharp.Tests/                  # run tests (TUnit — use dotnet run, not dotnet test)
-dotnet run --project MetaSharp.Compiler/ -- \
+dotnet run --project MetaSharp.Compiler.TypeScript/ -- \
   -p SampleTodo/SampleTodo.csproj \
   -o js/sample-todo/src --clean                       # transpile SampleTodo to TypeScript
 dotnet csharpier .                                    # format C# code
@@ -36,25 +36,43 @@ Always use **Bun** — never npm, yarn, or pnpm.
 
 ```
 MetaSharp.slnx
-├── MetaSharp.Annotations/     # Attributes for transpilation control (13 attributes)
-├── MetaSharp.Compiler/        # C# → TypeScript transpiler (Roslyn-based)
-│   ├── Transformation/        # TypeTransformer, ExpressionTransformer, TypeMapper, BclMapper
-│   ├── TypeScript/AST/        # ~60 record types representing TS AST nodes
-│   ├── TypeScript/Printer.cs  # AST → formatted text
-│   └── Commands.cs            # CLI (ConsoleAppFramework)
-├── MetaSharp.Tests/           # 166 TUnit tests with inline C# compilation
-│   └── Expected/              # Expected .ts output files
-├── SampleTodo/                # Sample C# project for end-to-end validation
-└── js/                        # Bun workspace
-    ├── meta-sharp-runtime/    # @meta-sharp/runtime (HashCode, LINQ, type checks)
-    └── sample-todo/           # Generated TS from SampleTodo + bun tests
+├── MetaSharp/                       # Attributes (namespace MetaSharp.Annotations) + future BCL mappings (namespace MetaSharp.Runtime)
+│   └── Annotations/                 # 13 attribute classes for transpilation control
+├── MetaSharp.Compiler/              # Target-agnostic core library
+│   ├── ITranspilerTarget.cs         # Interface every language target implements
+│   ├── TranspilerHost.cs            # Orchestrates load → compile → target.Transform → write
+│   ├── TranspileOptions/Result.cs   # Shared options/result records
+│   ├── SymbolHelper.cs              # Target-agnostic Roslyn helpers
+│   └── Diagnostics/                 # MetaSharpDiagnostic + DiagnosticCodes
+├── MetaSharp.Compiler.TypeScript/   # TypeScript target (depends on the core)
+│   ├── TypeScriptTarget.cs          # ITranspilerTarget adapter
+│   ├── Commands.cs                  # CLI (ConsoleAppFramework) — `metasharp-typescript`
+│   ├── PackageJsonWriter.cs         # Auto-generates package.json with imports/exports
+│   ├── Transformation/              # 30+ focused handlers (TypeTransformer is now ~470 lines, ExpressionTransformer ~170)
+│   └── TypeScript/AST + Printer.cs  # ~60 TS AST record types and the printer
+├── MetaSharp.Tests/                 # 197 TUnit tests with inline C# compilation
+│   └── Expected/                    # Expected .ts output files
+├── SampleTodo/                      # Sample C# project for end-to-end validation
+├── SampleIssueTracker/              # Larger sample exercising LINQ, records, modules
+└── js/                              # Bun workspace
+    ├── meta-sharp-runtime/          # @meta-sharp/runtime (HashCode, HashSet, LINQ, type checks)
+    ├── sample-todo/                 # Generated TS from SampleTodo + bun tests (17)
+    └── sample-issue-tracker/        # Generated TS from SampleIssueTracker + bun tests (51)
 ```
 
 ### Pipeline
 
 C# source + MetaSharp attributes → Roslyn SemanticModel → TypeScript AST → Printer → .ts files
 
+The core (`MetaSharp.Compiler`) is target-agnostic. Each language target (TypeScript today,
+Dart/Kotlin in the future) is its own project that implements `ITranspilerTarget` and ships
+its own AST, printer, and CLI tool. See `specs/next-steps.md` § "Compiler Refactor (Done)"
+for the full architectural rationale and the list of extracted handlers.
+
 ### MetaSharp Annotations
+
+All attributes live in the `MetaSharp.Annotations` namespace inside the `MetaSharp` project.
+Consumers add `using MetaSharp.Annotations;` to access them.
 
 | Attribute | Target | Purpose |
 |-----------|--------|---------|

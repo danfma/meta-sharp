@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using MetaSharp.Annotations;
 using MetaSharp.Transformation;
 using MetaSharp.TypeScript;
 
@@ -10,7 +11,7 @@ namespace MetaSharp.Tests;
 /// </summary>
 public static class TranspileHelper
 {
-    private static readonly string MetaSharpAnnotationsPath =
+    private static readonly string MetaSharpAssemblyPath =
         typeof(TranspileAttribute).Assembly.Location;
 
     /// <summary>
@@ -22,7 +23,7 @@ public static class TranspileHelper
         var source = $"""
             using System;
             using System.Threading.Tasks;
-            using MetaSharp;
+            using MetaSharp.Annotations;
             {csharpSource}
             """;
 
@@ -51,7 +52,7 @@ public static class TranspileHelper
             }
         }
 
-        // netstandard facade (needed for MetaSharp.Annotations targeting netstandard2.0)
+        // netstandard facade (needed for MetaSharp targeting netstandard2.0)
         var netstandardPath = Path.Combine(runtimeDir, "netstandard.dll");
         if (File.Exists(netstandardPath) && references.All(r => r.Display != netstandardPath))
             references.Add(MetadataReference.CreateFromFile(netstandardPath));
@@ -97,7 +98,7 @@ public static class TranspileHelper
         var source = $"""
             using System;
             using System.Threading.Tasks;
-            using MetaSharp;
+            using MetaSharp.Annotations;
             {csharpSource}
             """;
 

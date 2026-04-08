@@ -5,7 +5,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../MetaSharp.Annotations/MetaSharp.Annotations.csproj" />
+        <ProjectReference Include="../MetaSharp/MetaSharp.csproj" />
     </ItemGroup>
 
 </Project>

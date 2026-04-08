@@ -1,4 +1,4 @@
-namespace MetaSharp;
+namespace MetaSharp.Annotations;
 
 /// <summary>
 /// Declares that a type or member is imported from an external JavaScript module.

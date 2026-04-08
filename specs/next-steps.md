@@ -158,7 +158,7 @@ Extracted handlers (each covers one sub-grammar):
 > tree-shakeable, idiomático em TS.
 >
 > **Detecção:** Struct com `[InlineWrapper]` e exatamente 1 campo primitivo.
-- [x] Definir atributo `[InlineWrapper]` no MetaSharp.Annotations
+- [x] Definir atributo `[InlineWrapper]` no namespace `MetaSharp.Annotations`
 - [x] Detectar no TypeTransformer: struct com `[InlineWrapper]` + 1 campo → branded type
 - [x] Gerar `type X = primitive & { readonly __brand: "X" }` + namespace com static methods
 - [x] Constructor → `create()` function no namespace

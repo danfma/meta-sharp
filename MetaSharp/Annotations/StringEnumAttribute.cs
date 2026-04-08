@@ -1,4 +1,4 @@
-namespace MetaSharp;
+namespace MetaSharp.Annotations;
 
 /// <summary>
 /// Makes an enum transpile as a TypeScript string union type instead of a numeric enum.

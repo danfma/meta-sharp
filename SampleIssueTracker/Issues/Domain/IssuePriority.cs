@@ -1,4 +1,4 @@
-using MetaSharp;
+using MetaSharp.Annotations;
 
 namespace SampleIssueTracker.Issues.Domain;
 

@@ -1,14 +1,14 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-`MetaSharp.slnx` is the entry point for the .NET solution. `MetaSharp.Annotations/` contains the C# attributes that control transpilation, `MetaSharp.Compiler/` contains the Roslyn-based transformer and TypeScript printer, and `MetaSharp.Tests/` holds TUnit coverage plus golden files in `MetaSharp.Tests/Expected/`. `SampleTodo/` is the end-to-end C# sample. The `js/` workspace contains `meta-sharp-runtime/` for shared Bun/TypeScript runtime helpers and `sample-todo/` for generated TypeScript and Bun tests.
+`MetaSharp.slnx` is the entry point for the .NET solution. `MetaSharp/` holds the C# attributes (in the `MetaSharp.Annotations` namespace, under `MetaSharp/Annotations/`) that control transpilation. `MetaSharp.Compiler/` is the **target-agnostic core** (`ITranspilerTarget`, `TranspilerHost`, diagnostics, shared symbol helpers). `MetaSharp.Compiler.TypeScript/` is the TypeScript target — it depends on the core, ships the TypeScript AST + printer + the 30+ focused handlers under `Transformation/`, and exposes the `metasharp-typescript` CLI. `MetaSharp.Tests/` holds TUnit coverage plus golden files in `MetaSharp.Tests/Expected/`. `SampleTodo/` and `SampleIssueTracker/` are the end-to-end C# samples. The `js/` workspace contains `meta-sharp-runtime/` for shared Bun/TypeScript runtime helpers and `sample-todo/` / `sample-issue-tracker/` for generated TypeScript and Bun tests.
 
 ## Build, Test, and Development Commands
 Use the repository root for .NET commands and Bun workspace folders for JavaScript commands.
 
 - `dotnet build` builds the full solution.
 - `dotnet run --project MetaSharp.Tests/` runs the .NET test suite. Use this instead of `dotnet test` on .NET 10/TUnit.
-- `dotnet run --project MetaSharp.Compiler/ -- -p SampleTodo/SampleTodo.csproj -o js/sample-todo/src --clean` regenerates the sample TypeScript output.
+- `dotnet run --project MetaSharp.Compiler.TypeScript/ -- -p SampleTodo/SampleTodo.csproj -o js/sample-todo/src --clean` regenerates the sample TypeScript output.
 - `dotnet csharpier .` formats C# sources.
 - `cd js/meta-sharp-runtime && bun run build` builds the runtime with `tsgo`.
 - `cd js/meta-sharp-runtime && bun test` runs runtime tests.

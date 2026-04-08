@@ -109,7 +109,7 @@ Se falhar alguma regra, emitir diagnostic explicito e seguir fluxo normal (class
 
 ## Progresso de Implementacao (checkpoints)
 
-- [x] Checkpoint 1: `InlineWrapperAttribute` adicionado em `MetaSharp.Annotations`.
+- [x] Checkpoint 1: `InlineWrapperAttribute` added to the `MetaSharp.Annotations` namespace (in the `MetaSharp` project).
 - [x] Checkpoint 2: `SymbolHelper.HasInlineWrapper()` adicionado.
 - [x] Checkpoint 3: branch de transformacao dedicada no `TypeTransformer` para wrappers elegiveis.
 - [x] Checkpoint 4: emissao inicial de branded alias + companion `const` com `create` e metodos estaticos.
