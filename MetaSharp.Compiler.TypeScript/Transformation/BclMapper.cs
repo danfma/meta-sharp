@@ -43,9 +43,7 @@ public static class BclMapper
 
         var containing = symbol.ContainingType.ToDisplayString();
 
-        // string instance properties
-        if (containing == "string" && symbol.Name == "Length")
-            return new TsPropertyAccess(obj, "length");
+        // (string.Length is now handled declaratively via MetaSharp/Runtime/Strings.cs.)
 
         // Queue<T>.Count, Stack<T>.Count → .length
         // (List<T>/IList<T>/ICollection<T>/IReadOnlyList<T>/IReadOnlyCollection<T>.Count
@@ -100,12 +98,14 @@ public static class BclMapper
         // 1. Declarative method mapping wins over any hardcoded fallback below.
         if (transformer.DeclarativeMappings.TryGetMethod(method.ContainingType, name, out var methodMapping))
         {
-            // Resolve the receiver: for instance methods, the syntax is
-            // `<expr>.Method(args)`, so the receiver expression is the left side of the
-            // member access. For static methods (and the rarer free-standing form), there
-            // is no receiver to substitute.
+            // Resolve the receiver from the syntax. For instance methods this is the
+            // value expression to the left of the dot; for static methods called via
+            // `TypeName.Method(args)` this is the type identifier itself, which the
+            // IdentifierHandler renders verbatim in PascalCase. Both shapes feed the
+            // same JsMethod / JsTemplate substitution. Free-standing calls (no member
+            // access syntax) have no receiver to substitute.
             TsExpression? receiver = null;
-            if (!method.IsStatic && invocation.Expression is MemberAccessExpressionSyntax declarativeReceiverAccess)
+            if (invocation.Expression is MemberAccessExpressionSyntax declarativeReceiverAccess)
                 receiver = transformer.TransformExpression(declarativeReceiverAccess.Expression);
 
             return ApplyMethodMapping(methodMapping, receiver, args);
@@ -113,56 +113,12 @@ public static class BclMapper
 
         var containing = method.ContainingType.ToDisplayString();
 
-        // System.Math static methods
-        if (containing == "System.Math")
-        {
-            var jsMethod = name switch
-            {
-                "Round" => "round",
-                "Floor" => "floor",
-                "Ceiling" => "ceil",
-                "Ceil" => "ceil",
-                "Abs" => "abs",
-                "Min" => "min",
-                "Max" => "max",
-                "Sqrt" => "sqrt",
-                "Pow" => "pow",
-                _ => null,
-            };
+        // System.Math static methods are now handled declaratively via
+        // MetaSharp/Runtime/Math.cs.
 
-            if (jsMethod is not null)
-                return new TsCallExpression(
-                    new TsPropertyAccess(new TsIdentifier("Math"), jsMethod),
-                    args
-                );
-        }
-
-        // string instance methods
-        if (
-            containing == "string"
-            && invocation.Expression is MemberAccessExpressionSyntax memberAccess
-        )
-        {
-            var obj = transformer.TransformExpression(memberAccess.Expression);
-            var jsMethod = name switch
-            {
-                "ToUpper" or "ToUpperInvariant" => "toUpperCase",
-                "ToLower" or "ToLowerInvariant" => "toLowerCase",
-                "Contains" => "includes",
-                "StartsWith" => "startsWith",
-                "EndsWith" => "endsWith",
-                "Trim" => "trim",
-                "TrimStart" => "trimStart",
-                "TrimEnd" => "trimEnd",
-                "Replace" => "replace",
-                "Substring" => "substring",
-                "IndexOf" => "indexOf",
-                _ => null,
-            };
-
-            if (jsMethod is not null)
-                return new TsCallExpression(new TsPropertyAccess(obj, jsMethod), args);
-        }
+        // string instance methods are now handled declaratively via
+        // MetaSharp/Runtime/Strings.cs (ToUpper/ToLower, Contains, StartsWith, EndsWith,
+        // Trim/TrimStart/TrimEnd, Replace, Substring, IndexOf).
 
         // List<T> / IList<T> / ICollection<T> / IReadOnlyList<T> instance methods are
         // now handled declaratively via MetaSharp/Runtime/Lists.cs (Count, Add, AddRange,
@@ -366,10 +322,21 @@ public static class BclMapper
     }
 
     /// <summary>
-    /// Applies a declarative method mapping. The simple-rename form always emits a call
-    /// expression — instance methods become <c>receiver.jsName(args)</c>, static methods
-    /// become <c>jsName(args)</c>. Templates take the receiver as <c>$this</c> and the
-    /// arguments as <c>$0</c>, <c>$1</c>, …
+    /// Applies a declarative method mapping. For the simple-rename form
+    /// (<see cref="DeclarativeMappingEntry.JsName"/>), the original receiver is preserved
+    /// and the result is <c>receiver.jsName(args)</c> — that's true for both instance
+    /// methods (where the receiver is the C# value expression) and for static methods
+    /// called via <c>TypeName.Method(args)</c> (where the receiver is the type identifier
+    /// rendered verbatim, e.g., <c>Math.round(x)</c>). Static methods whose JS counterpart
+    /// has a different identifier (Console → console, Guid.NewGuid → crypto.randomUUID,
+    /// etc.) should use a <see cref="DeclarativeMappingEntry.JsTemplate"/> instead of the
+    /// rename shorthand.
+    ///
+    /// For free-standing calls (no member access on the LHS), the receiver is null and
+    /// the rename produces a bare <c>jsName(args)</c> call.
+    ///
+    /// The template form uses <c>$this</c> for the receiver and <c>$0</c>, <c>$1</c>, …
+    /// for the arguments — same convention as <see cref="EmitAttribute"/>.
     /// </summary>
     private static TsExpression ApplyMethodMapping(
         DeclarativeMappingEntry mapping,
