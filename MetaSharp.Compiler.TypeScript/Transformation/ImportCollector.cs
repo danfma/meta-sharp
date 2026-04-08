@@ -46,6 +46,11 @@ public sealed class ImportCollector(
 
         var imports = new List<TsImport>();
         var currentNs = PathNaming.GetNamespace(currentType);
+        // The current file's "key" — file name + namespace — used to elide self-imports
+        // for types co-located via [EmitInFile]. Without this, a multi-type file would
+        // try to import its sibling types from their individual paths (which don't
+        // exist as separate files when the grouping kicks in).
+        var currentFileName = GetFileName(currentType);
 
         // Runtime imports (HashCode for records)
         if (currentType.IsRecord)
@@ -171,8 +176,11 @@ public sealed class ImportCollector(
                 && importedNames.Add(typeName))
             {
                 var guardNs = PathNaming.GetNamespace(guardedSymbol);
-                var guardTsName = TypeTransformer.GetTsTypeName(guardedSymbol);
-                var guardPath = _pathNaming.ComputeRelativeImportPath(currentNs, guardNs, guardTsName);
+                // Use the file name (not the type name) when computing the path so a
+                // guard for a [EmitInFile]-grouped type points at the merged file.
+                var guardFileName = GetFileName(guardedSymbol);
+                if (guardNs == currentNs && guardFileName == currentFileName) continue; // same file
+                var guardPath = _pathNaming.ComputeRelativeImportPath(currentNs, guardNs, guardFileName);
                 imports.Add(new TsImport([typeName], guardPath));
                 continue;
             }
@@ -181,11 +189,18 @@ public sealed class ImportCollector(
             if (!_transpilableTypeMap.TryGetValue(typeName, out var referencedSymbol))
                 continue;
 
+            // Skip types co-located in the same file via [EmitInFile] — they're
+            // declared locally in the merged source, no import needed.
+            var targetNs = PathNaming.GetNamespace(referencedSymbol);
+            var targetFileName = GetFileName(referencedSymbol);
+            if (targetNs == currentNs && targetFileName == currentFileName) continue;
+
             if (!importedNames.Add(typeName)) continue;
 
-            var targetNs = PathNaming.GetNamespace(referencedSymbol);
             var targetTsName = TypeTransformer.GetTsTypeName(referencedSymbol);
-            var importPath = _pathNaming.ComputeRelativeImportPath(currentNs, targetNs, targetTsName);
+            // Path is computed against the FILE name (not the type name) so multiple
+            // types co-located in the same file resolve to the same import path.
+            var importPath = _pathNaming.ComputeRelativeImportPath(currentNs, targetNs, targetFileName);
             // StringEnums generate const objects — always import as value
             var isStringEnum = SymbolHelper.HasStringEnum(referencedSymbol);
             var typeOnly = !valueTypes.Contains(typeName) && !isStringEnum;
@@ -193,6 +208,21 @@ public sealed class ImportCollector(
         }
 
         return imports;
+    }
+
+    /// <summary>
+    /// Returns the file name (without extension, kebab-cased) under which the type
+    /// would be emitted. Honors <c>[EmitInFile("name")]</c>; falls back to the type's
+    /// own TS name (which itself honors <c>[Name]</c>). Used by the import collector
+    /// to elide self-imports for types co-located in the same file.
+    /// </summary>
+    private static string GetFileName(INamedTypeSymbol type)
+    {
+        var explicitFile = SymbolHelper.GetEmitInFile(type);
+        var name = explicitFile is not null && explicitFile.Length > 0
+            ? explicitFile
+            : TypeTransformer.GetTsTypeName(type);
+        return SymbolHelper.ToKebabCase(name);
     }
 
     // ─── Reference walker (pure / static) ───────────────────
