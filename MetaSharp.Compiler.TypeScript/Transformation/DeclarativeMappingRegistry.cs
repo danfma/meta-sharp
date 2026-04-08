@@ -10,15 +10,23 @@ namespace MetaSharp.Transformation;
 /// <see cref="WhenArg0StringEquals"/> is an optional literal-argument filter: when set,
 /// the entry only matches a call site whose first argument is a TS string literal with
 /// that exact value. Used for literal-aware lowering like <c>Guid.ToString("N")</c>.
+///
+/// <see cref="WrapReceiver"/> is an optional source-receiver wrapping spec: when set,
+/// the call site's receiver is rewritten to <c>WrapReceiver(source)</c> before the
+/// rename/template is applied, unless the receiver is already a chained call from the
+/// same wrapper (LINQ-style). See <see cref="MapMethodAttribute.WrapReceiver"/>.
 /// </summary>
 public sealed record DeclarativeMappingEntry(
     string? JsName,
     string? JsTemplate,
-    string? WhenArg0StringEquals = null)
+    string? WhenArg0StringEquals = null,
+    string? WrapReceiver = null)
 {
     public bool HasTemplate => JsTemplate is not null;
 
     public bool HasArgFilter => WhenArg0StringEquals is not null;
+
+    public bool HasWrapReceiver => WrapReceiver is not null;
 }
 
 /// <summary>
@@ -38,13 +46,16 @@ public sealed class DeclarativeMappingRegistry
 {
     private readonly Dictionary<(INamedTypeSymbol Type, string Name), List<DeclarativeMappingEntry>> _methods;
     private readonly Dictionary<(INamedTypeSymbol Type, string Name), DeclarativeMappingEntry> _properties;
+    private readonly Dictionary<string, HashSet<string>> _chainMethodsByWrapper;
 
     private DeclarativeMappingRegistry(
         Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>> methods,
-        Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry> properties)
+        Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry> properties,
+        Dictionary<string, HashSet<string>> chainMethodsByWrapper)
     {
         _methods = methods;
         _properties = properties;
+        _chainMethodsByWrapper = chainMethodsByWrapper;
     }
 
     /// <summary>
@@ -53,10 +64,22 @@ public sealed class DeclarativeMappingRegistry
     /// </summary>
     public static DeclarativeMappingRegistry Empty { get; } = new(
         new Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>>(SymbolNameKeyComparer.Instance),
-        new Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry>(SymbolNameKeyComparer.Instance));
+        new Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry>(SymbolNameKeyComparer.Instance),
+        []);
 
     public int MethodCount => _methods.Values.Sum(list => list.Count);
     public int PropertyCount => _properties.Count;
+
+    /// <summary>
+    /// Returns the set of JS method names registered for a given <c>WrapReceiver</c>
+    /// value. Used by <see cref="BclMapper"/> to recognize "already wrapped" sources
+    /// when applying a mapping with a wrapping spec — if the receiver is a call whose
+    /// callee property matches one of these names, no re-wrapping is needed.
+    /// </summary>
+    public IReadOnlySet<string> GetChainMethodNames(string wrapReceiver) =>
+        _chainMethodsByWrapper.TryGetValue(wrapReceiver, out var set)
+            ? set
+            : (IReadOnlySet<string>)new HashSet<string>();
 
     /// <summary>
     /// Returns all declarative method mapping entries registered for the given containing
@@ -123,7 +146,27 @@ public sealed class DeclarativeMappingRegistry
             }
         }
 
-        return new DeclarativeMappingRegistry(methods, properties);
+        // Build the per-wrapper chain method index used by BclMapper to detect
+        // already-wrapped receivers. Every entry that uses WrapReceiver contributes its
+        // JsName (or the inferred wrap-method root) to its wrapper's set.
+        var chainMethodsByWrapper = new Dictionary<string, HashSet<string>>();
+        foreach (var entries in methods.Values)
+        {
+            foreach (var entry in entries)
+            {
+                if (entry.WrapReceiver is null) continue;
+                if (entry.JsName is null) continue;  // template entries can't be detected by name
+
+                if (!chainMethodsByWrapper.TryGetValue(entry.WrapReceiver, out var set))
+                {
+                    set = [];
+                    chainMethodsByWrapper[entry.WrapReceiver] = set;
+                }
+                set.Add(entry.JsName);
+            }
+        }
+
+        return new DeclarativeMappingRegistry(methods, properties, chainMethodsByWrapper);
     }
 
     /// <summary>
@@ -186,6 +229,7 @@ public sealed class DeclarativeMappingRegistry
         string? jsName = null;
         string? jsTemplate = null;
         string? whenArg0StringEquals = null;
+        string? wrapReceiver = null;
         foreach (var named in attr.NamedArguments)
         {
             switch (named.Key)
@@ -199,12 +243,15 @@ public sealed class DeclarativeMappingRegistry
                 case "WhenArg0StringEquals":
                     whenArg0StringEquals = named.Value.Value as string;
                     break;
+                case "WrapReceiver":
+                    wrapReceiver = named.Value.Value as string;
+                    break;
             }
         }
 
         if (jsName is null && jsTemplate is null) return null;
 
-        return new DeclarativeMappingEntry(jsName, jsTemplate, whenArg0StringEquals);
+        return new DeclarativeMappingEntry(jsName, jsTemplate, whenArg0StringEquals, wrapReceiver);
     }
 
     /// <summary>

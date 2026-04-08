@@ -85,6 +85,26 @@ public sealed class MapMethodAttribute : Attribute
     /// </summary>
     public string? WhenArg0StringEquals { get; init; }
 
+    /// <summary>
+    /// Optional source-receiver wrapping. When set, the call site's receiver is rewritten
+    /// from <c>source.Method(args)</c> to <c>WrapReceiver(source).jsMethod(args)</c>
+    /// (or to the equivalent template form). Used to inject a lazy-evaluation wrapper
+    /// around extension method chains, e.g., LINQ on raw arrays:
+    /// <c>arr.Where(p).Select(s)</c> → <c>Enumerable.from(arr).where(p).select(s)</c>.
+    ///
+    /// The transpiler skips re-wrapping when the receiver is already a chained call from
+    /// the same wrapper — that is, either a direct call into the wrapper namespace
+    /// (<c>Enumerable.from(...)</c>, <c>Enumerable.range(...)</c>, …) or a property access
+    /// whose method name appears in any other declaration with the same
+    /// <see cref="WrapReceiver"/> value. So a long fluent chain only wraps the very first
+    /// call — subsequent ones recognize the wrapped shape and pass through.
+    ///
+    /// The wrapper string takes either the form <c>"Identifier"</c> (bare function call)
+    /// or <c>"RootIdentifier.method"</c> (property access on a known root). Deeper paths
+    /// are not supported yet.
+    /// </summary>
+    public string? WrapReceiver { get; init; }
+
     public MapMethodAttribute(Type declaringType, string csharpMethod)
     {
         DeclaringType = declaringType;

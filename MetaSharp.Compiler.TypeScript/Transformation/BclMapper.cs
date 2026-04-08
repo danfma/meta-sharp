@@ -109,6 +109,12 @@ public static class BclMapper
                 if (invocation.Expression is MemberAccessExpressionSyntax declarativeReceiverAccess)
                     receiver = transformer.TransformExpression(declarativeReceiverAccess.Expression);
 
+                // Apply source-receiver wrapping when the entry uses WrapReceiver and the
+                // receiver is not already a chained call from the same wrapper. The
+                // detection is generic over the wrapper namespace — see WrapReceiverIfNeeded.
+                if (match.HasWrapReceiver && receiver is not null)
+                    receiver = WrapReceiverIfNeeded(receiver, match.WrapReceiver!, transformer.DeclarativeMappings);
+
                 // Capture generic method type-argument names for $T0/$T1/... template
                 // placeholders. For non-generic methods this is the empty list.
                 var typeArgNames = method.TypeArguments
@@ -136,69 +142,10 @@ public static class BclMapper
         // Queue<T> and Stack<T> instance methods are now handled declaratively via
         // MetaSharp/Runtime/Queues.cs and MetaSharp/Runtime/Stacks.cs.
 
-        // LINQ extension methods → lazy Enumerable chain via @meta-sharp/runtime
-        if (IsLinqExtensionMethod(containing) && invocation.Expression is MemberAccessExpressionSyntax linqAccess)
-        {
-            var source = transformer.TransformExpression(linqAccess.Expression);
-
-            // Only wrap with Enumerable.from() if source is not already a LINQ chain
-            var wrapped = IsAlreadyLinqChain(source)
-                ? source
-                : new TsCallExpression(
-                    new TsPropertyAccess(new TsIdentifier("Enumerable"), "from"),
-                    [source]);
-
-            return name switch
-            {
-                // Composition (lazy — returns EnumerableBase)
-                "Where"             => LinqCall(wrapped, "where", args),
-                "Select"            => LinqCall(wrapped, "select", args),
-                "SelectMany"        => LinqCall(wrapped, "selectMany", args),
-                "OrderBy"           => LinqCall(wrapped, "orderBy", args),
-                "OrderByDescending" => LinqCall(wrapped, "orderByDescending", args),
-                "ThenBy"            => LinqCall(wrapped, "thenBy", args),
-                "ThenByDescending"  => LinqCall(wrapped, "thenByDescending", args),
-                "Take"              => LinqCall(wrapped, "take", args),
-                "Skip"              => LinqCall(wrapped, "skip", args),
-                "Distinct"          => LinqCall(wrapped, "distinct", []),
-                "GroupBy"           => LinqCall(wrapped, "groupBy", args),
-                "Concat"            => LinqCall(wrapped, "concat", args),
-                "TakeWhile"         => LinqCall(wrapped, "takeWhile", args),
-                "SkipWhile"         => LinqCall(wrapped, "skipWhile", args),
-                "DistinctBy"        => LinqCall(wrapped, "distinctBy", args),
-                "Reverse"           => LinqCall(wrapped, "reverse", []),
-                "Zip"               => LinqCall(wrapped, "zip", args),
-                "Append"            => LinqCall(wrapped, "append", args),
-                "Prepend"           => LinqCall(wrapped, "prepend", args),
-                "Union"             => LinqCall(wrapped, "union", args),
-                "Intersect"         => LinqCall(wrapped, "intersect", args),
-                "Except"            => LinqCall(wrapped, "except", args),
-
-                // Terminal (materializes)
-                "ToList" or "ToArray" => LinqCall(wrapped, "toArray", []),
-                "ToDictionary"      => LinqCall(wrapped, "toMap", args),
-                "ToHashSet"         => LinqCall(wrapped, "toSet", []),
-                "First"             => LinqCall(wrapped, "first", args),
-                "FirstOrDefault"    => LinqCall(wrapped, "firstOrDefault", args),
-                "Last"              => LinqCall(wrapped, "last", args),
-                "LastOrDefault"     => LinqCall(wrapped, "lastOrDefault", args),
-                "Single"            => LinqCall(wrapped, "single", args),
-                "SingleOrDefault"   => LinqCall(wrapped, "singleOrDefault", args),
-                "Any"               => LinqCall(wrapped, "any", args),
-                "All"               => LinqCall(wrapped, "all", args),
-                "Count"             => LinqCall(wrapped, "count", args),
-                "Sum"               => LinqCall(wrapped, "sum", args),
-                "Average"           => LinqCall(wrapped, "average", args),
-                "Min"               => LinqCall(wrapped, "min", args),
-                "Max"               => LinqCall(wrapped, "max", args),
-                "MinBy"             => LinqCall(wrapped, "minBy", args),
-                "MaxBy"             => LinqCall(wrapped, "maxBy", args),
-                "Contains"          => LinqCall(wrapped, "contains", args),
-                "Aggregate"         => LinqCall(wrapped, "aggregate", args),
-
-                _ => null,
-            };
-        }
+        // LINQ extension methods are now handled declaratively via MetaSharp/Runtime/Linq.cs.
+        // Each entry uses WrapReceiver = "Enumerable.from" so calls like `arr.Where(p)`
+        // lower to `Enumerable.from(arr).where(p)`. The BclMapper detects already-wrapped
+        // receivers via IsAlreadyWrappedBy so long fluent chains only wrap once.
 
         // Dictionary<K,V> and HashSet<T> family instance methods are now handled
         // declaratively via MetaSharp/Runtime/Dictionaries.cs and MetaSharp/Runtime/Sets.cs.
@@ -283,41 +230,88 @@ public static class BclMapper
         return args[0] is TsStringLiteral str && str.Value == entry.WhenArg0StringEquals;
     }
 
-    // ─── Type classification helpers ────────────────────────
-    // (IsCollectionType was deleted alongside the hardcoded List/IList/ICollection
-    // branches — those are handled declaratively now via MetaSharp/Runtime/Lists.cs.
-    // ImmutableList/ImmutableArray support has been temporarily lost in the migration
-    // and is tracked as a follow-up.)
-
-    private static bool IsLinqExtensionMethod(string? fullName)
+    /// <summary>
+    /// Wraps a source receiver with the wrapper namespace specified by a declarative
+    /// mapping's <see cref="DeclarativeMappingEntry.WrapReceiver"/>, unless the receiver
+    /// is already a chained call from the same wrapper. This is the LINQ
+    /// <c>Enumerable.from(arr).where(p).select(s)</c> optimization, generalized: long
+    /// fluent chains only wrap the very first call.
+    ///
+    /// The wrapper string takes either the form <c>"Identifier"</c> (bare function call,
+    /// e.g., <c>from</c>) or <c>"RootIdentifier.method"</c> (property access on a known
+    /// root, e.g., <c>Enumerable.from</c>). Deeper paths are not supported yet.
+    ///
+    /// Detection of "already wrapped":
+    /// <list type="number">
+    ///   <item>The receiver is a TsCallExpression whose callee starts with the wrapper's
+    ///   root identifier (e.g., <c>Enumerable.from(arr)</c>, <c>Enumerable.range(0, 10)</c>,
+    ///   <c>Enumerable.empty&lt;T&gt;()</c> all match the <c>Enumerable.*</c> wrapper).</item>
+    ///   <item>The receiver is a TsCallExpression whose callee property name appears in
+    ///   the registry's chain method set for this wrapper (e.g., <c>arr.where(p)</c>
+    ///   matches because <c>where</c> is registered for <c>Enumerable.from</c>).</item>
+    /// </list>
+    /// </summary>
+    private static TsExpression WrapReceiverIfNeeded(
+        TsExpression receiver,
+        string wrapReceiver,
+        DeclarativeMappingRegistry mappings)
     {
-        if (fullName is null) return false;
-        return fullName == "System.Linq.Enumerable"
-            || fullName.StartsWith("System.Linq.IOrderedEnumerable");
+        if (IsAlreadyWrappedBy(receiver, wrapReceiver, mappings))
+            return receiver;
+
+        return BuildWrapCall(wrapReceiver, receiver);
     }
 
-    private static TsCallExpression LinqCall(TsExpression source, string method, List<TsExpression> args) =>
-        new(new TsPropertyAccess(source, method), args);
-
     /// <summary>
-    /// Detects if an expression is already the result of a LINQ chain (Enumerable.from() or .where(), etc.)
-    /// to avoid double-wrapping.
+    /// Builds the JS expression that wraps a source with the given wrapper spec.
+    /// <list type="bullet">
+    ///   <item><c>"Enumerable.from"</c> + <c>arr</c> → <c>Enumerable.from(arr)</c></item>
+    ///   <item><c>"from"</c> + <c>arr</c> → <c>from(arr)</c></item>
+    /// </list>
     /// </summary>
-    private static bool IsAlreadyLinqChain(TsExpression expr) => expr switch
+    private static TsCallExpression BuildWrapCall(string wrapReceiver, TsExpression source)
     {
-        TsCallExpression { Callee: TsPropertyAccess { Object: TsIdentifier { Name: "Enumerable" } } } => true,
-        TsCallExpression { Callee: TsPropertyAccess { Property: var p } } when IsLinqMethodName(p) => true,
-        _ => false,
-    };
+        var dot = wrapReceiver.IndexOf('.');
+        if (dot < 0)
+            return new TsCallExpression(new TsIdentifier(wrapReceiver), [source]);
 
-    private static bool IsLinqMethodName(string name) => name is
-        "where" or "select" or "selectMany" or "orderBy" or "orderByDescending" or "thenBy" or "thenByDescending"
-        or "take" or "skip" or "distinct" or "groupBy" or "concat"
-        or "takeWhile" or "skipWhile" or "distinctBy" or "reverse"
-        or "zip" or "append" or "prepend" or "union" or "intersect" or "except"
-        or "toArray" or "toMap" or "toSet"
-        or "first" or "firstOrDefault" or "last" or "lastOrDefault"
-        or "single" or "singleOrDefault" or "any" or "all"
-        or "count" or "sum" or "average" or "min" or "max" or "minBy" or "maxBy"
-        or "contains" or "aggregate";
+        var root = wrapReceiver[..dot];
+        var member = wrapReceiver[(dot + 1)..];
+        return new TsCallExpression(
+            new TsPropertyAccess(new TsIdentifier(root), member),
+            [source]);
+    }
+
+    private static bool IsAlreadyWrappedBy(
+        TsExpression receiver,
+        string wrapReceiver,
+        DeclarativeMappingRegistry mappings)
+    {
+        if (receiver is not TsCallExpression call) return false;
+        if (call.Callee is not TsPropertyAccess access) return false;
+
+        // Detection 1: callee is a property access on the wrapper's root identifier.
+        // Covers Enumerable.from(...), Enumerable.range(...), Enumerable.empty(), etc.
+        var dot = wrapReceiver.IndexOf('.');
+        var root = dot < 0 ? wrapReceiver : wrapReceiver[..dot];
+        if (access.Object is TsIdentifier id && id.Name == root)
+            return true;
+
+        // Detection 2: callee property name is in the chain method set for this wrapper.
+        // Covers fluent chains like arr.where(p).select(s) where each subsequent step is
+        // a registered chain method.
+        var chainMethods = mappings.GetChainMethodNames(wrapReceiver);
+        return chainMethods.Contains(access.Property);
+    }
+
+    // ─── Type classification helpers ────────────────────────
+    // The original BclMapper had IsCollectionType / IsMapOrSetType / IsQueueType /
+    // IsStackType / IsLinqExtensionMethod / IsLinqMethodName / LinqCall / IsAlreadyLinqChain
+    // helpers that classified BCL types via display-name string matching. They're all
+    // gone now — the equivalent logic lives in MetaSharp/Runtime/*.cs declarations and
+    // is dispatched generically by the declarative pipeline (DeclarativeMappingRegistry,
+    // BclMapper.WrapReceiverIfNeeded, BclMapper.IsAlreadyWrappedBy).
+    //
+    // ImmutableList/ImmutableArray support has been temporarily lost during the
+    // migration and is tracked as a follow-up.
 }
