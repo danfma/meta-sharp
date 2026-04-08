@@ -132,6 +132,63 @@ public class DecimalIntegrationTests
     }
 
     [Test]
+    public async Task DecimalConstants_LowerToFreshDecimalInstances()
+    {
+        // decimal.Zero / One / MinusOne — there's no static counterpart in decimal.js,
+        // so each access creates a fresh Decimal. Cheap enough; user can hoist.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Calc
+            {
+                public decimal Zero() => decimal.Zero;
+                public decimal One() => decimal.One;
+                public decimal NegOne() => decimal.MinusOne;
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return new Decimal(0);");
+        await Assert.That(output).Contains("return new Decimal(1);");
+        await Assert.That(output).Contains("return new Decimal(-1);");
+    }
+
+    [Test]
+    public async Task DecimalParse_LowersToConstructorCall()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Calc
+            {
+                public decimal FromString(string s) => decimal.Parse(s);
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return new Decimal(s);");
+    }
+
+    [Test]
+    public async Task DecimalCompareTo_LowersToCmp()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public class Calc
+            {
+                public int Compare(decimal a, decimal b) => a.CompareTo(b);
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return a.cmp(b);");
+    }
+
+    [Test]
     public async Task NonDecimalLiteral_StillLowersToBareNumber()
     {
         // Sanity check: int / double / float literals are unaffected.
