@@ -79,6 +79,38 @@ public static class SymbolHelper
 
     public sealed record ExportVarFromBodyInfo(string Name, bool AsDefault, bool InPlace);
 
+    /// <summary>
+    /// Reads the <c>[assembly: EmitPackage("name", target)]</c> declaration from
+    /// <paramref name="assembly"/> for the requested <paramref name="target"/>. Returns
+    /// the package name on a match, or <c>null</c> when no matching attribute exists.
+    /// Multiple <c>[EmitPackage]</c> instances are supported (one per target); the first
+    /// one whose <c>Target</c> matches wins.
+    /// </summary>
+    /// <param name="targetEnumValue">Integer value of the EmitTarget enum (matches the
+    /// underlying value the attribute was constructed with). Pass 0 for JavaScript.</param>
+    public static string? GetEmitPackage(IAssemblySymbol assembly, int targetEnumValue)
+    {
+        foreach (var attr in assembly.GetAttributes())
+        {
+            if (attr.AttributeClass?.Name is not ("EmitPackageAttribute" or "EmitPackage"))
+                continue;
+
+            // Constructor: (string name, EmitTarget target = JavaScript)
+            if (attr.ConstructorArguments.Length == 0) continue;
+            var name = attr.ConstructorArguments[0].Value as string;
+            if (string.IsNullOrEmpty(name)) continue;
+
+            // Target arg may be omitted (default = JavaScript = 0) or present.
+            var target = 0;
+            if (attr.ConstructorArguments.Length > 1
+                && attr.ConstructorArguments[1].Value is int t)
+                target = t;
+
+            if (target == targetEnumValue) return name;
+        }
+        return null;
+    }
+
     public static bool HasInlineWrapper(ISymbol symbol) => HasAttribute(symbol, "InlineWrapper");
 
     /// <summary>
