@@ -110,7 +110,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
     {
         return expression switch
         {
-            LiteralExpressionSyntax lit => LiteralHandler.Transform(lit),
+            LiteralExpressionSyntax lit => LiteralHandler.Transform(lit, Model),
             IdentifierNameSyntax id => Identifiers.Transform(id),
 
             BinaryExpressionSyntax bin => Operators.TransformBinary(bin),
