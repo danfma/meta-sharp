@@ -274,6 +274,49 @@ public class CrossPackageImportTests
     }
 
     [Test]
+    public async Task EmitInFile_CrossPackageImportUsesFilePath()
+    {
+        // The library co-locates Issue + IssueStatus in a single `issue.ts` via
+        // [EmitInFile]. The consumer references both types and should produce ONE
+        // import line with both names from the file path (not two separate imports
+        // by type name).
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/issues")]
+
+            namespace AcmeIssues;
+
+            [EmitInFile("issue")]
+            public record Issue(string Title, IssueStatus Status);
+
+            [EmitInFile("issue")]
+            public enum IssueStatus { Open, Closed }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Tracker
+            {
+                public AcmeIssues.Issue? Current { get; set; }
+                public AcmeIssues.IssueStatus Status { get; set; }
+            }
+            """;
+
+        var result = TranspileHelper.TranspileWithLibrary(library, consumer);
+        var output = result["tracker.ts"];
+
+        // One merged import line, two names, file path is `issue` (not `issue-status`).
+        await Assert.That(output).Contains("from \"@acme/issues/issue\"");
+        await Assert.That(output).Contains("Issue");
+        await Assert.That(output).Contains("IssueStatus");
+        // No separate import for issue-status — that file doesn't exist on the lib side.
+        await Assert.That(output).DoesNotContain("issue-status");
+    }
+
+    [Test]
     public async Task ExportFromBclWithVersion_AddedToDependencies()
     {
         // The default decimal mapping in MetaSharp/Runtime/Decimal.cs declares

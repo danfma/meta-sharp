@@ -37,6 +37,7 @@
 - [x] `[ModuleEntryPoint]` — body do método vira top-level executável do módulo
 - [x] `[ExportVarFromBody]` — promove local var do entry point a export do módulo
 - [x] `[EmitPackage(name, target)]` + `EmitTarget` enum — identidade do package no target
+- [x] `[EmitInFile("name")]` — co-locate múltiplos tipos num mesmo arquivo `.ts`
 
 ### AST & Printer
 
@@ -261,11 +262,13 @@ name, so two assemblies with same-named types are correctly distinguished.
       The merge preserves user-hand-written entries for unrelated packages. Same-key
       entries are overwritten with the compiler-tracked version (the C# project is the
       source of truth).
-- [ ] **Multi-type-per-file support** — today MetaSharp emits one type per `.ts` file
-      and the cross-package `subPath` is computed from the type name. When a future
-      feature lets multiple types share a file, the subpath needs to become a file
-      path (not a type path) and the import collector needs to group multiple names
-      under the same subpath.
+- [x] **Multi-type-per-file support** via `[EmitInFile("name")]`. Types decorated with
+      the same file name (in the same C# namespace) are co-located in one `.ts` file
+      instead of producing one file per type. Cross-package consumers automatically
+      resolve the import to the file path: a reference to a co-located type becomes
+      `import { Foo, Bar } from "<package>/<ns>/<file>"`, and multiple names from the
+      same file are merged into one import line. Conflicting namespaces under the same
+      file name are rejected with MS0008.
 
 ### NuGet Library Path — `.metalib` (future)
 

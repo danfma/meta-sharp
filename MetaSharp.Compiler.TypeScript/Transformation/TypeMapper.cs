@@ -294,10 +294,14 @@ public static class TypeMapper
         }
 
         var ns = PathNaming.GetNamespace(entry.Symbol);
-        // The TS type name follows the [Name] override if present, mirroring how the
-        // file name is computed in the source assembly.
-        var typeName = SymbolHelper.GetNameOverride(entry.Symbol) ?? entry.Symbol.Name;
-        var subPath = PathNaming.ComputeSubPath(entry.AssemblyRootNamespace, ns, typeName);
+        // File name resolution: prefer [EmitInFile("name")] when present so consumers
+        // import multi-type files via the file path (not the type path). Otherwise
+        // fall back to the type's own name (with [Name] override applied), matching
+        // the 1:1 default. Both branches go through ToKebabCase via ComputeSubPath.
+        var fileName = SymbolHelper.GetEmitInFile(entry.Symbol)
+            ?? SymbolHelper.GetNameOverride(entry.Symbol)
+            ?? entry.Symbol.Name;
+        var subPath = PathNaming.ComputeSubPath(entry.AssemblyRootNamespace, ns, fileName);
 
         // Track that this package was actually referenced so the transformer can emit
         // a corresponding `dependencies` entry in the consumer's package.json. We

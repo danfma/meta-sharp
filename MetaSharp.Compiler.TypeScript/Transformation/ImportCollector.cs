@@ -102,12 +102,32 @@ public sealed class ImportCollector(
             importedNames.Add(helper);
 
         // Cross-package imports collected via TsTypeOrigin (resolved at type-mapping
-        // time, no string lookup needed). Each origin already carries the full path.
-        foreach (var (typeName, origin) in crossPackageOrigins.OrderBy(kv => kv.Key))
+        // time, no string lookup needed). Each origin carries the full path; multiple
+        // type names that share the same path (e.g., types co-located via [EmitInFile])
+        // are merged into a single named-import line. Default imports are kept
+        // separate because the syntax `import Foo from "..."` only supports one name.
+        var byPath = new Dictionary<string, (List<string> Names, bool IsDefault)>();
+        foreach (var (typeName, origin) in crossPackageOrigins)
         {
             if (!importedNames.Add(typeName)) continue;
             var importPath = $"{origin.PackageName}/{origin.SubPath}";
-            imports.Add(new TsImport([typeName], importPath, IsDefault: origin.IsDefault));
+            // Default imports never merge — emit them as their own line.
+            if (origin.IsDefault)
+            {
+                imports.Add(new TsImport([typeName], importPath, IsDefault: true));
+                continue;
+            }
+            if (!byPath.TryGetValue(importPath, out var bucket))
+            {
+                bucket = (new List<string>(), false);
+                byPath[importPath] = bucket;
+            }
+            bucket.Names.Add(typeName);
+        }
+        foreach (var (importPath, bucket) in byPath.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+        {
+            bucket.Names.Sort(StringComparer.Ordinal);
+            imports.Add(new TsImport(bucket.Names.ToArray(), importPath));
         }
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))
