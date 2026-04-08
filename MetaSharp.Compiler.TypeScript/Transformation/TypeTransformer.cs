@@ -332,7 +332,26 @@ public sealed class TypeTransformer(Compilation compilation)
     {
         _bclExportMap = new Dictionary<string, (string ExportedName, string FromPackage)>();
 
-        foreach (var attr in compilation.Assembly.GetAttributes())
+        // Read [ExportFromBcl] from the current assembly first, then from every
+        // referenced assembly so that built-in mappings (e.g., decimal → Decimal from
+        // decimal.js, declared in MetaSharp/Runtime/Decimal.cs) flow through without
+        // the user having to redeclare them in their own project. The current assembly
+        // is processed last so user overrides win on conflict.
+        foreach (var reference in compilation.References)
+        {
+            if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol asm
+                && !SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
+                LoadBclExportFromAssembly(asm);
+        }
+        LoadBclExportFromAssembly(compilation.Assembly);
+
+        // Make BCL export map available to TypeMapper
+        TypeMapper.BclExportMap = _bclExportMap;
+    }
+
+    private void LoadBclExportFromAssembly(IAssemblySymbol assembly)
+    {
+        foreach (var attr in assembly.GetAttributes())
         {
             if (attr.AttributeClass?.Name is not ("ExportFromBclAttribute" or "ExportFromBcl"))
                 continue;
@@ -363,9 +382,6 @@ public sealed class TypeTransformer(Compilation compilation)
                 _bclExportMap[typeArg.ToDisplayString()] = (exportedName, fromPackage);
             }
         }
-
-        // Make BCL export map available to TypeMapper
-        TypeMapper.BclExportMap = _bclExportMap;
     }
 
     private TsSourceFile? TransformType(INamedTypeSymbol type)

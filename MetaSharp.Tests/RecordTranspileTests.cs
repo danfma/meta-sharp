@@ -17,13 +17,16 @@ public class RecordTranspileTests
     [Test]
     public async Task RecordWithMethods_GeneratesClassWithMethods()
     {
+        // Uses int (not decimal) so the assertion stays focused on record-class shape
+        // and doesn't accidentally exercise the decimal → Decimal mapping introduced
+        // for the decimal.js integration.
         var result = TranspileHelper.Transpile("""
             [Transpile]
-            public readonly record struct Amount(decimal Value)
+            public readonly record struct Amount(int Value)
             {
-                public decimal Doubled() => Value * 2;
+                public int Doubled() => Value * 2;
 
-                public static Amount FromValue(decimal value) => new(value);
+                public static Amount FromValue(int value) => new(value);
             }
             """);
 
@@ -36,9 +39,9 @@ public class RecordTranspileTests
     {
         var result = TranspileHelper.Transpile("""
             [Transpile]
-            public readonly record struct Amount(decimal Value)
+            public readonly record struct Amount(int Value)
             {
-                public decimal Doubled() => Value * 2;
+                public int Doubled() => Value * 2;
             }
             """);
 

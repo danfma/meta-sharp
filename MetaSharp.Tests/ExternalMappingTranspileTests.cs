@@ -22,8 +22,12 @@ public class ExternalMappingTranspileTests
     }
 
     [Test]
-    public async Task ExportFromBcl_WithoutMapping_UsesBuiltInFallback()
+    public async Task Decimal_HasBuiltInMappingToDecimalJs()
     {
+        // MetaSharp ships a default [ExportFromBcl] for `decimal` in
+        // MetaSharp/Runtime/Decimal.cs, so user code that uses decimal automatically
+        // imports `Decimal` from `decimal.js` without any per-project declaration.
+        // The user is responsible for adding `decimal.js` to their package.json.
         var result = TranspileHelper.Transpile(
             """
             [Transpile]
@@ -32,8 +36,8 @@ public class ExternalMappingTranspileTests
         );
 
         var output = result["price.ts"];
-        // Without [ExportFromBcl], decimal falls back to number
-        await Assert.That(output).Contains("amount: number");
+        await Assert.That(output).Contains("amount: Decimal");
+        await Assert.That(output).Contains("from \"decimal.js\"");
     }
 
     // ─── [Import] ───────────────────────────────────────────
