@@ -35,13 +35,20 @@ public static class PackageJsonWriter
     /// as the source of truth. If the existing file already had a different name, an
     /// MS0007 diagnostic is returned and the authoritative value still wins (because
     /// cross-package import resolution depends on it).</param>
+    /// <param name="crossPackageDependencies">Maps each cross-package npm name that the
+    /// transpiler emitted an import for, to its version specifier (e.g., <c>^1.2.3</c>
+    /// or <c>workspace:*</c>). The writer MERGES these into <c>package.json#dependencies</c>
+    /// — existing entries the user has hand-written for OTHER packages are preserved
+    /// untouched; existing entries for the same package are overwritten with the
+    /// compiler-computed version (so versions stay in sync with the C# project).</param>
     /// <returns>List of diagnostics raised while writing — empty in the happy path.</returns>
     public static IReadOnlyList<MetaSharpDiagnostic> UpdateOrCreate(
         string packageRoot,
         string outputDirAbsolute,
         IReadOnlyList<TsSourceFile> files,
         string distDirRelativeToPackageRoot = "./dist",
-        string? authoritativePackageName = null)
+        string? authoritativePackageName = null,
+        IReadOnlyDictionary<string, string>? crossPackageDependencies = null)
     {
         var diagnostics = new List<MetaSharpDiagnostic>();
         var packageJsonPath = Path.Combine(packageRoot, "package.json");
@@ -92,6 +99,18 @@ public static class PackageJsonWriter
         root["sideEffects"] = false;
         root["imports"] = imports;
         root["exports"] = exports;
+
+        // Merge auto-generated cross-package dependencies into the existing
+        // `dependencies` object, leaving any user-hand-written entries for OTHER
+        // packages alone. We only touch the keys we know about, so adding `react` or
+        // `bun-types` by hand will survive a regenerate cycle.
+        if (crossPackageDependencies is { Count: > 0 })
+        {
+            var deps = root["dependencies"] as JsonObject ?? new JsonObject();
+            foreach (var (pkg, version) in crossPackageDependencies)
+                deps[pkg] = version;
+            root["dependencies"] = deps;
+        }
 
         Directory.CreateDirectory(packageRoot);
         File.WriteAllText(packageJsonPath, root.ToJsonString(WriteOptions) + "\n");

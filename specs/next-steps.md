@@ -243,11 +243,15 @@ name, so two assemblies with same-named types are correctly distinguished.
       compiler now emits MS0007 (hard error) at the consumer site instead of silently
       skipping the import. Diagnostics deduplicate by type display name so a single
       missing attribute produces exactly one error per type referenced.
-- [ ] **Auto-dependencies generation** in `package.json`: detect cross-package imports
-      during emission and add the corresponding entries to `dependencies` automatically.
-      Needs a version source — `workspace:*` for sibling projects in a Bun monorepo,
-      `^x.y.z` for external packages. Probably a new attribute property
-      (`[EmitPackage("x", Version = "1.2.3")]`) to declare the version on the C# side.
+- [x] **Auto-dependencies generation** in `package.json`: cross-package imports tracked
+      via `[EmitPackage]` are now merged into the consumer's `package.json#dependencies`
+      automatically. Version source is `IAssemblySymbol.Identity.Version` formatted as
+      `^Major.Minor.Patch`, falling back to `workspace:*` when the source assembly has
+      no explicit version (which is the right call for sibling projects in a Bun
+      monorepo). The merge preserves user-hand-written entries for unrelated packages.
+      Cross-package deps from `[Import]` (external libs like `decimal.js`) and from
+      `[ExportFromBcl]` are NOT auto-emitted yet — those need a separate version source
+      (probably a new attribute property on `[Import]` / `[ExportFromBcl]`).
 - [ ] **Multi-type-per-file support** — today MetaSharp emits one type per `.ts` file
       and the cross-package `subPath` is computed from the type name. When a future
       feature lets multiple types share a file, the subpath needs to become a file

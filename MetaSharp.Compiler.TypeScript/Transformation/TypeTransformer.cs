@@ -21,6 +21,18 @@ public sealed class TypeTransformer(Compilation compilation)
     /// </summary>
     public IReadOnlyList<MetaSharpDiagnostic> Diagnostics => _diagnostics;
 
+    private readonly Dictionary<string, string> _crossPackageDependencies = new();
+
+    /// <summary>
+    /// Maps each cross-package npm name that was actually referenced during
+    /// transformation to its npm version specifier (<c>^Major.Minor.Patch</c>, or
+    /// <c>workspace:*</c> when the source assembly has no explicit version). Drained
+    /// from <see cref="TypeMapper.UsedCrossPackages"/> at the end of <c>TransformAll</c>
+    /// and surfaced to the CLI driver so the package.json writer can merge the entries
+    /// into <c>dependencies</c>.
+    /// </summary>
+    public IReadOnlyDictionary<string, string> CrossPackageDependencies => _crossPackageDependencies;
+
     internal void ReportDiagnostic(MetaSharpDiagnostic diagnostic)
     {
         _diagnostics.Add(diagnostic);
@@ -125,6 +137,7 @@ public sealed class TypeTransformer(Compilation compilation)
         TypeMapper.CrossAssemblyTypeMap = _crossAssemblyTypeMap;
         TypeMapper.AssembliesNeedingEmitPackage = _assembliesNeedingEmitPackage;
         TypeMapper.CrossPackageMisses = new HashSet<string>();
+        TypeMapper.UsedCrossPackages = new Dictionary<string, IAssemblySymbol>();
 
         // Build guard name → type name map for cross-file guard imports
         _guardNameToTypeMap = new Dictionary<string, string>();
@@ -193,7 +206,31 @@ public sealed class TypeTransformer(Compilation compilation)
                 $"the producing project so consumers can import this type."));
         }
 
+        // Drain auto-generated cross-package dependencies. For every package whose
+        // types were actually referenced during transformation, compute a version
+        // specifier from the source assembly and surface it via CrossPackageDependencies
+        // so the CLI driver can merge it into the consumer's package.json.
+        foreach (var (packageName, sourceAsm) in TypeMapper.UsedCrossPackages)
+        {
+            _crossPackageDependencies[packageName] = FormatPackageVersion(sourceAsm);
+        }
+
         return files;
+    }
+
+    /// <summary>
+    /// Formats an assembly's version as an npm-compatible specifier. Assemblies that
+    /// don't declare a version (Roslyn defaults to <c>0.0.0.0</c>) get
+    /// <c>workspace:*</c>, which is the right call for sibling projects in a Bun
+    /// monorepo. Anything with a real version becomes <c>^Major.Minor.Patch</c>.
+    /// </summary>
+    private static string FormatPackageVersion(IAssemblySymbol assembly)
+    {
+        var v = assembly.Identity.Version;
+        if (v.Major == 0 && v.Minor == 0 && v.Build <= 0)
+            return "workspace:*";
+        var build = v.Build > 0 ? v.Build : 0;
+        return $"^{v.Major}.{v.Minor}.{build}";
     }
 
     private bool _assemblyWideTranspile;

@@ -166,6 +166,66 @@ public static class TranspileHelper
         return files;
     }
 
+    /// <summary>
+    /// Compiles a library source into an in-memory <see cref="CSharpCompilation"/>.
+    /// Useful for tests that want to inspect the cross-package transformer state
+    /// directly (e.g., <c>CrossPackageDependencies</c>) instead of just asserting on
+    /// the generated TS files.
+    /// </summary>
+    public static CSharpCompilation CompileLibrary(string librarySource)
+    {
+        var source = $"""
+            using System;
+            using System.Threading.Tasks;
+            using MetaSharp.Annotations;
+            {librarySource}
+            """;
+        var tree = CSharpSyntaxTree.ParseText(source,
+            new CSharpParseOptions(LanguageVersion.Preview));
+        var compilation = CSharpCompilation.Create(
+            "TestLibrary", [tree], BuildBaseReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var errors = compilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        if (errors.Count > 0)
+            throw new InvalidOperationException(
+                $"Library compilation failed:\n{string.Join("\n", errors)}");
+        return compilation;
+    }
+
+    /// <summary>
+    /// Compiles a consumer source that references a previously built library
+    /// compilation. The consumer's references include the base set plus the library
+    /// as a metadata reference (in-memory).
+    /// </summary>
+    public static CSharpCompilation CompileConsumer(
+        string consumerSource, CSharpCompilation libraryCompilation)
+    {
+        var source = $"""
+            using System;
+            using System.Threading.Tasks;
+            using MetaSharp.Annotations;
+            {consumerSource}
+            """;
+        var tree = CSharpSyntaxTree.ParseText(source,
+            new CSharpParseOptions(LanguageVersion.Preview));
+        var compilation = CSharpCompilation.Create(
+            "TestConsumer",
+            [tree],
+            BuildBaseReferences().Concat([libraryCompilation.ToMetadataReference()]),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+
+        var errors = compilation.GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        if (errors.Count > 0)
+            throw new InvalidOperationException(
+                $"Consumer compilation failed:\n{string.Join("\n", errors)}");
+        return compilation;
+    }
+
     private static (Dictionary<string, string> Files, IReadOnlyList<MetaSharp.Compiler.Diagnostics.MetaSharpDiagnostic> Diagnostics)
         TranspileWithLibraryCore(string librarySource, string consumerSource)
     {

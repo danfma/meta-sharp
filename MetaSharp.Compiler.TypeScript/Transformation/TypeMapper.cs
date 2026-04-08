@@ -69,6 +69,23 @@ public static class TypeMapper
         set => _crossPackageMisses = value;
     }
 
+    /// <summary>
+    /// Cross-package names that were actually referenced during transformation, mapped
+    /// to the source assembly they came from. Populated by <see cref="ResolveOrigin"/>
+    /// on every successful lookup. The transformer reads this after
+    /// <c>TransformAll</c> to compute the auto-generated <c>dependencies</c> entries
+    /// for the consumer's <c>package.json</c> — versions come from
+    /// <c>IAssemblySymbol.Identity.Version</c>.
+    /// </summary>
+    [ThreadStatic]
+    private static Dictionary<string, IAssemblySymbol>? _usedCrossPackages;
+
+    public static Dictionary<string, IAssemblySymbol> UsedCrossPackages
+    {
+        get => _usedCrossPackages ??= new();
+        set => _usedCrossPackages = value;
+    }
+
     public static TsType Map(ITypeSymbol type)
     {
         // Nullable<T> (value types: int?, bool?, etc.) → T | null
@@ -255,6 +272,13 @@ public static class TypeMapper
         // file name is computed in the source assembly.
         var typeName = SymbolHelper.GetNameOverride(entry.Symbol) ?? entry.Symbol.Name;
         var subPath = PathNaming.ComputeSubPath(entry.AssemblyRootNamespace, ns, typeName);
+
+        // Track that this package was actually referenced so the transformer can emit
+        // a corresponding `dependencies` entry in the consumer's package.json. The
+        // value is the source assembly so we can read its version later.
+        if (entry.Symbol.ContainingAssembly is { } sourceAsm)
+            UsedCrossPackages[entry.PackageName] = sourceAsm;
+
         return new TsTypeOrigin(entry.PackageName, subPath);
     }
 

@@ -74,6 +74,67 @@ public class EmitPackageTests
     }
 
     [Test]
+    public async Task CrossPackageDependencies_MergedIntoExisting()
+    {
+        // The writer must add the compiler-tracked entries WITHOUT clobbering any
+        // hand-written `dependencies` the user already had.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            { "name": "consumer", "private": true, "dependencies": { "react": "^18.0.0" } }
+            """);
+
+        var deps = new Dictionary<string, string>
+        {
+            ["sample-todo"] = "workspace:*",
+            ["@scope/lib"] = "^1.2.3",
+        };
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir, srcDir, files: [],
+            crossPackageDependencies: deps);
+
+        var pkg = ReadJson(tempDir);
+        var depsObj = pkg["dependencies"] as JsonObject;
+        await Assert.That(depsObj).IsNotNull();
+        // Hand-written entry preserved.
+        await Assert.That(depsObj!["react"]?.GetValue<string>()).IsEqualTo("^18.0.0");
+        // Compiler-tracked entries added.
+        await Assert.That(depsObj["sample-todo"]?.GetValue<string>()).IsEqualTo("workspace:*");
+        await Assert.That(depsObj["@scope/lib"]?.GetValue<string>()).IsEqualTo("^1.2.3");
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task CrossPackageDependencies_OverwriteSamePackageVersion()
+    {
+        // If the user previously had `sample-todo` pinned to a stale version, the new
+        // compiler-tracked version overrides — this keeps the version source of truth
+        // on the C# side rather than risking drift.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            { "name": "consumer", "dependencies": { "sample-todo": "^0.0.1" } }
+            """);
+
+        var deps = new Dictionary<string, string> { ["sample-todo"] = "^1.5.0" };
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir, srcDir, files: [], crossPackageDependencies: deps);
+
+        var pkg = ReadJson(tempDir);
+        await Assert.That((pkg["dependencies"] as JsonObject)!["sample-todo"]?.GetValue<string>())
+            .IsEqualTo("^1.5.0");
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
     public async Task NoAuthoritativeName_PreservesExisting()
     {
         var tempDir = CreateTempDir();

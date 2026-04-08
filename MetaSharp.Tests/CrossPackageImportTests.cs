@@ -129,6 +129,113 @@ public class CrossPackageImportTests
     }
 
     [Test]
+    public async Task UsedCrossPackages_TrackedForAutoDependencies()
+    {
+        // After a successful cross-package import, the compiler exposes the package
+        // name + source assembly via TypeMapper.UsedCrossPackages. The TypeTransformer
+        // formats this into a CrossPackageDependencies dictionary that the CLI driver
+        // hands to PackageJsonWriter for the auto-dep merge.
+        var library = """
+            [assembly: System.Reflection.AssemblyVersion("1.5.2.0")]
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/lib")]
+
+            namespace AcmeLib;
+
+            public record Item(string Name);
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Holder
+            {
+                public AcmeLib.Item? Stored { get; set; }
+            }
+            """;
+
+        var libCompilation = TranspileHelper.CompileLibrary(library);
+        var consumerCompilation = TranspileHelper.CompileConsumer(consumer, libCompilation);
+
+        var transformer = new MetaSharp.Transformation.TypeTransformer(consumerCompilation);
+        transformer.TransformAll();
+
+        await Assert.That(transformer.CrossPackageDependencies.ContainsKey("@acme/lib")).IsTrue();
+        // Library declares AssemblyVersion 1.5.2.0 → ^1.5.2
+        await Assert.That(transformer.CrossPackageDependencies["@acme/lib"]).IsEqualTo("^1.5.2");
+    }
+
+    [Test]
+    public async Task UnversionedLibrary_GetsWorkspaceDepSpec()
+    {
+        // No [assembly: AssemblyVersion] → Roslyn defaults to 0.0.0.0 → workspace:*
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/lib")]
+
+            namespace AcmeLib;
+
+            public record Item(string Name);
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Holder
+            {
+                public AcmeLib.Item? Stored { get; set; }
+            }
+            """;
+
+        var libCompilation = TranspileHelper.CompileLibrary(library);
+        var consumerCompilation = TranspileHelper.CompileConsumer(consumer, libCompilation);
+
+        var transformer = new MetaSharp.Transformation.TypeTransformer(consumerCompilation);
+        transformer.TransformAll();
+
+        await Assert.That(transformer.CrossPackageDependencies["@acme/lib"]).IsEqualTo("workspace:*");
+    }
+
+    [Test]
+    public async Task UnreferencedLibrary_NotInDependencies()
+    {
+        // The library is referenced as a project dep, but the consumer never uses any
+        // of its types. We must NOT add it to dependencies — that would pollute the
+        // package.json with unused entries on every regenerate.
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/unused")]
+
+            namespace AcmeUnused;
+
+            public record Unused(int X);
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            public class Standalone
+            {
+                public int Value { get; set; }
+            }
+            """;
+
+        var libCompilation = TranspileHelper.CompileLibrary(library);
+        var consumerCompilation = TranspileHelper.CompileConsumer(consumer, libCompilation);
+
+        var transformer = new MetaSharp.Transformation.TypeTransformer(consumerCompilation);
+        transformer.TransformAll();
+
+        await Assert.That(transformer.CrossPackageDependencies.ContainsKey("@acme/unused")).IsFalse();
+    }
+
+    [Test]
     public async Task LibraryWithoutEmitPackage_DiagnosticDeduplicates()
     {
         // The same library type referenced from multiple consumer types should produce

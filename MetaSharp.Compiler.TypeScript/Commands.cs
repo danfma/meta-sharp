@@ -55,7 +55,8 @@ public class Commands
                 outputDir,
                 target.LastSourceFiles,
                 dist,
-                authoritativePackageName: target.LastEmitPackageName);
+                authoritativePackageName: target.LastEmitPackageName,
+                crossPackageDependencies: target.LastCrossPackageDependencies);
             foreach (var d in pkgDiagnostics)
                 Console.WriteLine(d.Format());
             Console.WriteLine($"  Updated: {Path.Combine(resolvedPackageRoot, "package.json")}");
