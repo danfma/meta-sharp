@@ -15,12 +15,18 @@ namespace MetaSharp.Transformation;
 /// the call site's receiver is rewritten to <c>WrapReceiver(source)</c> before the
 /// rename/template is applied, unless the receiver is already a chained call from the
 /// same wrapper (LINQ-style). See <see cref="MapMethodAttribute.WrapReceiver"/>.
+///
+/// <see cref="RuntimeImports"/> is an optional runtime-helper identifier the lowered
+/// call site needs imported from <c>@meta-sharp/runtime</c>. Forwarded to the
+/// generated <see cref="TsTemplate"/> so the import collector can pick it up — the
+/// template body is otherwise opaque text from the walker's perspective.
 /// </summary>
 public sealed record DeclarativeMappingEntry(
     string? JsName,
     string? JsTemplate,
     string? WhenArg0StringEquals = null,
-    string? WrapReceiver = null)
+    string? WrapReceiver = null,
+    string? RuntimeImports = null)
 {
     public bool HasTemplate => JsTemplate is not null;
 
@@ -230,6 +236,7 @@ public sealed class DeclarativeMappingRegistry
         string? jsTemplate = null;
         string? whenArg0StringEquals = null;
         string? wrapReceiver = null;
+        string? runtimeImports = null;
         foreach (var named in attr.NamedArguments)
         {
             switch (named.Key)
@@ -246,12 +253,15 @@ public sealed class DeclarativeMappingRegistry
                 case "WrapReceiver":
                     wrapReceiver = named.Value.Value as string;
                     break;
+                case "RuntimeImports":
+                    runtimeImports = named.Value.Value as string;
+                    break;
             }
         }
 
         if (jsName is null && jsTemplate is null) return null;
 
-        return new DeclarativeMappingEntry(jsName, jsTemplate, whenArg0StringEquals, wrapReceiver);
+        return new DeclarativeMappingEntry(jsName, jsTemplate, whenArg0StringEquals, wrapReceiver, runtimeImports);
     }
 
     /// <summary>

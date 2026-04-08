@@ -1,7 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
-        <TargetFramework>netstandard2.0</TargetFramework>
+        <!--
+            Multi-targeted across the currently supported .NET releases so consumers on
+            each version can reference MetaSharp without forcing a runtime upgrade. The
+            previous netstandard2.0 + net6.0 matrix was dropped: net6.0/.NET 7 are out
+            of support, and netstandard2.0 was only there to keep the IsExternalInit
+            polyfill story simple — irrelevant now that every supported target ships
+            init-only setters and the modern BCL surface (DateOnly, MinBy, MaxBy, …).
+        -->
+        <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
         <LangVersion>preview</LangVersion>
         <Nullable>enable</Nullable>
     </PropertyGroup>

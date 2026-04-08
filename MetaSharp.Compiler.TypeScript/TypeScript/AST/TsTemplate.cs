@@ -23,13 +23,27 @@ namespace MetaSharp.TypeScript.AST;
 /// without forcing the template author to think about textual rendering. The type-name
 /// placeholders (<c>$T<n></c>) are written as plain text since they're already
 /// identifiers.
+///
+/// <see cref="RuntimeImports"/> lists identifier names that the template body references
+/// from <c>@meta-sharp/runtime</c> (e.g., <c>"dayNumber"</c>). The
+/// <see cref="ImportCollector"/> visits these as referenced names so the appropriate
+/// import line is emitted in the generated file — without this, identifiers buried inside
+/// the opaque template text would never be discovered by the AST walker.
 /// </summary>
 public sealed record TsTemplate(
     string Template,
     TsExpression? Receiver,
     IReadOnlyList<TsExpression> Arguments,
-    IReadOnlyList<string> TypeArgumentNames) : TsExpression
+    IReadOnlyList<string> TypeArgumentNames,
+    IReadOnlyList<string> RuntimeImports) : TsExpression
 {
     public TsTemplate(string template, TsExpression? receiver, IReadOnlyList<TsExpression> arguments)
-        : this(template, receiver, arguments, []) { }
+        : this(template, receiver, arguments, [], []) { }
+
+    public TsTemplate(
+        string template,
+        TsExpression? receiver,
+        IReadOnlyList<TsExpression> arguments,
+        IReadOnlyList<string> typeArgumentNames)
+        : this(template, receiver, arguments, typeArgumentNames, []) { }
 }

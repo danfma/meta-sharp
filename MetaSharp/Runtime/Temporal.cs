@@ -5,12 +5,6 @@
 // etc.) is handled by TypeMapper. This file declares the runtime *member* lowerings —
 // the static factories and the helper extensions used by the transpiled code at the
 // call site.
-//
-// DateOnly is .NET 6+ and is NOT available in netstandard2.0, which is the target
-// framework of this MetaSharp project. The DateOnly.DayNumber mapping therefore stays
-// hardcoded in BclMapper.cs for now. Migrating it requires multi-targeting the
-// MetaSharp project to include net6.0 (or later) so `typeof(DateOnly)` resolves; that's
-// tracked as a follow-up alongside the broader Decimal / runtime decisions.
 
 using System;
 using MetaSharp.Annotations;
@@ -18,3 +12,12 @@ using MetaSharp.Annotations;
 // DateTimeOffset.UtcNow → Temporal.Now.zonedDateTimeISO()
 [assembly: MapProperty(typeof(DateTimeOffset), nameof(DateTimeOffset.UtcNow),
     JsTemplate = "Temporal.Now.zonedDateTimeISO()")]
+
+// DateOnly.DayNumber → dayNumber($this)
+// Lowers to a call into the @meta-sharp/runtime dayNumber helper, since Temporal.PlainDate
+// has no equivalent property. The RuntimeImports annotation tells the import collector
+// to emit `import { dayNumber } from "@meta-sharp/runtime";` — without it the identifier
+// would be invisible to the AST walker because it lives inside the opaque template body.
+[assembly: MapProperty(typeof(DateOnly), nameof(DateOnly.DayNumber),
+    JsTemplate = "dayNumber($this)",
+    RuntimeImports = "dayNumber")]

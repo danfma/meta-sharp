@@ -57,6 +57,14 @@ public sealed class MapPropertyAttribute : Attribute
     /// </summary>
     public string? JsTemplate { get; init; }
 
+    /// <summary>
+    /// Optional runtime helper identifier that the lowered access needs imported from
+    /// <c>@meta-sharp/runtime</c>. Used when a <see cref="JsTemplate"/> embeds a free
+    /// identifier (e.g., <c>"dayNumber($this)"</c>) that the import collector cannot
+    /// detect by walking the AST. See <c>MapMethodAttribute.RuntimeImports</c>.
+    /// </summary>
+    public string? RuntimeImports { get; init; }
+
     public MapPropertyAttribute(Type declaringType, string csharpProperty)
     {
         DeclaringType = declaringType;

@@ -432,6 +432,17 @@ public sealed class ImportCollector(
                     CollectFromExpression(template.Receiver, names, valueNames);
                 foreach (var arg in template.Arguments)
                     CollectFromExpression(arg, names, valueNames);
+                // Runtime helper identifiers carried alongside the template (e.g.,
+                // "dayNumber" from a [MapProperty(..., RuntimeImports = "dayNumber")]
+                // declaration). The walker can't see these inside the opaque template
+                // text, so the BclMapper threads them through here as a separate field
+                // and we register them as both referenced names AND value names so the
+                // import line is emitted.
+                foreach (var helper in template.RuntimeImports)
+                {
+                    names.Add(helper);
+                    valueNames.Add(helper);
+                }
                 break;
         }
     }

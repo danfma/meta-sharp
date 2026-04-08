@@ -49,17 +49,11 @@ public static class BclMapper
         // Count → size are now handled declaratively via MetaSharp/Runtime/Lists.cs,
         // Queues.cs, Stacks.cs, Dictionaries.cs and Sets.cs.
 
-        // Task.CompletedTask and DateTimeOffset.UtcNow are now handled declaratively via
-        // MetaSharp/Runtime/Tasks.cs and MetaSharp/Runtime/Temporal.cs.
-
-        // DateOnly.DayNumber → dayNumber(date) helper from runtime.
-        // Stays hardcoded because DateOnly is .NET 6+ and the MetaSharp annotations
-        // assembly targets netstandard2.0 — typeof(DateOnly) doesn't resolve there.
-        // Tracked as a follow-up alongside multi-targeting the project.
-        if (containing == "System.DateOnly" && symbol.Name == "DayNumber")
-            return new TsCallExpression(
-                new TsIdentifier("dayNumber"),
-                [obj]);
+        // Task.CompletedTask, DateTimeOffset.UtcNow and DateOnly.DayNumber are now
+        // handled declaratively via MetaSharp/Runtime/Tasks.cs and Temporal.cs. The
+        // DateOnly entry uses the new RuntimeImports schema property to make the
+        // import collector aware of the `dayNumber` runtime helper that lives inside
+        // the otherwise opaque template body.
 
         return null;
     }
@@ -175,7 +169,14 @@ public static class BclMapper
         TsExpression? receiver)
     {
         if (mapping.HasTemplate)
-            return JsTemplateExpander.Expand(mapping.JsTemplate!, receiver, args: []);
+        {
+            return JsTemplateExpander.Expand(
+                mapping.JsTemplate!,
+                receiver,
+                args: [],
+                typeArgumentNames: [],
+                runtimeImports: SplitRuntimeImports(mapping.RuntimeImports));
+        }
 
         var name = mapping.JsName!;
         return receiver is not null
@@ -208,13 +209,35 @@ public static class BclMapper
         IReadOnlyList<string> typeArgumentNames)
     {
         if (mapping.HasTemplate)
-            return JsTemplateExpander.Expand(mapping.JsTemplate!, receiver, args, typeArgumentNames);
+        {
+            return JsTemplateExpander.Expand(
+                mapping.JsTemplate!,
+                receiver,
+                args,
+                typeArgumentNames,
+                SplitRuntimeImports(mapping.RuntimeImports));
+        }
 
         var name = mapping.JsName!;
         var callee = receiver is not null
             ? (TsExpression)new TsPropertyAccess(receiver, name)
             : new TsIdentifier(name);
         return new TsCallExpression(callee, args);
+    }
+
+    /// <summary>
+    /// Splits a comma-separated <c>RuntimeImports</c> value into a list of identifier
+    /// names. The empty case (null or whitespace) returns an empty list so the template
+    /// node carries no extra payload.
+    /// </summary>
+    private static IReadOnlyList<string> SplitRuntimeImports(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return [];
+        return raw!
+            .Split(',')
+            .Select(s => s.Trim())
+            .Where(s => s.Length > 0)
+            .ToList();
     }
 
     /// <summary>

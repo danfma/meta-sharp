@@ -105,6 +105,18 @@ public sealed class MapMethodAttribute : Attribute
     /// </summary>
     public string? WrapReceiver { get; init; }
 
+    /// <summary>
+    /// Optional runtime helper identifier that the lowered call site needs imported from
+    /// <c>@meta-sharp/runtime</c>. Used when a <see cref="JsTemplate"/> embeds a free
+    /// identifier (e.g., <c>"dayNumber($this)"</c>) that the import collector cannot
+    /// detect by walking the AST — the template body is opaque text from its perspective.
+    ///
+    /// When set, the transpiler treats the value as if it had been a referenced runtime
+    /// identifier in the generated TS file, which causes the appropriate
+    /// <c>import { … } from "@meta-sharp/runtime";</c> line to be emitted.
+    /// </summary>
+    public string? RuntimeImports { get; init; }
+
     public MapMethodAttribute(Type declaringType, string csharpMethod)
     {
         DeclaringType = declaringType;

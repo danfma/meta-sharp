@@ -38,10 +38,7 @@ using MetaSharp.Annotations;
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Concat),            WrapReceiver = "Enumerable.from", JsMethod = "concat")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.TakeWhile),         WrapReceiver = "Enumerable.from", JsMethod = "takeWhile")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.SkipWhile),         WrapReceiver = "Enumerable.from", JsMethod = "skipWhile")]
-// DistinctBy is .NET 6+. The MetaSharp project targets netstandard2.0, so nameof()
-// can't reference it; falls back to a string literal until task #12 (multi-targeting)
-// lands and the whole file moves to nameof().
-[assembly: MapMethod(typeof(Enumerable), "DistinctBy",                          WrapReceiver = "Enumerable.from", JsMethod = "distinctBy")]
+[assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.DistinctBy),        WrapReceiver = "Enumerable.from", JsMethod = "distinctBy")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Reverse),           WrapReceiver = "Enumerable.from", JsMethod = "reverse")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Zip),               WrapReceiver = "Enumerable.from", JsMethod = "zip")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Append),            WrapReceiver = "Enumerable.from", JsMethod = "append")]
@@ -56,8 +53,7 @@ using MetaSharp.Annotations;
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.ToList),         WrapReceiver = "Enumerable.from", JsMethod = "toArray")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.ToArray),        WrapReceiver = "Enumerable.from", JsMethod = "toArray")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.ToDictionary),   WrapReceiver = "Enumerable.from", JsMethod = "toMap")]
-// ToHashSet is .NET 5+ (string literal until multi-targeting lands — see DistinctBy above).
-[assembly: MapMethod(typeof(Enumerable), "ToHashSet",                          WrapReceiver = "Enumerable.from", JsMethod = "toSet")]
+[assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.ToHashSet),         WrapReceiver = "Enumerable.from", JsMethod = "toSet")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.First),          WrapReceiver = "Enumerable.from", JsMethod = "first")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.FirstOrDefault), WrapReceiver = "Enumerable.from", JsMethod = "firstOrDefault")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Last),           WrapReceiver = "Enumerable.from", JsMethod = "last")]
@@ -71,8 +67,7 @@ using MetaSharp.Annotations;
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Average),        WrapReceiver = "Enumerable.from", JsMethod = "average")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Min),            WrapReceiver = "Enumerable.from", JsMethod = "min")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Max),            WrapReceiver = "Enumerable.from", JsMethod = "max")]
-// MinBy/MaxBy are .NET 6+ (string literal until multi-targeting lands — see DistinctBy above).
-[assembly: MapMethod(typeof(Enumerable), "MinBy",                              WrapReceiver = "Enumerable.from", JsMethod = "minBy")]
-[assembly: MapMethod(typeof(Enumerable), "MaxBy",                              WrapReceiver = "Enumerable.from", JsMethod = "maxBy")]
+[assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.MinBy),             WrapReceiver = "Enumerable.from", JsMethod = "minBy")]
+[assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.MaxBy),             WrapReceiver = "Enumerable.from", JsMethod = "maxBy")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Contains),       WrapReceiver = "Enumerable.from", JsMethod = "contains")]
 [assembly: MapMethod(typeof(Enumerable), nameof(Enumerable.Aggregate),      WrapReceiver = "Enumerable.from", JsMethod = "aggregate")]
