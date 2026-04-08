@@ -56,16 +56,11 @@ public sealed class TypeTransformer(Compilation compilation)
         var members = new List<TsTopLevel>();
         foreach (var nestedType in nested)
         {
-            var nestedFile = TransformType(nestedType);
-            if (nestedFile is null) continue;
-
-            // Skip imports — they're already handled by the parent file's CollectImports.
-            // Recursively flatten nested types of nested types is handled by the recursion.
-            foreach (var stmt in nestedFile.Statements)
-            {
-                if (stmt is TsImport or TsReExport) continue;
-                members.Add(stmt);
-            }
+            // Use BuildTypeStatements directly so the nested type's declarations are
+            // emitted without going through the file-grouping pipeline. Imports and
+            // path computation are the parent file's responsibility (the parent's
+            // ImportCollector already walks these statements).
+            BuildTypeStatements(nestedType, members);
         }
 
         if (members.Count > 0)
@@ -175,9 +170,14 @@ public sealed class TypeTransformer(Compilation compilation)
 
         var files = new List<TsSourceFile>();
 
-        foreach (var type in transpilableTypes)
+        // Group types by output file. Types decorated with [EmitInFile("name")] share
+        // the same file; everything else gets its own file (legacy 1:1 default). The
+        // grouping is keyed by (namespace, fileName) so types with the same EmitInFile
+        // value but different namespaces don't accidentally collide — that case is
+        // rejected later as MS0008.
+        foreach (var group in GroupTypesByFile(transpilableTypes))
         {
-            var file = TransformType(type);
+            var file = TransformGroup(group);
             if (file is not null)
                 files.Add(file);
         }
@@ -443,76 +443,163 @@ public sealed class TypeTransformer(Compilation compilation)
         }
     }
 
-    private TsSourceFile? TransformType(INamedTypeSymbol type)
+    /// <summary>
+    /// Builds the top-level statements for a single type into <paramref name="sink"/>,
+    /// without computing the file path or collecting imports. Returns true if the type
+    /// produced any statements (and is therefore part of a file group); false if it's
+    /// a no-op (e.g., <c>[Import]</c> or <c>[NoEmit]</c>).
+    /// </summary>
+    private bool BuildTypeStatements(INamedTypeSymbol type, List<TsTopLevel> sink)
     {
         // [Import] types are external — don't generate .ts files
         if (SymbolHelper.HasImport(type))
-            return null;
+            return false;
 
         // [NoEmit] types are ambient/declaration-only — discoverable in C# so consumers
         // can reference them in signatures, but no .ts file is generated and no import
         // is emitted. Used for structural shapes over external library types.
         if (SymbolHelper.HasNoEmit(type))
-            return null;
+            return false;
 
-        var statements = new List<TsTopLevel>();
+        var startCount = sink.Count;
 
         if (type.TypeKind == TypeKind.Enum)
         {
-            EnumTransformer.Transform(type, statements);
+            EnumTransformer.Transform(type, sink);
         }
         else if (type.TypeKind == TypeKind.Interface)
         {
-            InterfaceTransformer.Transform(type, statements);
+            InterfaceTransformer.Transform(type, sink);
         }
         else if (IsExceptionType(type))
         {
-            new ExceptionTransformer(_context!).Transform(type, statements);
+            new ExceptionTransformer(_context!).Transform(type, sink);
         }
         else if ((SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) && type.IsStatic)
         {
-            new ModuleTransformer(_context!).Transform(type, statements);
+            new ModuleTransformer(_context!).Transform(type, sink);
         }
-        else if (new InlineWrapperTransformer(_context!).Transform(type, statements))
+        else if (new InlineWrapperTransformer(_context!).Transform(type, sink))
         {
             // InlineWrapper handled by specialized pipeline.
         }
         else if (type.IsRecord || type.TypeKind is TypeKind.Struct or TypeKind.Class)
         {
-            new RecordClassTransformer(_context!).Transform(type, statements);
+            new RecordClassTransformer(_context!).Transform(type, sink);
         }
 
-        if (statements.Count == 0)
-            return null;
+        if (sink.Count == startCount)
+            return false;
 
         // Generate type guard function when [GenerateGuard] is present
         if (SymbolHelper.HasGenerateGuard(type))
         {
             var guard = new TypeGuardBuilder(_context!.TranspilableTypeMap).Generate(type);
             if (guard is not null)
-                statements.Add(guard);
+                sink.Add(guard);
         }
 
         // Process nested types — emit a companion namespace with the nested members.
         // TypeScript declaration merging makes `Outer.Inner` accessible just like in C#.
-        TransformNestedTypes(type, statements);
+        TransformNestedTypes(type, sink);
 
-        // Add imports for referenced transpilable types
+        return true;
+    }
+
+    /// <summary>
+    /// Transforms a group of types that share an output file. Each type's statements
+    /// are concatenated in the order the types were discovered, then a single
+    /// <see cref="ImportCollector"/> pass collects imports for the merged file. The
+    /// resulting <see cref="TsSourceFile"/>'s namespace is taken from the first type
+    /// in the group (all types in a valid group share a namespace; conflicts are
+    /// flagged as MS0008 by <see cref="GroupTypesByFile"/>).
+    /// </summary>
+    private TsSourceFile? TransformGroup(TypeFileGroup group)
+    {
+        var statements = new List<TsTopLevel>();
+        var anyEmitted = false;
+        foreach (var type in group.Types)
+        {
+            if (BuildTypeStatements(type, statements))
+                anyEmitted = true;
+        }
+
+        if (!anyEmitted) return null;
+
+        // The import collector takes a "current type" so it can elide self-imports for
+        // a type's own guard function. We pass the first type in the group; for
+        // multi-type files, the elision still works for the primary type, and other
+        // types in the same file aren't imported anyway (they're locally declared).
+        var primaryType = group.Types[0];
         var imports = new ImportCollector(
             _context!.TranspilableTypeMap,
             _context.ExternalImportMap,
             _context.BclExportMap,
             _context.GuardNameToTypeMap,
             _context.PathNaming)
-            .Collect(type, statements);
+            .Collect(primaryType, statements);
         statements.InsertRange(0, imports);
 
-        var ns = PathNaming.GetNamespace(type);
-        var tsTypeName = GetTsTypeName(type);
-        var relativePath = _context!.PathNaming.GetRelativePath(ns, tsTypeName);
-
-        return new TsSourceFile(relativePath, statements, ns);
+        var relativePath = _context!.PathNaming.GetRelativePath(group.Namespace, group.FileName);
+        return new TsSourceFile(relativePath, statements, group.Namespace);
     }
+
+    /// <summary>
+    /// Groups discovered types into file buckets. Types decorated with
+    /// <c>[EmitInFile("name")]</c> share a bucket keyed by <c>(namespace, name)</c>;
+    /// everything else falls back to its own bucket keyed by <c>(namespace, kebab-case-of-type-name)</c>.
+    /// Types in the same group preserve discovery order so the file's declarations are
+    /// emitted in the same order as the source assembly walked them.
+    /// </summary>
+    private List<TypeFileGroup> GroupTypesByFile(IReadOnlyList<INamedTypeSymbol> types)
+    {
+        // Use an OrderedDictionary-like structure: a list of groups + a lookup for
+        // existing keys. This preserves insertion order so the output is deterministic.
+        var groups = new List<TypeFileGroup>();
+        var byKey = new Dictionary<(string Namespace, string FileName), TypeFileGroup>();
+
+        // Track the namespace conflict case: same file name appears in two namespaces.
+        var seenFileNames = new Dictionary<string, string>();
+
+        foreach (var type in types)
+        {
+            var ns = PathNaming.GetNamespace(type);
+            var explicitFile = SymbolHelper.GetEmitInFile(type);
+            var fileName = explicitFile is not null && explicitFile.Length > 0
+                ? SymbolHelper.ToKebabCase(explicitFile)
+                : SymbolHelper.ToKebabCase(GetTsTypeName(type));
+
+            // MS0008: when a type opts into [EmitInFile], the file name must be unique
+            // per namespace. If we've seen the same file name in a different namespace,
+            // that's an ambiguous folder placement.
+            if (explicitFile is not null && seenFileNames.TryGetValue(fileName, out var firstNs)
+                && firstNs != ns)
+            {
+                _diagnostics.Add(new MetaSharpDiagnostic(
+                    MetaSharpDiagnosticSeverity.Error,
+                    DiagnosticCodes.EmitInFileConflict,
+                    $"[EmitInFile(\"{explicitFile}\")] on type '{type.ToDisplayString()}' " +
+                    $"conflicts with another type that uses the same file name in namespace " +
+                    $"'{firstNs}'. Co-located types must share a namespace.",
+                    type.Locations.FirstOrDefault()));
+                continue;
+            }
+            seenFileNames.TryAdd(fileName, ns);
+
+            var key = (ns, fileName);
+            if (!byKey.TryGetValue(key, out var group))
+            {
+                group = new TypeFileGroup(ns, fileName, new List<INamedTypeSymbol>());
+                byKey[key] = group;
+                groups.Add(group);
+            }
+            group.Types.Add(type);
+        }
+
+        return groups;
+    }
+
+    private sealed record TypeFileGroup(string Namespace, string FileName, List<INamedTypeSymbol> Types);
 
     /// <summary>
     /// Returns the TypeScript name for a type. Uses [Name] override if present, otherwise the C# name as-is.

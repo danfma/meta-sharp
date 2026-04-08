@@ -76,4 +76,9 @@ public static class DiagnosticCodes
     /// diverges from the assembly's <c>[EmitPackage]</c>, OR a consumer references a type
     /// from an assembly that does not declare <c>[EmitPackage]</c> for the active target.</summary>
     public const string CrossPackageResolution = "MS0007";
+
+    /// <summary>MS0008 — Conflicting <c>[EmitInFile]</c> grouping: types sharing the same
+    /// file name belong to different namespaces, so the file would have an ambiguous
+    /// folder placement.</summary>
+    public const string EmitInFileConflict = "MS0008";
 }

@@ -52,6 +52,19 @@ public static class SymbolHelper
     public static bool HasModuleEntryPoint(ISymbol symbol) => HasAttribute(symbol, "ModuleEntryPoint");
 
     /// <summary>
+    /// Reads the file name from <c>[EmitInFile("name")]</c> on a type symbol, or null
+    /// when the attribute isn't present (in which case the type takes its own name as
+    /// the file).
+    /// </summary>
+    public static string? GetEmitInFile(ISymbol symbol)
+    {
+        var attr = symbol.GetAttributes().FirstOrDefault(a =>
+            a.AttributeClass?.Name is "EmitInFileAttribute" or "EmitInFile");
+        if (attr is null || attr.ConstructorArguments.Length == 0) return null;
+        return attr.ConstructorArguments[0].Value as string;
+    }
+
+    /// <summary>
     /// Reads <c>[ExportVarFromBody("name", AsDefault = ?, InPlace = ?)]</c> from a method
     /// symbol. Returns null when the attribute isn't present.
     /// </summary>
