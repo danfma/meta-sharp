@@ -125,12 +125,12 @@ public class DeclarativeMappingTests
     }
 
     [Test]
-    public async Task DeclarativeListRemove_LowersToCapturedReceiverIife()
+    public async Task DeclarativeListRemove_LowersToRuntimeHelper()
     {
-        // List<T>.Remove returns a bool. The declarative template wraps an arrow IIFE
-        // that captures the receiver as `arr`, finds the index via indexOf, splices it
-        // out if found, and returns the boolean. Capturing the receiver as the IIFE
-        // argument prevents double-evaluation when the receiver is a method call.
+        // List<T>.Remove returns a bool. The declarative template lowers to a call to
+        // the `listRemove` runtime helper from @meta-sharp/runtime, which mirrors the
+        // bool-returning C# contract. The helper identifier is declared via
+        // RuntimeImports so the import collector emits the import.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Generic;
@@ -145,12 +145,9 @@ public class DeclarativeMappingTests
         );
 
         var output = result["todo-list.ts"];
-        await Assert.That(output).Contains("arr.indexOf(value)");
-        await Assert.That(output).Contains("arr.splice(i, 1)");
-        await Assert.That(output).Contains("return true");
-        await Assert.That(output).Contains("return false");
-        // Receiver is passed as the IIFE argument, not duplicated.
-        await Assert.That(output).Contains("})(this.items)");
+        await Assert.That(output).Contains("listRemove(this.items, value)");
+        await Assert.That(output).Contains("@meta-sharp/runtime");
+        await Assert.That(output).Contains("listRemove");
     }
 
     [Test]
@@ -176,8 +173,11 @@ public class DeclarativeMappingTests
     }
 
     [Test]
-    public async Task DeclarativeImmutableListRemoveAt_LowersToCapturedReceiverIife()
+    public async Task DeclarativeImmutableListRemoveAt_LowersToRuntimeHelper()
     {
+        // ImmutableList<T>.RemoveAt lowers to a call to the `immutableRemoveAt` runtime
+        // helper from @meta-sharp/runtime. The helper returns a fresh array, mirroring
+        // the immutable contract.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Immutable;
@@ -192,12 +192,9 @@ public class DeclarativeMappingTests
         );
 
         var output = result["history.ts"];
-        // The IIFE captures the receiver as `arr` and slices around the index. The arrow
-        // body is a single expression so the IIFE form is `((arr) => [...])(receiver)`,
-        // not `((arr) => { ... })(receiver)`.
-        await Assert.That(output).Contains("arr.slice(0, index)");
-        await Assert.That(output).Contains("arr.slice(index + 1)");
-        await Assert.That(output).Contains("])(this.snapshots)");
+        await Assert.That(output).Contains("immutableRemoveAt(this.snapshots, index)");
+        await Assert.That(output).Contains("@meta-sharp/runtime");
+        await Assert.That(output).Contains("immutableRemoveAt");
     }
 
     [Test]

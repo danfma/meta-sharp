@@ -35,7 +35,8 @@ public sealed class ImportCollector(
     {
         var referencedTypes = new HashSet<string>();
         var valueTypes = new HashSet<string>(); // types used via `new` or `extends` (need runtime import)
-        CollectReferencedTypeNames(statements, referencedTypes, valueTypes);
+        var runtimeHelpers = new HashSet<string>(); // identifiers from TsTemplate.RuntimeImports
+        CollectReferencedTypeNames(statements, referencedTypes, valueTypes, runtimeHelpers);
 
         var tsTypeName = TypeTransformer.GetTsTypeName(currentType);
         referencedTypes.Remove(currentType.Name);
@@ -74,10 +75,12 @@ public sealed class ImportCollector(
             imports.Add(new TsImport(["Enumerable"], "@meta-sharp/runtime"));
         }
 
-        // Runtime helper imports (dayNumber, etc.)
-        if (referencedTypes.Contains("dayNumber"))
+        // Runtime helper imports collected from TsTemplate.RuntimeImports declarations
+        // (e.g., dayNumber, listRemove, immutableInsert, immutableRemoveAt, immutableRemove).
+        // Bundled into a single import line from @meta-sharp/runtime.
+        if (runtimeHelpers.Count > 0)
         {
-            imports.Add(new TsImport(["dayNumber"], "@meta-sharp/runtime"));
+            imports.Add(new TsImport(runtimeHelpers.OrderBy(n => n).ToArray(), "@meta-sharp/runtime"));
         }
 
         // HashSet import (from runtime collections)
@@ -93,7 +96,9 @@ public sealed class ImportCollector(
         }
 
         // Track what we've already imported to avoid duplicates
-        var importedNames = new HashSet<string>(runtimeTypeChecks) { "Enumerable", "Grouping", "HashSet", "dayNumber" };
+        var importedNames = new HashSet<string>(runtimeTypeChecks) { "Enumerable", "Grouping", "HashSet" };
+        foreach (var helper in runtimeHelpers)
+            importedNames.Add(helper);
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))
         {
@@ -158,13 +163,14 @@ public sealed class ImportCollector(
     private static void CollectReferencedTypeNames(
         IEnumerable<TsTopLevel> statements,
         HashSet<string> names,
-        HashSet<string> valueNames)
+        HashSet<string> valueNames,
+        HashSet<string> runtimeHelpers)
     {
         foreach (var stmt in statements)
-            CollectFromTopLevel(stmt, names, valueNames);
+            CollectFromTopLevel(stmt, names, valueNames, runtimeHelpers);
     }
 
-    private static void CollectFromTopLevel(TsTopLevel node, HashSet<string> names, HashSet<string> valueNames)
+    private static void CollectFromTopLevel(TsTopLevel node, HashSet<string> names, HashSet<string> valueNames, HashSet<string> runtimeHelpers)
     {
         switch (node)
         {
@@ -186,11 +192,11 @@ public sealed class ImportCollector(
                 foreach (var param in func.Parameters)
                     CollectFromType(param.Type, names);
                 CollectFromType(func.ReturnType, names);
-                CollectFromStatements(func.Body, names, valueNames);
+                CollectFromStatements(func.Body, names, valueNames, runtimeHelpers);
                 break;
             case TsConstObject constObj:
                 foreach (var (_, value) in constObj.Entries)
-                    CollectFromExpression(value, names, valueNames);
+                    CollectFromExpression(value, names, valueNames, runtimeHelpers);
                 break;
             case TsNamespaceDeclaration ns:
                 foreach (var func in ns.Functions)
@@ -198,7 +204,7 @@ public sealed class ImportCollector(
                     foreach (var p in func.Parameters)
                         CollectFromType(p.Type, names);
                     CollectFromType(func.ReturnType, names);
-                    CollectFromStatements(func.Body, names, valueNames);
+                    CollectFromStatements(func.Body, names, valueNames, runtimeHelpers);
                 }
                 break;
             case TsClass cls:
@@ -216,7 +222,7 @@ public sealed class ImportCollector(
                 {
                     foreach (var p in cls.Constructor.Parameters)
                         CollectFromType(p.Type, names);
-                    CollectFromStatements(cls.Constructor.Body, names, valueNames);
+                    CollectFromStatements(cls.Constructor.Body, names, valueNames, runtimeHelpers);
                 }
                 foreach (var member in cls.Members)
                 {
@@ -227,7 +233,7 @@ public sealed class ImportCollector(
                             foreach (var p in m.Parameters)
                                 CollectFromType(p.Type, names);
                             CollectFromType(m.ReturnType, names);
-                            CollectFromStatements(m.Body, names, valueNames);
+                            CollectFromStatements(m.Body, names, valueNames, runtimeHelpers);
                             // Collect from overload signatures too
                             if (m.Overloads is not null)
                                 foreach (var overload in m.Overloads)
@@ -239,12 +245,12 @@ public sealed class ImportCollector(
                             break;
                         case TsGetterMember g:
                             CollectFromType(g.ReturnType, names);
-                            CollectFromStatements(g.Body, names, valueNames);
+                            CollectFromStatements(g.Body, names, valueNames, runtimeHelpers);
                             break;
                         case TsFieldMember f:
                             CollectFromType(f.Type, names);
                             if (f.Initializer is not null)
-                                CollectFromExpression(f.Initializer, names, valueNames);
+                                CollectFromExpression(f.Initializer, names, valueNames, runtimeHelpers);
                             break;
                     }
                 }
@@ -296,37 +302,37 @@ public sealed class ImportCollector(
         }
     }
 
-    private static void CollectFromStatements(IReadOnlyList<TsStatement> statements, HashSet<string> names, HashSet<string> valueNames)
+    private static void CollectFromStatements(IReadOnlyList<TsStatement> statements, HashSet<string> names, HashSet<string> valueNames, HashSet<string> runtimeHelpers)
     {
         foreach (var stmt in statements)
-            CollectFromStatement(stmt, names, valueNames);
+            CollectFromStatement(stmt, names, valueNames, runtimeHelpers);
     }
 
-    private static void CollectFromStatement(TsStatement stmt, HashSet<string> names, HashSet<string> valueNames)
+    private static void CollectFromStatement(TsStatement stmt, HashSet<string> names, HashSet<string> valueNames, HashSet<string> runtimeHelpers)
     {
         switch (stmt)
         {
             case TsReturnStatement ret:
-                if (ret.Expression is not null) CollectFromExpression(ret.Expression, names, valueNames);
+                if (ret.Expression is not null) CollectFromExpression(ret.Expression, names, valueNames, runtimeHelpers);
                 break;
             case TsThrowStatement thr:
-                CollectFromExpression(thr.Expression, names, valueNames);
+                CollectFromExpression(thr.Expression, names, valueNames, runtimeHelpers);
                 break;
             case TsExpressionStatement expr:
-                CollectFromExpression(expr.Expression, names, valueNames);
+                CollectFromExpression(expr.Expression, names, valueNames, runtimeHelpers);
                 break;
             case TsIfStatement ifStmt:
-                CollectFromExpression(ifStmt.Condition, names, valueNames);
-                CollectFromStatements(ifStmt.Then, names, valueNames);
-                if (ifStmt.Else is not null) CollectFromStatements(ifStmt.Else, names, valueNames);
+                CollectFromExpression(ifStmt.Condition, names, valueNames, runtimeHelpers);
+                CollectFromStatements(ifStmt.Then, names, valueNames, runtimeHelpers);
+                if (ifStmt.Else is not null) CollectFromStatements(ifStmt.Else, names, valueNames, runtimeHelpers);
                 break;
             case TsVariableDeclaration varDecl:
-                CollectFromExpression(varDecl.Initializer, names, valueNames);
+                CollectFromExpression(varDecl.Initializer, names, valueNames, runtimeHelpers);
                 break;
         }
     }
 
-    private static void CollectFromExpression(TsExpression expr, HashSet<string> names, HashSet<string> valueNames)
+    private static void CollectFromExpression(TsExpression expr, HashSet<string> names, HashSet<string> valueNames, HashSet<string> runtimeHelpers)
     {
         switch (expr)
         {
@@ -344,7 +350,7 @@ public sealed class ImportCollector(
                     }
                 }
                 foreach (var arg in newExpr.Arguments)
-                    CollectFromExpression(arg, names, valueNames);
+                    CollectFromExpression(arg, names, valueNames, runtimeHelpers);
                 break;
             case TsCallExpression call:
                 // Function calls may reference guard functions (e.g., isCurrency)
@@ -359,17 +365,17 @@ public sealed class ImportCollector(
                 {
                     names.Add(rootName);
                     valueNames.Add(rootName);
-                    CollectFromExpression(call.Callee, names, valueNames);
+                    CollectFromExpression(call.Callee, names, valueNames, runtimeHelpers);
                 }
                 else
                 {
-                    CollectFromExpression(call.Callee, names, valueNames);
+                    CollectFromExpression(call.Callee, names, valueNames, runtimeHelpers);
                 }
                 foreach (var arg in call.Arguments)
-                    CollectFromExpression(arg, names, valueNames);
+                    CollectFromExpression(arg, names, valueNames, runtimeHelpers);
                 break;
             case TsPropertyAccess access:
-                CollectFromExpression(access.Object, names, valueNames);
+                CollectFromExpression(access.Object, names, valueNames, runtimeHelpers);
                 // Static member access like IssuePriority.High → collect the type as value
                 if (access.Object is TsIdentifier { Name: var propObjName }
                     && propObjName.Length > 0 && char.IsUpper(propObjName[0]))
@@ -379,46 +385,46 @@ public sealed class ImportCollector(
                 }
                 break;
             case TsBinaryExpression bin:
-                CollectFromExpression(bin.Left, names, valueNames);
-                CollectFromExpression(bin.Right, names, valueNames);
+                CollectFromExpression(bin.Left, names, valueNames, runtimeHelpers);
+                CollectFromExpression(bin.Right, names, valueNames, runtimeHelpers);
                 // instanceof uses the type as a value
                 if (bin.Operator == "instanceof" && bin.Right is TsIdentifier instanceId)
                     valueNames.Add(instanceId.Name);
                 break;
             case TsObjectLiteral obj:
                 foreach (var prop in obj.Properties)
-                    CollectFromExpression(prop.Value, names, valueNames);
+                    CollectFromExpression(prop.Value, names, valueNames, runtimeHelpers);
                 break;
             case TsTemplateLiteral tmpl:
                 foreach (var e in tmpl.Expressions)
-                    CollectFromExpression(e, names, valueNames);
+                    CollectFromExpression(e, names, valueNames, runtimeHelpers);
                 break;
             case TsConditionalExpression cond:
-                CollectFromExpression(cond.Condition, names, valueNames);
-                CollectFromExpression(cond.WhenTrue, names, valueNames);
-                CollectFromExpression(cond.WhenFalse, names, valueNames);
+                CollectFromExpression(cond.Condition, names, valueNames, runtimeHelpers);
+                CollectFromExpression(cond.WhenTrue, names, valueNames, runtimeHelpers);
+                CollectFromExpression(cond.WhenFalse, names, valueNames, runtimeHelpers);
                 break;
             case TsAwaitExpression await_:
-                CollectFromExpression(await_.Expression, names, valueNames);
+                CollectFromExpression(await_.Expression, names, valueNames, runtimeHelpers);
                 break;
             case TsParenthesized paren:
-                CollectFromExpression(paren.Expression, names, valueNames);
+                CollectFromExpression(paren.Expression, names, valueNames, runtimeHelpers);
                 break;
             case TsSpreadExpression spread:
-                CollectFromExpression(spread.Expression, names, valueNames);
+                CollectFromExpression(spread.Expression, names, valueNames, runtimeHelpers);
                 break;
             case TsArrowFunction arrow:
                 foreach (var p in arrow.Parameters)
                     CollectFromType(p.Type, names);
-                CollectFromStatements(arrow.Body, names, valueNames);
+                CollectFromStatements(arrow.Body, names, valueNames, runtimeHelpers);
                 break;
             case TsElementAccess elemAccess:
-                CollectFromExpression(elemAccess.Object, names, valueNames);
-                CollectFromExpression(elemAccess.Index, names, valueNames);
+                CollectFromExpression(elemAccess.Object, names, valueNames, runtimeHelpers);
+                CollectFromExpression(elemAccess.Index, names, valueNames, runtimeHelpers);
                 break;
             case TsArrayLiteral arrayLit:
                 foreach (var e in arrayLit.Elements)
-                    CollectFromExpression(e, names, valueNames);
+                    CollectFromExpression(e, names, valueNames, runtimeHelpers);
                 break;
             case TsTemplate template:
                 // Templates carry real TS expression nodes for the receiver and each
@@ -429,20 +435,18 @@ public sealed class ImportCollector(
                 // need to be value imports (e.g., a `new SomeRecord(...)` substituted
                 // into the template).
                 if (template.Receiver is not null)
-                    CollectFromExpression(template.Receiver, names, valueNames);
+                    CollectFromExpression(template.Receiver, names, valueNames, runtimeHelpers);
                 foreach (var arg in template.Arguments)
-                    CollectFromExpression(arg, names, valueNames);
+                    CollectFromExpression(arg, names, valueNames, runtimeHelpers);
                 // Runtime helper identifiers carried alongside the template (e.g.,
-                // "dayNumber" from a [MapProperty(..., RuntimeImports = "dayNumber")]
-                // declaration). The walker can't see these inside the opaque template
-                // text, so the BclMapper threads them through here as a separate field
-                // and we register them as both referenced names AND value names so the
-                // import line is emitted.
+                // "dayNumber", "listRemove", "immutableInsert") from
+                // [MapMethod(..., RuntimeImports = "...")] declarations. The walker can't
+                // see these inside the opaque template text, so the BclMapper threads
+                // them through here as a separate field. They go into the dedicated
+                // `runtimeHelpers` set so the Collect entry point can emit a single
+                // bundled `import { ... } from "@meta-sharp/runtime"` line.
                 foreach (var helper in template.RuntimeImports)
-                {
-                    names.Add(helper);
-                    valueNames.Add(helper);
-                }
+                    runtimeHelpers.Add(helper);
                 break;
         }
     }

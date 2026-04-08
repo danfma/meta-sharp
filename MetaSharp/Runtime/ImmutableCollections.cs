@@ -6,11 +6,16 @@
 // immutable contract — `var newList = old.Add(x);` lowers to
 // `const newList = [...old, x];` and the original array is left untouched.
 //
-// Note about the receiver placeholder ($this): for templates that reference $this
-// multiple times we wrap the body in an IIFE so the receiver expression is only
-// evaluated once. Otherwise, when the C# receiver is a method call (e.g., `GetItems()`),
-// each $this substitution would re-execute the call and the immutable methods would
-// operate on different snapshots.
+// Two flavors of lowering live here:
+//
+// - **Inline templates** for the trivial single-spread / literal forms (Add, AddRange,
+//   Clear, Empty). These read clearly at the call site and need no helper.
+// - **Runtime helpers** (immutableInsert / immutableRemoveAt / immutableRemove) for the
+//   multi-step algorithms. The helpers live in @meta-sharp/runtime/system/collections/
+//   list-helpers.ts and are pulled in via the RuntimeImports schema property. Putting
+//   the body in JS instead of in a captured-receiver IIFE keeps the generated code
+//   readable, gives the helper a name in stack traces, and lets the runtime own the
+//   implementation in a single place.
 
 using System.Collections.Immutable;
 using MetaSharp.Annotations;
@@ -25,19 +30,22 @@ using MetaSharp.Annotations;
 [assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.AddRange),
     JsTemplate = "[...$this, ...$0]")]
 
-// list.Insert(index, item) → captured-receiver IIFE that splices in the new item.
-// We use `with`-style spread instead of mutating splice to preserve immutability.
+// list.Insert(index, item) → immutableInsert(list, index, item)
 [assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.Insert),
-    JsTemplate = "((arr) => [...arr.slice(0, $0), $1, ...arr.slice($0)])($this)")]
+    JsTemplate = "immutableInsert($this, $0, $1)",
+    RuntimeImports = "immutableInsert")]
 
-// list.RemoveAt(index) → captured-receiver IIFE that drops the index'th element.
+// list.RemoveAt(index) → immutableRemoveAt(list, index)
 [assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.RemoveAt),
-    JsTemplate = "((arr) => [...arr.slice(0, $0), ...arr.slice($0 + 1)])($this)")]
+    JsTemplate = "immutableRemoveAt($this, $0)",
+    RuntimeImports = "immutableRemoveAt")]
 
-// list.Remove(item) → captured-receiver IIFE: find the index, drop the element if found,
-// otherwise return the original array unchanged (matching ImmutableList<T>.Remove).
+// list.Remove(item) → immutableRemove(list, item)
+// The helper returns the original array reference when the item is not found,
+// matching ImmutableList<T>.Remove which can safely share immutable instances.
 [assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.Remove),
-    JsTemplate = "((arr) => { const i = arr.indexOf($0); return i >= 0 ? [...arr.slice(0, i), ...arr.slice(i + 1)] : arr; })($this)")]
+    JsTemplate = "immutableRemove($this, $0)",
+    RuntimeImports = "immutableRemove")]
 
 // list.Clear() → []
 [assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.Clear),
@@ -68,13 +76,16 @@ using MetaSharp.Annotations;
     JsTemplate = "[...$this, ...$0]")]
 
 [assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Insert),
-    JsTemplate = "((arr) => [...arr.slice(0, $0), $1, ...arr.slice($0)])($this)")]
+    JsTemplate = "immutableInsert($this, $0, $1)",
+    RuntimeImports = "immutableInsert")]
 
 [assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.RemoveAt),
-    JsTemplate = "((arr) => [...arr.slice(0, $0), ...arr.slice($0 + 1)])($this)")]
+    JsTemplate = "immutableRemoveAt($this, $0)",
+    RuntimeImports = "immutableRemoveAt")]
 
 [assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Remove),
-    JsTemplate = "((arr) => { const i = arr.indexOf($0); return i >= 0 ? [...arr.slice(0, i), ...arr.slice(i + 1)] : arr; })($this)")]
+    JsTemplate = "immutableRemove($this, $0)",
+    RuntimeImports = "immutableRemove")]
 
 [assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Clear),
     JsTemplate = "[]")]
