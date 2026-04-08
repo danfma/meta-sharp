@@ -139,7 +139,8 @@ public static class SymbolHelper
     }
 
     /// <summary>
-    /// Reads <c>[Import("name", from: "module", AsDefault = ?)]</c> from a symbol.
+    /// Reads <c>[Import("name", from: "module", AsDefault = ?, Version = ?)]</c> from
+    /// a symbol.
     /// </summary>
     public static ImportInfo? GetImport(ISymbol symbol)
     {
@@ -154,15 +155,18 @@ public static class SymbolHelper
         if (name is null || from is null) return null;
 
         var asDefault = false;
+        string? version = null;
         foreach (var named in attr.NamedArguments)
         {
             if (named.Key == "AsDefault" && named.Value.Value is bool ad) asDefault = ad;
+            else if (named.Key == "Version" && named.Value.Value is string v && v.Length > 0)
+                version = v;
         }
 
-        return new ImportInfo(name, from, asDefault);
+        return new ImportInfo(name, from, asDefault, version);
     }
 
-    public sealed record ImportInfo(string Name, string From, bool AsDefault = false);
+    public sealed record ImportInfo(string Name, string From, bool AsDefault = false, string? Version = null);
 
     /// <summary>
     /// Converts PascalCase to kebab-case for file paths.

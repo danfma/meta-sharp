@@ -15,9 +15,9 @@ public static class TypeMapper
     /// Key: C# full type name (e.g. "System.Decimal"), Value: (ExportedName, FromPackage)
     /// </summary>
     [ThreadStatic]
-    private static Dictionary<string, (string ExportedName, string FromPackage)>? _bclExportMap;
+    private static Dictionary<string, (string ExportedName, string FromPackage, string Version)>? _bclExportMap;
 
-    public static Dictionary<string, (string ExportedName, string FromPackage)> BclExportMap
+    public static Dictionary<string, (string ExportedName, string FromPackage, string Version)> BclExportMap
     {
         get => _bclExportMap ??= [];
         set => _bclExportMap = value;
@@ -70,20 +70,42 @@ public static class TypeMapper
     }
 
     /// <summary>
-    /// Cross-package names that were actually referenced during transformation, mapped
-    /// to the source assembly they came from. Populated by <see cref="ResolveOrigin"/>
-    /// on every successful lookup. The transformer reads this after
-    /// <c>TransformAll</c> to compute the auto-generated <c>dependencies</c> entries
-    /// for the consumer's <c>package.json</c> — versions come from
-    /// <c>IAssemblySymbol.Identity.Version</c>.
+    /// Package names that were actually referenced during transformation, mapped to a
+    /// pre-formatted npm version specifier (e.g., <c>^1.2.3</c> or <c>workspace:*</c>).
+    /// Populated by three paths:
+    /// <list type="bullet">
+    ///   <item><see cref="ResolveOrigin"/> for cross-assembly types — version comes
+    ///   from <c>IAssemblySymbol.Identity.Version</c></item>
+    ///   <item><see cref="Map"/> for <c>[ExportFromBcl]</c> types whose mapping
+    ///   declares a <c>Version</c></item>
+    ///   <item><see cref="Transformation.ImportCollector"/> for <c>[Import]</c> types
+    ///   whose mapping declares a <c>Version</c></item>
+    /// </list>
+    /// The transformer reads this after <c>TransformAll</c> to compute the
+    /// auto-generated <c>dependencies</c> entries for the consumer's <c>package.json</c>.
     /// </summary>
     [ThreadStatic]
-    private static Dictionary<string, IAssemblySymbol>? _usedCrossPackages;
+    private static Dictionary<string, string>? _usedCrossPackages;
 
-    public static Dictionary<string, IAssemblySymbol> UsedCrossPackages
+    public static Dictionary<string, string> UsedCrossPackages
     {
         get => _usedCrossPackages ??= new();
         set => _usedCrossPackages = value;
+    }
+
+    /// <summary>
+    /// Formats an assembly's version as an npm-compatible specifier. Assemblies that
+    /// don't declare a version (Roslyn defaults to <c>0.0.0.0</c>) get
+    /// <c>workspace:*</c>, which is the right call for sibling projects in a Bun
+    /// monorepo. Anything with a real version becomes <c>^Major.Minor.Patch</c>.
+    /// </summary>
+    public static string FormatAssemblyVersion(IAssemblySymbol assembly)
+    {
+        var v = assembly.Identity.Version;
+        if (v.Major == 0 && v.Minor == 0 && v.Build <= 0)
+            return "workspace:*";
+        var build = v.Build > 0 ? v.Build : 0;
+        return $"^{v.Major}.{v.Minor}.{build}";
     }
 
     public static TsType Map(ITypeSymbol type)
@@ -105,6 +127,10 @@ public static class TypeMapper
         // Check BCL export map first (overrides hardcoded mappings)
         if (type is INamedTypeSymbol bclType && BclExportMap.TryGetValue(bclType.ToDisplayString(), out var bclExport))
         {
+            // Track for auto-deps generation when the mapping declares a Version. The
+            // package name is the npm package the user will need to install.
+            if (bclExport.Version.Length > 0 && bclExport.FromPackage.Length > 0)
+                UsedCrossPackages[bclExport.FromPackage] = bclExport.Version;
             return new TsNamedType(bclExport.ExportedName);
         }
 
@@ -274,10 +300,11 @@ public static class TypeMapper
         var subPath = PathNaming.ComputeSubPath(entry.AssemblyRootNamespace, ns, typeName);
 
         // Track that this package was actually referenced so the transformer can emit
-        // a corresponding `dependencies` entry in the consumer's package.json. The
-        // value is the source assembly so we can read its version later.
+        // a corresponding `dependencies` entry in the consumer's package.json. We
+        // format the version eagerly here from the source assembly's identity so the
+        // tracking dictionary stays homogeneous (all string→string).
         if (entry.Symbol.ContainingAssembly is { } sourceAsm)
-            UsedCrossPackages[entry.PackageName] = sourceAsm;
+            UsedCrossPackages[entry.PackageName] = FormatAssemblyVersion(sourceAsm);
 
         return new TsTypeOrigin(entry.PackageName, subPath);
     }

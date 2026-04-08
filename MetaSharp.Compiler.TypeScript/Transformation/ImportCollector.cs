@@ -20,14 +20,14 @@ namespace MetaSharp.Transformation;
 /// </summary>
 public sealed class ImportCollector(
     IReadOnlyDictionary<string, INamedTypeSymbol> transpilableTypeMap,
-    IReadOnlyDictionary<string, (string Name, string From, bool IsDefault)> externalImportMap,
-    IReadOnlyDictionary<string, (string ExportedName, string FromPackage)> bclExportMap,
+    IReadOnlyDictionary<string, (string Name, string From, bool IsDefault, string? Version)> externalImportMap,
+    IReadOnlyDictionary<string, (string ExportedName, string FromPackage, string Version)> bclExportMap,
     IReadOnlyDictionary<string, string> guardNameToTypeMap,
     PathNaming pathNaming)
 {
     private readonly IReadOnlyDictionary<string, INamedTypeSymbol> _transpilableTypeMap = transpilableTypeMap;
-    private readonly IReadOnlyDictionary<string, (string Name, string From, bool IsDefault)> _externalImportMap = externalImportMap;
-    private readonly IReadOnlyDictionary<string, (string ExportedName, string FromPackage)> _bclExportMap = bclExportMap;
+    private readonly IReadOnlyDictionary<string, (string Name, string From, bool IsDefault, string? Version)> _externalImportMap = externalImportMap;
+    private readonly IReadOnlyDictionary<string, (string ExportedName, string FromPackage, string Version)> _bclExportMap = bclExportMap;
     private readonly IReadOnlyDictionary<string, string> _guardNameToTypeMap = guardNameToTypeMap;
     private readonly PathNaming _pathNaming = pathNaming;
 
@@ -138,6 +138,10 @@ public sealed class ImportCollector(
                     [extImport.Name],
                     extImport.From,
                     IsDefault: extImport.IsDefault));
+                // Track for auto-deps when [Import] declared a Version. The package
+                // name is `extImport.From` (the module specifier).
+                if (extImport.Version is not null && extImport.Version.Length > 0)
+                    TypeMapper.UsedCrossPackages[extImport.From] = extImport.Version;
                 continue;
             }
 

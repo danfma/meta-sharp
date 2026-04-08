@@ -201,6 +201,99 @@ public class CrossPackageImportTests
     }
 
     [Test]
+    public async Task ImportAttributeWithVersion_AddedToDependencies()
+    {
+        // [Import("Hono", from: "hono", Version = "^4.6.0")] should add `hono` to the
+        // tracked dependencies the first time the type is referenced. Without Version,
+        // the type still imports correctly but no auto-dep entry is created (the user
+        // adds it manually).
+        var result = TranspileHelper.Transpile(
+            """
+            [assembly: TranspileAssembly]
+
+            [Import("Hono", from: "hono", Version = "^4.6.0")]
+            public class Hono
+            {
+                public Hono() { }
+            }
+
+            public class App
+            {
+                public Hono Server { get; } = new Hono();
+            }
+            """);
+
+        // Use the helper that exposes the transformer's tracked dependencies. We
+        // re-compile here so we can read TypeMapper.UsedCrossPackages directly via the
+        // CrossPackageDependencies property.
+        var compilation = TranspileHelper.CompileLibrary(
+            """
+            [assembly: TranspileAssembly]
+
+            [Import("Hono", from: "hono", Version = "^4.6.0")]
+            public class Hono
+            {
+                public Hono() { }
+            }
+
+            public class App
+            {
+                public Hono Server { get; } = new Hono();
+            }
+            """);
+
+        var transformer = new MetaSharp.Transformation.TypeTransformer(compilation);
+        transformer.TransformAll();
+
+        await Assert.That(transformer.CrossPackageDependencies.ContainsKey("hono")).IsTrue();
+        await Assert.That(transformer.CrossPackageDependencies["hono"]).IsEqualTo("^4.6.0");
+        // The generated TS still has the import line.
+        await Assert.That(result["app.ts"]).Contains("import { Hono } from \"hono\"");
+    }
+
+    [Test]
+    public async Task ImportAttributeWithoutVersion_NoAutoDep()
+    {
+        var compilation = TranspileHelper.CompileLibrary(
+            """
+            [assembly: TranspileAssembly]
+
+            [Import("Hono", from: "hono")]
+            public class Hono { public Hono() { } }
+
+            public class App
+            {
+                public Hono Server { get; } = new Hono();
+            }
+            """);
+
+        var transformer = new MetaSharp.Transformation.TypeTransformer(compilation);
+        transformer.TransformAll();
+
+        await Assert.That(transformer.CrossPackageDependencies.ContainsKey("hono")).IsFalse();
+    }
+
+    [Test]
+    public async Task ExportFromBclWithVersion_AddedToDependencies()
+    {
+        // The default decimal mapping in MetaSharp/Runtime/Decimal.cs declares
+        // Version = "^10.6.0". Any consumer that uses decimal should auto-get the
+        // dependency entry.
+        var compilation = TranspileHelper.CompileLibrary(
+            """
+            [assembly: TranspileAssembly]
+
+            public record Price(decimal Amount);
+            """);
+
+        var transformer = new MetaSharp.Transformation.TypeTransformer(compilation);
+        transformer.TransformAll();
+
+        await Assert.That(transformer.CrossPackageDependencies.ContainsKey("decimal.js")).IsTrue();
+        await Assert.That(transformer.CrossPackageDependencies["decimal.js"]).IsEqualTo("^10.6.0");
+    }
+
+    [Test]
     public async Task UnreferencedLibrary_NotInDependencies()
     {
         // The library is referenced as a project dep, but the consumer never uses any

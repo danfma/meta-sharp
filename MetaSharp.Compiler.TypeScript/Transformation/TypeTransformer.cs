@@ -114,13 +114,13 @@ public sealed class TypeTransformer(Compilation compilation)
         }
 
         // Register [Import] types as external (no .ts file generated, but importable)
-        _externalImportMap = new Dictionary<string, (string Name, string From, bool IsDefault)>();
+        _externalImportMap = new Dictionary<string, (string Name, string From, bool IsDefault, string? Version)>();
         foreach (var t in transpilableTypes.ToList())
         {
             var import = SymbolHelper.GetImport(t);
             if (import is not null)
             {
-                var entry = (import.Name, import.From, import.AsDefault);
+                var entry = (import.Name, import.From, import.AsDefault, import.Version);
                 _externalImportMap[t.Name] = entry;
                 var tsName = GetTsTypeName(t);
                 if (tsName != t.Name)
@@ -137,7 +137,7 @@ public sealed class TypeTransformer(Compilation compilation)
         TypeMapper.CrossAssemblyTypeMap = _crossAssemblyTypeMap;
         TypeMapper.AssembliesNeedingEmitPackage = _assembliesNeedingEmitPackage;
         TypeMapper.CrossPackageMisses = new HashSet<string>();
-        TypeMapper.UsedCrossPackages = new Dictionary<string, IAssemblySymbol>();
+        TypeMapper.UsedCrossPackages = new Dictionary<string, string>();
 
         // Build guard name → type name map for cross-file guard imports
         _guardNameToTypeMap = new Dictionary<string, string>();
@@ -206,38 +206,23 @@ public sealed class TypeTransformer(Compilation compilation)
                 $"the producing project so consumers can import this type."));
         }
 
-        // Drain auto-generated cross-package dependencies. For every package whose
-        // types were actually referenced during transformation, compute a version
-        // specifier from the source assembly and surface it via CrossPackageDependencies
-        // so the CLI driver can merge it into the consumer's package.json.
-        foreach (var (packageName, sourceAsm) in TypeMapper.UsedCrossPackages)
+        // Drain auto-generated cross-package dependencies. The map is already
+        // pre-formatted (string → version specifier), populated by three paths in
+        // TypeMapper / ImportCollector. The CLI driver merges it into the consumer's
+        // package.json.
+        foreach (var (packageName, version) in TypeMapper.UsedCrossPackages)
         {
-            _crossPackageDependencies[packageName] = FormatPackageVersion(sourceAsm);
+            _crossPackageDependencies[packageName] = version;
         }
 
         return files;
     }
 
-    /// <summary>
-    /// Formats an assembly's version as an npm-compatible specifier. Assemblies that
-    /// don't declare a version (Roslyn defaults to <c>0.0.0.0</c>) get
-    /// <c>workspace:*</c>, which is the right call for sibling projects in a Bun
-    /// monorepo. Anything with a real version becomes <c>^Major.Minor.Patch</c>.
-    /// </summary>
-    private static string FormatPackageVersion(IAssemblySymbol assembly)
-    {
-        var v = assembly.Identity.Version;
-        if (v.Major == 0 && v.Minor == 0 && v.Build <= 0)
-            return "workspace:*";
-        var build = v.Build > 0 ? v.Build : 0;
-        return $"^{v.Major}.{v.Minor}.{build}";
-    }
-
     private bool _assemblyWideTranspile;
     private IAssemblySymbol? _currentAssembly;
     private Dictionary<string, INamedTypeSymbol> _transpilableTypeMap = [];
-    private Dictionary<string, (string Name, string From, bool IsDefault)> _externalImportMap = [];
-    private Dictionary<string, (string ExportedName, string FromPackage)> _bclExportMap = [];
+    private Dictionary<string, (string Name, string From, bool IsDefault, string? Version)> _externalImportMap = [];
+    private Dictionary<string, (string ExportedName, string FromPackage, string Version)> _bclExportMap = [];
     /// <summary>
     /// Types discovered in referenced assemblies that declare both
     /// <c>[TranspileAssembly]</c> and <c>[EmitPackage(JavaScript)]</c>. Keyed by symbol
@@ -333,7 +318,7 @@ public sealed class TypeTransformer(Compilation compilation)
                 var import = SymbolHelper.GetImport(type);
                 if (import is not null)
                 {
-                    var entry = (import.Name, import.From, import.AsDefault);
+                    var entry = (import.Name, import.From, import.AsDefault, import.Version);
                     _externalImportMap[type.Name] = entry;
                     var tsName = GetTsTypeName(type);
                     if (tsName != type.Name)
@@ -400,7 +385,7 @@ public sealed class TypeTransformer(Compilation compilation)
 
     private void LoadBclExportMappings()
     {
-        _bclExportMap = new Dictionary<string, (string ExportedName, string FromPackage)>();
+        _bclExportMap = new Dictionary<string, (string ExportedName, string FromPackage, string Version)>();
 
         // Read [ExportFromBcl] from the current assembly first, then from every
         // referenced assembly so that built-in mappings (e.g., decimal → Decimal from
@@ -433,6 +418,7 @@ public sealed class TypeTransformer(Compilation compilation)
 
             var exportedName = "";
             var fromPackage = "";
+            var version = "";
 
             foreach (var namedArg in attr.NamedArguments)
             {
@@ -444,12 +430,15 @@ public sealed class TypeTransformer(Compilation compilation)
                     case "FromPackage":
                         fromPackage = namedArg.Value.Value?.ToString() ?? "";
                         break;
+                    case "Version":
+                        version = namedArg.Value.Value?.ToString() ?? "";
+                        break;
                 }
             }
 
             if (exportedName.Length > 0)
             {
-                _bclExportMap[typeArg.ToDisplayString()] = (exportedName, fromPackage);
+                _bclExportMap[typeArg.ToDisplayString()] = (exportedName, fromPackage, version);
             }
         }
     }

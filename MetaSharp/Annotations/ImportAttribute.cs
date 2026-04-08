@@ -20,4 +20,13 @@ public sealed class ImportAttribute(string name, string from) : Attribute
     /// (<c>import Name from "from"</c>) instead of named-import syntax.
     /// </summary>
     public bool AsDefault { get; init; }
+
+    /// <summary>
+    /// Optional npm version specifier (e.g., <c>^4.6.0</c>). When set, the compiler
+    /// auto-adds <c>{ from: Version }</c> to the consumer's
+    /// <c>package.json#dependencies</c> the first time this type is actually
+    /// referenced. Without it, the user is responsible for adding the dependency
+    /// manually.
+    /// </summary>
+    public string Version { get; init; } = "";
 }

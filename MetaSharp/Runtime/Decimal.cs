@@ -18,7 +18,8 @@ using MetaSharp.Annotations;
 
 [assembly: ExportFromBcl(typeof(decimal),
     ExportedName = "Decimal",
-    FromPackage = "decimal.js")]
+    FromPackage = "decimal.js",
+    Version = "^10.6.0")]
 
 // ─── Constants ──────────────────────────────────────────────
 // decimal.js has no static `Zero` / `One` — we wrap each access in a fresh Decimal.

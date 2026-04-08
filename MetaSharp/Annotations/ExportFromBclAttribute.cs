@@ -13,4 +13,13 @@ public sealed class ExportFromBclAttribute(Type type) : Attribute
     public Type Type { get; } = type;
     public string FromPackage { get; set; } = "";
     public string ExportedName { get; set; } = "";
+
+    /// <summary>
+    /// Optional npm version specifier (e.g., <c>^10.6.0</c>). When set, the compiler
+    /// auto-adds <c>{ FromPackage: Version }</c> to the consumer's
+    /// <c>package.json#dependencies</c> the first time a type referenced by this
+    /// mapping is actually used. Without it, the user is responsible for adding the
+    /// dependency manually.
+    /// </summary>
+    public string Version { get; set; } = "";
 }

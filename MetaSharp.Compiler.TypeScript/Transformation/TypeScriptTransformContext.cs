@@ -27,8 +27,8 @@ public sealed class TypeScriptTransformContext(
     IAssemblySymbol? currentAssembly,
     bool assemblyWideTranspile,
     IReadOnlyDictionary<string, INamedTypeSymbol> transpilableTypeMap,
-    IReadOnlyDictionary<string, (string Name, string From, bool IsDefault)> externalImportMap,
-    IReadOnlyDictionary<string, (string ExportedName, string FromPackage)> bclExportMap,
+    IReadOnlyDictionary<string, (string Name, string From, bool IsDefault, string? Version)> externalImportMap,
+    IReadOnlyDictionary<string, (string ExportedName, string FromPackage, string Version)> bclExportMap,
     IReadOnlyDictionary<string, string> guardNameToTypeMap,
     PathNaming pathNaming,
     DeclarativeMappingRegistry declarativeMappings,
@@ -38,8 +38,8 @@ public sealed class TypeScriptTransformContext(
     public IAssemblySymbol? CurrentAssembly { get; } = currentAssembly;
     public bool AssemblyWideTranspile { get; } = assemblyWideTranspile;
     public IReadOnlyDictionary<string, INamedTypeSymbol> TranspilableTypeMap { get; } = transpilableTypeMap;
-    public IReadOnlyDictionary<string, (string Name, string From, bool IsDefault)> ExternalImportMap { get; } = externalImportMap;
-    public IReadOnlyDictionary<string, (string ExportedName, string FromPackage)> BclExportMap { get; } = bclExportMap;
+    public IReadOnlyDictionary<string, (string Name, string From, bool IsDefault, string? Version)> ExternalImportMap { get; } = externalImportMap;
+    public IReadOnlyDictionary<string, (string ExportedName, string FromPackage, string Version)> BclExportMap { get; } = bclExportMap;
     public IReadOnlyDictionary<string, string> GuardNameToTypeMap { get; } = guardNameToTypeMap;
     public PathNaming PathNaming { get; } = pathNaming;
     public DeclarativeMappingRegistry DeclarativeMappings { get; } = declarativeMappings;
