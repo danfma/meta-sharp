@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using MetaSharp.Compiler.Diagnostics;
 using MetaSharp.TypeScript.AST;
 
 namespace MetaSharp;
@@ -29,12 +30,20 @@ public static class PackageJsonWriter
     /// <param name="outputDirAbsolute">Absolute path where TS files are emitted (e.g., /path/to/pkg/src).</param>
     /// <param name="distDirRelativeToPackageRoot">Relative path from packageRoot to the JS output directory (default: "./dist").</param>
     /// <param name="files">All generated TsSourceFile objects (type files + barrels).</param>
-    public static void UpdateOrCreate(
+    /// <param name="authoritativePackageName">When non-null, this name (typically read
+    /// from <c>[assembly: EmitPackage(...)]</c>) is written to <c>package.json#name</c>
+    /// as the source of truth. If the existing file already had a different name, an
+    /// MS0007 diagnostic is returned and the authoritative value still wins (because
+    /// cross-package import resolution depends on it).</param>
+    /// <returns>List of diagnostics raised while writing — empty in the happy path.</returns>
+    public static IReadOnlyList<MetaSharpDiagnostic> UpdateOrCreate(
         string packageRoot,
         string outputDirAbsolute,
         IReadOnlyList<TsSourceFile> files,
-        string distDirRelativeToPackageRoot = "./dist")
+        string distDirRelativeToPackageRoot = "./dist",
+        string? authoritativePackageName = null)
     {
+        var diagnostics = new List<MetaSharpDiagnostic>();
         var packageJsonPath = Path.Combine(packageRoot, "package.json");
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
@@ -52,9 +61,30 @@ public static class PackageJsonWriter
         {
             root = new JsonObject
             {
-                ["name"] = Path.GetFileName(packageRoot.TrimEnd('/', '\\')),
+                ["name"] = authoritativePackageName
+                    ?? Path.GetFileName(packageRoot.TrimEnd('/', '\\')),
                 ["private"] = true,
             };
+        }
+
+        // [EmitPackage] is the source of truth for the package name when present.
+        // If the existing file's name diverges, warn and overwrite — cross-package
+        // import resolution depends on the attribute value, so the package.json must
+        // match what consumers will write in their `import { … } from "<name>/…"` lines.
+        if (authoritativePackageName is not null)
+        {
+            var existingName = root["name"]?.GetValue<string>();
+            if (existingName is not null && existingName != authoritativePackageName)
+            {
+                diagnostics.Add(new MetaSharpDiagnostic(
+                    MetaSharpDiagnosticSeverity.Warning,
+                    DiagnosticCodes.CrossPackageResolution,
+                    $"package.json#name '{existingName}' diverges from " +
+                    $"[assembly: EmitPackage(\"{authoritativePackageName}\")]. " +
+                    $"Overwriting with the attribute value — consumers will import via " +
+                    $"'{authoritativePackageName}'."));
+            }
+            root["name"] = authoritativePackageName;
         }
 
         // Apply controlled fields (overwrite)
@@ -65,6 +95,7 @@ public static class PackageJsonWriter
 
         Directory.CreateDirectory(packageRoot);
         File.WriteAllText(packageJsonPath, root.ToJsonString(WriteOptions) + "\n");
+        return diagnostics;
     }
 
     /// <summary>

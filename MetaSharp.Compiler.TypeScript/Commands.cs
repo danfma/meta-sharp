@@ -50,7 +50,14 @@ public class Commands
                 ? Path.GetFullPath(packageRoot)
                 : Path.GetDirectoryName(outputDir)!;
 
-            PackageJsonWriter.UpdateOrCreate(resolvedPackageRoot, outputDir, target.LastSourceFiles, dist);
+            var pkgDiagnostics = PackageJsonWriter.UpdateOrCreate(
+                resolvedPackageRoot,
+                outputDir,
+                target.LastSourceFiles,
+                dist,
+                authoritativePackageName: target.LastEmitPackageName);
+            foreach (var d in pkgDiagnostics)
+                Console.WriteLine(d.Format());
             Console.WriteLine($"  Updated: {Path.Combine(resolvedPackageRoot, "package.json")}");
         }
     }

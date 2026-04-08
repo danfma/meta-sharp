@@ -25,11 +25,20 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// </summary>
     public IReadOnlyList<TsSourceFile> LastSourceFiles { get; private set; } = [];
 
+    /// <summary>
+    /// The package name read from <c>[assembly: EmitPackage(name)]</c> on the compiled
+    /// assembly, or null when the attribute isn't present. Used by the CLI driver to
+    /// pass an authoritative name to <see cref="PackageJsonWriter"/>.
+    /// </summary>
+    public string? LastEmitPackageName { get; private set; }
+
     public TargetOutput Transform(Compilation compilation)
     {
         var transformer = new TypeTransformer(compilation);
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;
+        // Read [EmitPackage] for the JavaScript target (enum value 0).
+        LastEmitPackageName = SymbolHelper.GetEmitPackage(compilation.Assembly, targetEnumValue: 0);
 
         var printer = new Printer();
         var generated = new List<GeneratedFile>(sourceFiles.Count);

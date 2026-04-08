@@ -71,4 +71,9 @@ public static class DiagnosticCodes
     /// <summary>MS0006 — Invalid use of [ModuleEntryPoint] (multiple, non-void/Task return,
     /// or has parameters).</summary>
     public const string InvalidModuleEntryPoint = "MS0006";
+
+    /// <summary>MS0007 — Cross-package resolution failure: the name in <c>package.json</c>
+    /// diverges from the assembly's <c>[EmitPackage]</c>, OR a consumer references a type
+    /// from an assembly that does not declare <c>[EmitPackage]</c> for the active target.</summary>
+    public const string CrossPackageResolution = "MS0007";
 }
