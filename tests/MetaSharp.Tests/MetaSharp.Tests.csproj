@@ -10,8 +10,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../MetaSharp/MetaSharp.csproj" />
-    <ProjectReference Include="../MetaSharp.Compiler.TypeScript/MetaSharp.Compiler.TypeScript.csproj" />
+    <ProjectReference Include="../../src/MetaSharp/MetaSharp.csproj" />
+    <ProjectReference Include="../../src/MetaSharp.Compiler.TypeScript/MetaSharp.Compiler.TypeScript.csproj" />
   </ItemGroup>
 
   <ItemGroup>
