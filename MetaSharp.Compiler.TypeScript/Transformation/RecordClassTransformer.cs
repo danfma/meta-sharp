@@ -402,7 +402,8 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             if (firstMember is null)
                 return null;
             var enumName = TypeTransformer.GetTsTypeName(enumType);
-            return new TsPropertyAccess(new TsIdentifier(enumName), firstMember.Name);
+            var memberName = SymbolHelper.GetNameOverride(firstMember) ?? firstMember.Name;
+            return new TsPropertyAccess(new TsIdentifier(enumName), memberName);
         }
 
         // Numeric primitives → 0
