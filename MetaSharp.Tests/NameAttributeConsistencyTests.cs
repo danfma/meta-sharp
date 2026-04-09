@@ -152,4 +152,69 @@ public class NameAttributeConsistencyTests
         // The type reference in the property should use the overridden name
         await Assert.That(ts).Contains("ApiUser[]");
     }
+
+    [Test]
+    public async Task NestedType_WithNameOverride_UsesQualifiedNameInNewExpression()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            [Name("Container")]
+            public static class Outer
+            {
+                [Transpile]
+                [Name("Child")]
+                public record struct Inner(int Value);
+            }
+
+            [Transpile]
+            public record struct Factory(string Label)
+            {
+                public Outer.Inner Create() => new Outer.Inner(42);
+            }
+            """
+        );
+
+        await Assert.That(result).ContainsKey("container.ts");
+        var containerTs = result["container.ts"];
+        // Declaration uses the overridden names
+        await Assert.That(containerTs).Contains("Container");
+        await Assert.That(containerTs).Contains("Child");
+
+        var factoryTs = result["factory.ts"];
+        // The new expression should use the fully qualified overridden name
+        await Assert.That(factoryTs).Contains("new Container.Child(");
+    }
+
+    [Test]
+    public async Task StringEnum_WithNameOverrideOnMember_AutoInitsCorrectly()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            [StringEnum]
+            public enum Priority
+            {
+                [Name("low")]
+                Low,
+                [Name("medium")]
+                Medium,
+                [Name("high")]
+                High
+            }
+
+            [Transpile]
+            public class TaskItem
+            {
+                public Priority Level { get; set; }
+            }
+            """
+        );
+
+        var taskTs = result["task-item.ts"];
+        // The auto-init for the enum should use the overridden member name "low"
+        // not the raw C# name "Low"
+        await Assert.That(taskTs).Contains("Priority.low");
+        await Assert.That(taskTs).DoesNotContain("Priority.Low");
+    }
 }

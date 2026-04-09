@@ -37,8 +37,7 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
         )
         {
             var args = _parent.ArgumentResolver.Resolve(creation.ArgumentList, creation);
-            var tsTypeName =
-                SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
+            var tsTypeName = BuildQualifiedTypeName(inlineWrapperType);
             return new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier(tsTypeName), "create"),
                 args
@@ -65,7 +64,7 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
                     _parent.AssemblyWideTranspile,
                     _parent.CurrentAssembly
                 )
-                    ? TypeTransformer.GetTsTypeName(named)
+                    ? BuildQualifiedTypeName(named)
                     : "Error";
             return new TsNewExpression(new TsIdentifier(errorName), args);
         }
@@ -93,8 +92,7 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
             var inlineArgs = creation
                 .ArgumentList.Arguments.Select(a => _parent.TransformExpression(a.Expression))
                 .ToList();
-            var tsTypeName =
-                SymbolHelper.GetNameOverride(inlineWrapperType) ?? inlineWrapperType.Name;
+            var tsTypeName = BuildQualifiedTypeName(inlineWrapperType);
             return new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier(tsTypeName), "create"),
                 inlineArgs
@@ -114,7 +112,7 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
         return new TsNewExpression(
             new TsIdentifier(
                 type is INamedTypeSymbol implicitNamed
-                    ? TypeTransformer.GetTsTypeName(implicitNamed)
+                    ? BuildQualifiedTypeName(implicitNamed)
                     : "Object"
             ),
             args
@@ -223,7 +221,7 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
             {
                 var args = _parent.ArgumentResolver.Resolve(argumentList, parentExpr);
                 return new TsNewExpression(
-                    new TsIdentifier(TypeTransformer.GetTsTypeName(recordType)),
+                    new TsIdentifier(BuildQualifiedTypeName(recordType)),
                     args
                 );
             }
@@ -233,7 +231,7 @@ public sealed class ObjectCreationHandler(ExpressionTransformer parent)
             argumentList?.Arguments.Select(a => _parent.TransformExpression(a.Expression)).ToList()
             ?? [];
         return new TsNewExpression(
-            new TsIdentifier(TypeTransformer.GetTsTypeName(recordType)),
+            new TsIdentifier(BuildQualifiedTypeName(recordType)),
             simpleArgs
         );
     }
