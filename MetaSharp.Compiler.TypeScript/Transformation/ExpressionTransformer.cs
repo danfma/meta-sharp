@@ -149,6 +149,7 @@ public sealed class ExpressionTransformer(SemanticModel model)
             ThisExpressionSyntax => new TsIdentifier("this"),
 
             PrefixUnaryExpressionSyntax prefix => Operators.TransformPrefixUnary(prefix),
+            PostfixUnaryExpressionSyntax postfix => Operators.TransformPostfixUnary(postfix),
 
             // x?.Prop → x?.prop
             ConditionalAccessExpressionSyntax condAccess =>

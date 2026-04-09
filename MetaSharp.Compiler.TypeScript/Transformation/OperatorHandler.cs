@@ -91,6 +91,16 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
         );
     }
 
+    /// <summary>
+    /// Postfix increment / decrement: <c>x++</c>, <c>x--</c>. JS uses the same syntax,
+    /// so the transform is essentially identity except we need a dedicated AST node
+    /// since <see cref="TsUnaryExpression"/> always renders the operator on the left.
+    /// </summary>
+    public TsExpression TransformPostfixUnary(PostfixUnaryExpressionSyntax postfix) =>
+        new TsPostfixUnaryExpression(
+            _parent.TransformExpression(postfix.Operand),
+            postfix.OperatorToken.Text);
+
     private bool IsDecimalOperand(ExpressionSyntax expr)
     {
         var info = _parent.Model.GetTypeInfo(expr);

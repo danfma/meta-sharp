@@ -717,6 +717,11 @@ public sealed class Printer(string indent = "  ")
                 PrintExpression(unary.Operand);
                 break;
 
+            case TsPostfixUnaryExpression postfix:
+                PrintExpression(postfix.Operand);
+                _sb.Write(postfix.Operator);
+                break;
+
             case TsParenthesized paren:
                 _sb.Write("(");
                 PrintExpression(paren.Expression);
