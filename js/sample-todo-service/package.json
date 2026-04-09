@@ -34,9 +34,9 @@
       "types": "./dist/program.d.ts",
       "import": "./dist/program.js"
     },
-    "./todo-summarizer": {
-      "types": "./dist/todo-summarizer.d.ts",
-      "import": "./dist/todo-summarizer.js"
+    "./todos": {
+      "types": "./dist/todos.d.ts",
+      "import": "./dist/todos.js"
     }
   }
 }
