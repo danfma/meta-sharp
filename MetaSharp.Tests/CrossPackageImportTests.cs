@@ -1,3 +1,6 @@
+using MetaSharp.Compiler.Diagnostics;
+using MetaSharp.TypeScript;
+
 namespace MetaSharp.Tests;
 
 /// <summary>
@@ -271,6 +274,95 @@ public class CrossPackageImportTests
         transformer.TransformAll();
 
         await Assert.That(transformer.CrossPackageDependencies.ContainsKey("hono")).IsFalse();
+    }
+
+    [Test]
+    public async Task LocalImportMapping_WinsOverReferencedCollision()
+    {
+        var library = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/lib")]
+
+            namespace Lib;
+
+            [Import("Moment", from: "shared-moment")]
+            public class Moment { }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            [Import("Moment", from: "local-moment")]
+            public class Moment { }
+
+            public class App
+            {
+                public Moment Value { get; set; } = new Moment();
+            }
+            """;
+
+        var libCompilation = TranspileHelper.CompileLibrary(library);
+        var consumerCompilation = TranspileHelper.CompileConsumer(consumer, libCompilation);
+
+        var transformer = new MetaSharp.Transformation.TypeTransformer(consumerCompilation);
+        var files = transformer.TransformAll();
+        var printer = new Printer();
+        var output = printer.Print(files.Single(f => f.FileName == "app.ts"));
+
+        await Assert.That(output).Contains("import { Moment } from \"local-moment\"");
+        await Assert.That(output).DoesNotContain("shared-moment");
+        await Assert.That(transformer.Diagnostics.Any(d =>
+            d.Code == DiagnosticCodes.AmbiguousConstruct &&
+            d.Message.Contains("Moment") &&
+            d.Message.Contains("local-moment") &&
+            d.Message.Contains("shared-moment"))).IsTrue();
+    }
+
+    [Test]
+    public async Task ReferencedImportCollision_EmitsDiagnosticAndKeepsFirstMapping()
+    {
+        var libraryA = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/lib-a")]
+
+            namespace LibA;
+
+            [Import("Moment", from: "moment-a")]
+            public class Moment { }
+            """;
+
+        var libraryB = """
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("@acme/lib-b")]
+
+            namespace LibB;
+
+            [Import("Moment", from: "moment-b")]
+            public class Moment { }
+            """;
+
+        var consumer = """
+            [assembly: TranspileAssembly]
+
+            public class App
+            {
+                public string Name { get; set; } = "";
+            }
+            """;
+
+        var libACompilation = TranspileHelper.CompileLibrary(libraryA, "LibA");
+        var libBCompilation = TranspileHelper.CompileLibrary(libraryB, "LibB");
+        var consumerCompilation = TranspileHelper.CompileConsumer(
+            consumer,
+            libACompilation,
+            libBCompilation);
+
+        var transformer = new MetaSharp.Transformation.TypeTransformer(consumerCompilation);
+        transformer.TransformAll();
+
+        await Assert.That(transformer.Diagnostics.Any(d =>
+            d.Code == DiagnosticCodes.AmbiguousConstruct &&
+            d.Message.Contains("Moment"))).IsTrue();
     }
 
     [Test]
