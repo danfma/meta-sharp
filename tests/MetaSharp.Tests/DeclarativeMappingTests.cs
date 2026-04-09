@@ -151,10 +151,10 @@ public class DeclarativeMappingTests
     }
 
     [Test]
-    public async Task DeclarativeImmutableListAdd_LowersToSpread()
+    public async Task DeclarativeImmutableListAdd_LowersToNamespaceHelper()
     {
-        // ImmutableList<T>.Add returns a NEW list — the spread template creates a fresh
-        // array containing the original elements followed by the new item.
+        // ImmutableList<T>.Add returns a NEW list — lowers to the ImmutableCollection
+        // namespace helper that returns a fresh array.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Immutable;
@@ -169,15 +169,16 @@ public class DeclarativeMappingTests
         );
 
         var output = result["history.ts"];
-        await Assert.That(output).Contains("[...this.snapshots, value]");
+        await Assert.That(output).Contains("ImmutableCollection.add(this.snapshots, value)");
+        await Assert.That(output).Contains("ImmutableCollection");
+        await Assert.That(output).Contains("@meta-sharp/runtime");
     }
 
     [Test]
-    public async Task DeclarativeImmutableListRemoveAt_LowersToRuntimeHelper()
+    public async Task DeclarativeImmutableListRemoveAt_LowersToNamespaceHelper()
     {
-        // ImmutableList<T>.RemoveAt lowers to a call to the `immutableRemoveAt` runtime
-        // helper from @meta-sharp/runtime. The helper returns a fresh array, mirroring
-        // the immutable contract.
+        // ImmutableList<T>.RemoveAt lowers to ImmutableCollection.removeAt — the
+        // namespace helper returns a fresh array, mirroring the immutable contract.
         var result = TranspileHelper.Transpile(
             """
             using System.Collections.Immutable;
@@ -192,9 +193,9 @@ public class DeclarativeMappingTests
         );
 
         var output = result["history.ts"];
-        await Assert.That(output).Contains("immutableRemoveAt(this.snapshots, index)");
+        await Assert.That(output).Contains("ImmutableCollection.removeAt(this.snapshots, index)");
         await Assert.That(output).Contains("@meta-sharp/runtime");
-        await Assert.That(output).Contains("immutableRemoveAt");
+        await Assert.That(output).Contains("ImmutableCollection");
     }
 
     [Test]
