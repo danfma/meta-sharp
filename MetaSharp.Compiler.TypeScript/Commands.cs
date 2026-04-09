@@ -23,9 +23,11 @@ public class Commands
         bool clean = false,
         string? packageRoot = null,
         string dist = "./dist",
-        bool skipPackageJson = false)
+        bool skipPackageJson = false
+    )
     {
         var target = new TypeScriptTarget();
+
         var options = new TranspileOptions(
             ProjectPath: project,
             OutputDir: output,
@@ -46,6 +48,7 @@ public class Commands
         if (!skipPackageJson && target.LastSourceFiles.Count > 0)
         {
             var outputDir = Path.GetFullPath(output);
+
             var resolvedPackageRoot = packageRoot is not null
                 ? Path.GetFullPath(packageRoot)
                 : Path.GetDirectoryName(outputDir)!;
@@ -56,9 +59,12 @@ public class Commands
                 target.LastSourceFiles,
                 dist,
                 authoritativePackageName: target.LastEmitPackageName,
-                crossPackageDependencies: target.LastCrossPackageDependencies);
+                crossPackageDependencies: target.LastCrossPackageDependencies
+            );
+
             foreach (var d in pkgDiagnostics)
                 Console.WriteLine(d.Format());
+
             Console.WriteLine($"  Updated: {Path.Combine(resolvedPackageRoot, "package.json")}");
         }
     }
