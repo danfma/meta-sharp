@@ -173,6 +173,14 @@ public static class TranspileHelper
     /// the generated TS files.
     /// </summary>
     public static CSharpCompilation CompileLibrary(string librarySource)
+        => CompileLibrary(librarySource, "TestLibrary");
+
+    /// <summary>
+    /// Compiles a library source into an in-memory <see cref="CSharpCompilation"/>
+    /// using the provided assembly name. Useful for tests that need multiple distinct
+    /// referenced libraries in the same consumer compilation.
+    /// </summary>
+    public static CSharpCompilation CompileLibrary(string librarySource, string assemblyName)
     {
         var source = $"""
             using System;
@@ -183,7 +191,7 @@ public static class TranspileHelper
         var tree = CSharpSyntaxTree.ParseText(source,
             new CSharpParseOptions(LanguageVersion.Preview));
         var compilation = CSharpCompilation.Create(
-            "TestLibrary", [tree], BuildBaseReferences(),
+            assemblyName, [tree], BuildBaseReferences(),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var errors = compilation.GetDiagnostics()
@@ -202,6 +210,15 @@ public static class TranspileHelper
     /// </summary>
     public static CSharpCompilation CompileConsumer(
         string consumerSource, CSharpCompilation libraryCompilation)
+        => CompileConsumer(consumerSource, [libraryCompilation]);
+
+    /// <summary>
+    /// Compiles a consumer source that references multiple previously built library
+    /// compilations. Useful for tests that need to validate behavior across more than
+    /// one referenced assembly.
+    /// </summary>
+    public static CSharpCompilation CompileConsumer(
+        string consumerSource, params CSharpCompilation[] libraryCompilations)
     {
         var source = $"""
             using System;
@@ -214,7 +231,7 @@ public static class TranspileHelper
         var compilation = CSharpCompilation.Create(
             "TestConsumer",
             [tree],
-            BuildBaseReferences().Concat([libraryCompilation.ToMetadataReference()]),
+            BuildBaseReferences().Concat(libraryCompilations.Select(c => c.ToMetadataReference())),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
 
         var errors = compilation.GetDiagnostics()

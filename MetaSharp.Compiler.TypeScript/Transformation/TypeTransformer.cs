@@ -116,10 +116,18 @@ public sealed class TypeTransformer(Compilation compilation)
             if (import is not null)
             {
                 var entry = (import.Name, import.From, import.AsDefault, import.Version);
-                _externalImportMap[t.Name] = entry;
+                RegisterExternalImportMapping(
+                    t.Name,
+                    entry,
+                    t.ToDisplayString(),
+                    t.Locations.FirstOrDefault());
                 var tsName = GetTsTypeName(t);
                 if (tsName != t.Name)
-                    _externalImportMap[tsName] = entry;
+                    RegisterExternalImportMapping(
+                        tsName,
+                        entry,
+                        t.ToDisplayString(),
+                        t.Locations.FirstOrDefault());
             }
         }
 
@@ -321,10 +329,18 @@ public sealed class TypeTransformer(Compilation compilation)
                 if (import is not null)
                 {
                     var entry = (import.Name, import.From, import.AsDefault, import.Version);
-                    _externalImportMap[type.Name] = entry;
+                    RegisterExternalImportMapping(
+                        type.Name,
+                        entry,
+                        type.ToDisplayString(),
+                        type.Locations.FirstOrDefault());
                     var tsName = GetTsTypeName(type);
                     if (tsName != type.Name)
-                        _externalImportMap[tsName] = entry;
+                        RegisterExternalImportMapping(
+                            tsName,
+                            entry,
+                            type.ToDisplayString(),
+                            type.Locations.FirstOrDefault());
                     continue;
                 }
 
@@ -602,6 +618,30 @@ public sealed class TypeTransformer(Compilation compilation)
     }
 
     private sealed record TypeFileGroup(string Namespace, string FileName, List<INamedTypeSymbol> Types);
+
+    private void RegisterExternalImportMapping(
+        string key,
+        (string Name, string From, bool IsDefault, string? Version) entry,
+        string ownerDisplayName,
+        Location? location)
+    {
+        if (!_externalImportMap.TryGetValue(key, out var existing))
+        {
+            _externalImportMap[key] = entry;
+            return;
+        }
+
+        if (existing == entry)
+            return;
+
+        _diagnostics.Add(new MetaSharpDiagnostic(
+            MetaSharpDiagnosticSeverity.Warning,
+            DiagnosticCodes.AmbiguousConstruct,
+            $"External import name collision for '{key}'. Keeping '{existing.From}' " +
+            $"('{existing.Name}') and ignoring conflicting mapping from " +
+            $"'{ownerDisplayName}' to '{entry.From}' ('{entry.Name}').",
+            location));
+    }
 
     /// <summary>
     /// Returns the TypeScript name for a type. Uses [Name] override if present, otherwise the C# name as-is.
