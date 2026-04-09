@@ -4,6 +4,8 @@
     "target": "ESNext",
     "module": "Preserve",
     "moduleDetection": "force",
+    "composite": true,
+    "declaration": true,
     "allowJs": true,
     "rootDir": "./src",
     "outDir": "./dist",
