@@ -106,14 +106,14 @@ describe("sample-todo-service routes (cross-package + Hono)", () => {
     expect(res.status).toBe(404);
   });
 
-  test("DELETE /todos/:id removes and returns the deleted id", async () => {
+  test("DELETE /todos/:id removes and returns 204 No Content", async () => {
     const app = await freshApp();
     const created = await postJson<StoredTodo>(app, "/todos", { title: "Doomed", priority: "low" });
 
     const del = await app.fetch(new Request(url(`/todos/${created.data.id}`), { method: "DELETE" }));
-    expect(del.status).toBe(200);
-    const body = await del.json() as { id: string };
-    expect(body.id).toBe(created.data.id);
+    expect(del.status).toBe(204);
+    // 204 has no body — reading text() gives empty string, json() would throw.
+    expect(await del.text()).toBe("");
 
     // Subsequent GET → 404
     const after = await app.fetch(new Request(url(`/todos/${created.data.id}`)));

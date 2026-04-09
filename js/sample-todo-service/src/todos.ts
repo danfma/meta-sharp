@@ -19,10 +19,6 @@ export interface UpdateTodoDto {
   readonly completed: boolean | null;
 }
 
-export interface DeletedDto {
-  readonly id: string;
-}
-
 export class TodoStore {
   private readonly _items: StoredTodo[] = [];
 

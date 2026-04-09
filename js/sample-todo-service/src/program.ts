@@ -46,7 +46,7 @@ app.delete("/todos/:id", (c) =>  {
   if (id === null) {
     return c.notFound();
   }
-  return store.remove(id) ? c.json({ id: id }) : c.notFound();
+  return store.remove(id) ? c.body(null, 204) : c.notFound();
 });
 
 

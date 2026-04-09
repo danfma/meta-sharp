@@ -24,12 +24,6 @@ public record CreateTodoDto(string Title, Priority Priority);
 public record UpdateTodoDto(string? Title, Priority? Priority, bool? Completed);
 
 /// <summary>
-/// DELETE /todos/:id response body. Plain envelope acknowledging the removal.
-/// </summary>
-[PlainObject, EmitInFile("todos")]
-public record DeletedDto(string Id);
-
-/// <summary>
 /// In-memory store of todos. Backed by a <see cref="List{T}"/> with linear scans —
 /// fine for the sample's scale. We deliberately avoid <see cref="Dictionary{TKey,TValue}"/>
 /// because the transpiler's Dictionary→Map mapping doesn't yet lower the indexer

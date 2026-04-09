@@ -18,6 +18,13 @@ public interface IHonoContext
     [Name("json")] IHonoContext Json<T>(T value);
     [Name("json")] IHonoContext Json<T>(T value, int status);
 
+    /// <summary>
+    /// Returns a response with no body. Use for status codes that disallow content
+    /// (204 No Content, 304 Not Modified, etc.) — Hono's <c>text()</c> overload
+    /// rejects those because its return type is restricted to ContentfulStatusCode.
+    /// </summary>
+    [Name("body")] IHonoContext Body(string? data, int status);
+
     [Name("notFound")] IHonoContext NotFound();
 
     IHonoRequest Req { [Name("req")] get; }

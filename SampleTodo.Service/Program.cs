@@ -44,17 +44,15 @@ public static class Program
             return updated is null ? c.NotFound() : c.Json(updated);
         });
 
-        // Delete by id. Returns the deleted id on success, 404 when missing. We use
-        // JSON instead of an empty 204 because Hono's c.text(text, status) overload
-        // doesn't accept no-content status codes (204/205/304) — it requires a
-        // ContentfulStatusCode. Returning a small JSON envelope is the simplest
-        // workaround that survives type checking.
+        // Delete by id. 204 No Content on success, 404 when missing. The Body()
+        // overload exists precisely for status codes Hono won't accept via Text()
+        // (204/205/304); without it the previous version had to fake a JSON envelope.
         app.Delete("/todos/:id", c =>
         {
             var id = c.Req.Param("id");
             if (id is null) return c.NotFound();
             return store.Remove(id)
-                ? c.Json(new DeletedDto(id))
+                ? c.Body(null, 204)
                 : c.NotFound();
         });
     }
