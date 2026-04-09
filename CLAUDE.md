@@ -13,6 +13,10 @@ MetaSharp is a C# → TypeScript transpiler powered by Roslyn. It reads C# proje
 ```sh
 dotnet build                                          # build entire solution
 dotnet run --project tests/MetaSharp.Tests/            # run tests (TUnit — use dotnet run, not dotnet test)
+dotnet run --project tests/MetaSharp.Tests/ -- \
+  --coverage --coverage-output-format cobertura \
+  --coverage-output coverage.cobertura.xml \
+  --results-directory TestResults                     # run tests with code coverage
 dotnet run --project src/MetaSharp.Compiler.TypeScript/ -- \
   -p samples/SampleTodo/SampleTodo.csproj \
   -o js/sample-todo/src --clean                       # transpile SampleTodo to TypeScript
