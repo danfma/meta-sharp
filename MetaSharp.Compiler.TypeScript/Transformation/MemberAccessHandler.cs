@@ -63,7 +63,19 @@ public sealed class MemberAccessHandler(ExpressionTransformer parent)
         if (nameOverride is not null)
             return new TsPropertyAccess(obj, nameOverride);
 
-        var memberName = TypeScriptNaming.ToCamelCase(member.Name.Identifier.Text);
+        // Member access uses the non-escaping variant for the common case
+        // (`obj.delete` is valid in JS even though `let delete = …` isn't). The
+        // exception: methods on `[InlineWrapper]` types lower to namespace functions
+        // (`namespace UserId { export function new_() {} }`), and namespace function
+        // declarations DO require reserved-word escapes — so the call site has to
+        // match by also escaping. Detect this via the resolved symbol's containing
+        // type carrying `[InlineWrapper]`.
+        var useEscape = symbol is IMethodSymbol m
+            && m.ContainingType is { } container
+            && SymbolHelper.HasInlineWrapper(container);
+        var memberName = useEscape
+            ? TypeScriptNaming.ToCamelCase(member.Name.Identifier.Text)
+            : TypeScriptNaming.ToCamelCaseMember(member.Name.Identifier.Text);
         return new TsPropertyAccess(obj, memberName);
     }
 }

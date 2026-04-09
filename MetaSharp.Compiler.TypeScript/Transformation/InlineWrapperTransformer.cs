@@ -87,6 +87,12 @@ public sealed class InlineWrapperTransformer(TypeScriptTransformContext context)
                 .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
                 .ToList();
 
+            // Inline wrapper helpers lower to `export namespace TypeName { export
+            // function methodName() { … } }`. Function declarations inside a namespace
+            // can NOT use reserved words (`function new() {}` is illegal even though
+            // `obj.new` is fine), so this stays on the escaping ToCamelCase variant.
+            // The call-site MemberAccessHandler detects [InlineWrapper] receivers and
+            // matches the escape so the two halves stay in sync.
             var methodName = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
             var returnType = TypeMapper.Map(method.ReturnType);
             functions.Add(new TsFunction(methodName, parameters, returnType, body,

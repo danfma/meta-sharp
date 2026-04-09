@@ -30,13 +30,9 @@ public static class TypeScriptNaming
     }
 
     /// <summary>
-    /// Converts PascalCase to camelCase for TS output. Reserved words get an
-    /// underscore suffix so they're safe to use as variable / parameter / class-member
-    /// identifiers (declaration sites and call sites use the same suffix so they
-    /// remain in agreement). When the user wants a property name that IS a reserved
-    /// word in JS (e.g., a method named <c>delete</c> on the Hono binding), they
-    /// can opt out of the auto-conversion via <c>[Name("delete")]</c>; the
-    /// <c>MemberAccessHandler</c> honors that override verbatim.
+    /// Converts PascalCase to camelCase for TS output as a variable / parameter
+    /// identifier. Reserved words get an underscore suffix because they can't be
+    /// used as bare identifiers in JS (<c>let delete = …</c> is illegal).
     /// </summary>
     public static string ToCamelCase(string name)
     {
@@ -47,6 +43,22 @@ public static class TypeScriptNaming
         if (IsReservedWord(result))
             return result + "_";
         return result;
+    }
+
+    /// <summary>
+    /// camelCase variant for class members and object property names — i.e., names
+    /// that always appear in property position (after a dot, inside a class body, or
+    /// as a key in an object literal). Reserved words are NOT escaped because JS
+    /// allows them as property names (<c>obj.delete</c>, <c>class Foo { delete() {} }</c>).
+    /// Use this at declaration sites (method/property/field declarations) AND at
+    /// reference sites (member access, static member, instance member) so the two
+    /// halves stay in agreement.
+    /// </summary>
+    public static string ToCamelCaseMember(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+        if (char.IsLower(name[0])) return name;
+        return char.ToLowerInvariant(name[0]) + name[1..];
     }
 
     private static readonly HashSet<string> JsReservedWords =

@@ -132,7 +132,7 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
     {
         var sorted = methods.OrderByDescending(m => m.Parameters.Length).ToList();
         var firstName = sorted[0];
-        var name = SymbolHelper.GetNameOverride(firstName) ?? TypeScriptNaming.ToCamelCase(firstName.Name);
+        var name = SymbolHelper.GetNameOverride(firstName) ?? TypeScriptNaming.ToCamelCaseMember(firstName.Name);
         var isStatic = firstName.IsStatic;
         var isAsync = sorted.Any(m => m.IsAsync);
         var accessibility = TypeTransformer.MapAccessibility(firstName.DeclaredAccessibility);

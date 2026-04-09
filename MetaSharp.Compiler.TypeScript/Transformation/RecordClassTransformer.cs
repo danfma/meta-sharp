@@ -512,7 +512,11 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             as MethodDeclarationSyntax;
         if (syntax is null) return null;
 
-        var name = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
+        // Method declarations use the member-name camelCase (no reserved-word
+        // escape) so a method named `Delete` becomes `delete()` instead of
+        // `delete_()`. Both the declaration and the call site (MemberAccessHandler)
+        // route through the same non-escaping helper, so they stay in agreement.
+        var name = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCaseMember(method.Name);
         var hasYield = syntax.DescendantNodes().OfType<YieldStatementSyntax>().Any();
         var returnType = hasYield
             ? TypeMapper.MapForGeneratorReturn(method.ReturnType)
