@@ -155,7 +155,12 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
             {
                 if (member.IsImplicitlyDeclared) continue;
                 if (member.IsStatic) continue;
-                if (member.DeclaredAccessibility is Accessibility.Internal or Accessibility.NotApplicable) continue;
+                // Unified policy: exclude Private, Internal, and NotApplicable.
+                // ProtectedAndInternal (C# `private protected`) and
+                // ProtectedOrInternal (C# `protected internal`) are treated as
+                // TS `protected` — included in the guard because TS has no
+                // assembly-level visibility distinction.
+                if (!IsGuardVisible(member.DeclaredAccessibility)) continue;
                 if (SymbolHelper.HasIgnore(member)) continue;
 
                 var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
@@ -171,7 +176,7 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
                 if (member.IsImplicitlyDeclared) continue;
                 if (member.IsStatic) continue;
                 if (member.AssociatedSymbol is not null) continue;
-                if (member.DeclaredAccessibility is Accessibility.Private or Accessibility.Internal or Accessibility.NotApplicable) continue;
+                if (!IsGuardVisible(member.DeclaredAccessibility)) continue;
                 if (SymbolHelper.HasIgnore(member)) continue;
 
                 var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
@@ -186,6 +191,20 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
 
         return fields;
     }
+
+    /// <summary>
+    /// Returns true when a member's declared accessibility should be included in a
+    /// generated type guard. TS has no assembly-level visibility, so both C# composite
+    /// accessibilities (<c>private protected</c> and <c>protected internal</c>) are
+    /// treated as plain <c>protected</c> — visible to subclasses, included in the
+    /// guard. Only <c>Private</c>, <c>Internal</c>, and <c>NotApplicable</c> are
+    /// excluded.
+    /// </summary>
+    private static bool IsGuardVisible(Accessibility accessibility) =>
+        accessibility is Accessibility.Public
+            or Accessibility.Protected
+            or Accessibility.ProtectedOrInternal
+            or Accessibility.ProtectedAndInternal;
 
     /// <summary>
     /// Generates a runtime type check expression for a single field.
