@@ -8,5 +8,7 @@ public sealed record TsFieldMember(
     TsType Type,
     TsExpression? Initializer = null,
     bool Readonly = false,
+    bool Static = false,
+    bool Optional = false,
     TsAccessibility Accessibility = TsAccessibility.Public
 ) : TsClassMember;

@@ -493,6 +493,10 @@ public sealed class TypeTransformer(Compilation compilation)
         {
             new ExceptionTransformer(_context!).Transform(type, sink);
         }
+        else if (IsJsonSerializerContextType(type))
+        {
+            new JsonSerializerContextTransformer(_context!).Transform(type, sink);
+        }
         else if ((SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) && type.IsStatic)
         {
             new ModuleTransformer(_context!).Transform(type, sink);
@@ -657,6 +661,22 @@ public sealed class TypeTransformer(Compilation compilation)
         while (current is not null)
         {
             if (current.ToDisplayString() == "System.Exception") return true;
+            current = current.BaseType;
+        }
+
+        return false;
+    }
+
+    internal static bool IsJsonSerializerContextType(INamedTypeSymbol type)
+    {
+        var current = type.BaseType;
+        while (current is not null)
+        {
+            if (
+                current.ToDisplayString()
+                == "System.Text.Json.Serialization.JsonSerializerContext"
+            )
+                return true;
             current = current.BaseType;
         }
 

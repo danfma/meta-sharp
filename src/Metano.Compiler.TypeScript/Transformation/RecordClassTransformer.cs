@@ -485,7 +485,7 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
         // decimal → new Decimal("0"), etc.). Reference types and string stay null.
         initializer ??= ComputeDefaultInitializer(field.Type);
 
-        return new TsFieldMember(name, tsType, initializer, isReadonly, accessibility);
+        return new TsFieldMember(name, tsType, initializer, isReadonly, Accessibility: accessibility);
     }
 
     private static bool IsConstructorParam(
@@ -601,7 +601,7 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                 initializer = ComputeDefaultInitializer(prop.Type);
             }
 
-            results.Add(new TsFieldMember(name, tsType, initializer, isReadonly, accessibility));
+            results.Add(new TsFieldMember(name, tsType, initializer, isReadonly, Accessibility: accessibility));
         }
 
         return results;

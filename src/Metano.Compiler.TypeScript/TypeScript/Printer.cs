@@ -398,6 +398,7 @@ public sealed class Printer(string indent = "  ")
         switch (member)
         {
             case TsGetterMember getter:
+                if (getter.Static) _sb.Write("static ");
                 _sb.Write("get ");
                 _sb.Write(getter.Name);
                 _sb.Write("(): ");
@@ -420,8 +421,10 @@ public sealed class Printer(string indent = "  ")
 
             case TsFieldMember field:
                 PrintAccessibility(field.Accessibility);
+                if (field.Static) _sb.Write("static ");
                 if (field.Readonly) _sb.Write("readonly ");
                 _sb.Write(field.Name);
+                if (field.Optional) _sb.Write("?");
                 _sb.Write(": ");
                 PrintType(field.Type);
                 if (field.Initializer is not null)

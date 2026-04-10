@@ -384,7 +384,7 @@ public static class TypeMapper
             || fullName.StartsWith("System.Threading.Tasks.ValueTask");
     }
 
-    private static bool IsDictionaryLike(INamedTypeSymbol type)
+    internal static bool IsDictionaryLike(INamedTypeSymbol type)
     {
         var fullName = type.ToDisplayString();
         return fullName.StartsWith("System.Collections.Generic.Dictionary")
@@ -393,7 +393,7 @@ public static class TypeMapper
             || fullName.StartsWith("System.Collections.Concurrent.ConcurrentDictionary");
     }
 
-    private static bool IsSetLike(INamedTypeSymbol type)
+    internal static bool IsSetLike(INamedTypeSymbol type)
     {
         var fullName = type.ToDisplayString();
         return fullName.StartsWith("System.Collections.Generic.HashSet")
@@ -436,7 +436,7 @@ public static class TypeMapper
         return string.Join(".", parts);
     }
 
-    private static bool IsCollectionLike(INamedTypeSymbol type)
+    internal static bool IsCollectionLike(INamedTypeSymbol type)
     {
         var fullName = type.ToDisplayString();
         return fullName.StartsWith("System.Collections.Generic.List")
