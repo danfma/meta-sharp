@@ -24,7 +24,7 @@ jobs:
         run: dotnet tool restore
 
       - name: Build
-        run: dotnet build
+        run: dotnet build -maxcpucount:1
 
       - name: Test
         run: dotnet run --project tests/Metano.Tests/
