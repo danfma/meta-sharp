@@ -1,4 +1,4 @@
-# MetaSharp — Next Steps
+# Metano — Next Steps
 
 ## Concluído ✅
 
@@ -17,7 +17,7 @@
 - [x] BCL mappings: Math, string methods, Console.WriteLine
 - [x] Namespaces → pastas + `index.ts` barrel re-exports
 - [x] Imports type-only vs value (detecta `new` expressions)
-- [x] `@meta-sharp/runtime` com `HashCode` (xxHash32)
+- [x] `metano-runtime` com `HashCode` (xxHash32)
 
 ### Atributos
 
@@ -59,13 +59,13 @@
 
 ### Phase A — Core / TypeScript target split
 
-- [x] `MetaSharp.Compiler` became a **target-agnostic** library (core)
-- [x] `MetaSharp.Compiler.TypeScript` is the TypeScript target (depends on core)
+- [x] `Metano.Compiler` became a **target-agnostic** library (core)
+- [x] `Metano.Compiler.TypeScript` is the TypeScript target (depends on core)
 - [x] `ITranspilerTarget` interface in core
 - [x] `TranspilerHost.RunAsync(options, target)` orchestrates: load project → compile → target.Transform → write files
 - [x] `TypeScriptTarget : ITranspilerTarget` adapts the existing pipeline
-- [x] `MetaSharpDiagnostic` and `SymbolHelper` (target-agnostic part) moved to core
-- [x] CLI tool renamed to `metasharp-typescript`
+- [x] `MetanoDiagnostic` and `SymbolHelper` (target-agnostic part) moved to core
+- [x] CLI tool renamed to `metano-typescript`
 - [x] Each future target (Dart, Kotlin) will be its own CLI/project without touching the core
 
 ### Phase B — TypeScript target internal decomposition
@@ -123,7 +123,7 @@ Extracted handlers (each covers one sub-grammar):
 | `ExpressionTransformer.cs` | 973 | 174 | -82.1% |
 | **Total** | **3799** | **640** | **-83.2%** |
 
-30+ new files in `MetaSharp.Compiler.TypeScript/Transformation/` + 8 new files in the core.
+30+ new files in `Metano.Compiler.TypeScript/Transformation/` + 8 new files in the core.
 
 ---
 
@@ -163,7 +163,7 @@ Extracted handlers (each covers one sub-grammar):
 > tree-shakeable, idiomático em TS.
 >
 > **Detecção:** Struct com `[InlineWrapper]` e exatamente 1 campo primitivo.
-- [x] Definir atributo `[InlineWrapper]` no namespace `MetaSharp.Annotations`
+- [x] Definir atributo `[InlineWrapper]` no namespace `Metano.Annotations`
 - [x] Detectar no TypeTransformer: struct com `[InlineWrapper]` + 1 campo → branded type
 - [x] Gerar `type X = primitive & { readonly __brand: "X" }` + namespace com static methods
 - [x] Constructor → `create()` function no namespace
@@ -209,7 +209,7 @@ Extracted handlers (each covers one sub-grammar):
 - [x] `[ExportFromBcl]` — assembly-level: mapeia tipo BCL para package JS (ex: `decimal` → `Decimal` de `decimal.js`)
 - [x] `[Import]` — tipo externo não gera .ts, referências geram import correto
 - [x] `[Emit]` — JS inline nos call sites com placeholders `$0`, `$1`
-- [ ] Config file (`meta-sharp.json`) — futuro, para mapeamentos sem poluir o código
+- [ ] Config file (`metano.json`) — futuro, para mapeamentos sem poluir o código
 
 ### Cross-Project References ✅ (ProjectReference path)
 
@@ -255,7 +255,7 @@ name, so two assemblies with same-named types are correctly distinguished.
         the version comes from the attribute. Without `Version`, the type still
         imports correctly but no auto-dep entry is created (the user adds it manually).
       - **BCL types via `[ExportFromBcl(..., Version = "^x.y.z")]`**: same model as
-        `[Import]`. The default `decimal` mapping in `MetaSharp/Runtime/Decimal.cs`
+        `[Import]`. The default `decimal` mapping in `Metano/Runtime/Decimal.cs`
         ships with `Version = "^10.6.0"`, so any consumer that uses `decimal` gets
         `decimal.js` in its dependencies automatically.
 
@@ -274,7 +274,7 @@ name, so two assemblies with same-named types are correctly distinguished.
 
 The `ProjectReference` flow above uses Roslyn's in-process compilation references and
 works for source-available libraries within the same solution. For libraries shipped
-as NuGet packages (no source), MetaSharp needs a separate metadata sidecar file:
+as NuGet packages (no source), Metano needs a separate metadata sidecar file:
 
 - A `.metalib` (binary metadata) embedded in the NuGet package
 - Contains type signatures + namespace → package JS mapping + type guard info
@@ -495,7 +495,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
   mappings" below.
 
 #### Diagnostics ✅
-- [x] **Sistema de Diagnostics próprio** (`MetaSharpDiagnostic`): reporta warnings/errors
+- [x] **Sistema de Diagnostics próprio** (`MetanoDiagnostic`): reporta warnings/errors
   com localização exata no source C# (Roslyn `Location`)
 - [x] `/* unsupported: ... */` silencioso substituído por warnings + placeholder
 - [x] Categorias: MS0001 UnsupportedFeature, MS0002 UnresolvedType, MS0003 AmbiguousConstruct, MS0004 ConflictingAttributes
@@ -506,8 +506,8 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 ### Declarative BCL Mappings ✅
 
 > Replaces the hardcoded `BclMapper.cs` with assembly-level `[MapMethod]` /
-> `[MapProperty]` attributes living alongside the `MetaSharp` project under
-> `MetaSharp/Runtime/`. The compiler walks every referenced assembly's attributes,
+> `[MapProperty]` attributes living alongside the `Metano` project under
+> `Metano/Runtime/`. The compiler walks every referenced assembly's attributes,
 > indexes them by `(declaringType, memberName)`, and dispatches BCL → JS lowering
 > through the registry. `BclMapper.cs` shrank from ~400 lines (with hardcoded type-name
 > string matching) to ~340 lines of pure dispatch infrastructure.
@@ -519,14 +519,14 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 >     WrapReceiver = "Enumerable.from", JsMethod = "where")]
 > ```
 
-- [x] `[MapMethod]` / `[MapProperty]` attributes in the `MetaSharp.Annotations` namespace
+- [x] `[MapMethod]` / `[MapProperty]` attributes in the `Metano.Annotations` namespace
 - [x] `DeclarativeMappingRegistry` builds the lookup index from all referenced
   assemblies during `TypeTransformer.TransformAll` setup
 - [x] `BclMapper.TryMap` / `TryMapMethod` consult the registry as the only source of
   truth for BCL lowering; no hardcoded type-name branches remain
 - [x] External packages can ship their own mappings — any assembly with
   `[assembly: MapMethod]` declarations is picked up automatically
-- [x] Default BCL mappings live under `MetaSharp/Runtime/`, organized by area:
+- [x] Default BCL mappings live under `Metano/Runtime/`, organized by area:
   Lists, Strings, Math, Console, Guid, Tasks, Temporal, Enums, Queues, Stacks,
   Dictionaries, Sets, Linq (~140 declarations total)
 - [x] Schema features:
@@ -540,12 +540,12 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
       with generic chain detection so long fluent chains only wrap once
     - `RuntimeImports` — declares runtime helper identifiers the template body
       references so the import collector can emit the appropriate
-      `import { … } from "@meta-sharp/runtime";` line
+      `import { … } from "metano-runtime";` line
 
 #### Migration follow-ups
 
 - [x] `ImmutableList<T>` / `ImmutableArray<T>` — lowered via `ImmutableCollection`
-  namespace helpers in `@meta-sharp/runtime`. Each mutation method (Add, AddRange,
+  namespace helpers in `metano-runtime`. Each mutation method (Add, AddRange,
   Insert, Remove, RemoveAt, Clear) calls a namespaced pure function that returns a
   new array. No wrapper/class — representation stays as plain `T[]` so serialization
   works without friction (same approach as Kotlin's read-only collections).
@@ -556,7 +556,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] `List<T>.Remove(item)` — lowered to `listRemove($this, $0)` runtime helper
   that does `indexOf + splice` and returns `bool`, matching the C# contract.
 
-### Config File (`meta-sharp.json`)
+### Config File (`metano.json`)
 
 - [ ] Output directory
 - [ ] Type mappings globais
@@ -578,7 +578,7 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [ ] `--verbose` para log detalhado da transformação
 - [ ] (Warnings para constructs não suportados está em "Compiler Architecture > Diagnostics")
 
-### @meta-sharp/runtime
+### metano-runtime
 
 - [x] `HashCode` (xxHash32)
 - [x] `HashSet<T>` com equals/hashCode customizado (system/collections/)
@@ -588,9 +588,9 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 - [x] `Decimal` integration via decimal.js — type mapping (`decimal` → `Decimal`), literal
   lowering (`1.5m` → `new Decimal("1.5")`), operator lowering (`a + b` → `a.plus(b)`),
   and member mappings (`decimal.Parse`, `CompareTo`, constants). Built-in via
-  `MetaSharp/Runtime/Decimal.cs` with `Version = "^10.6.0"` for auto-deps.
+  `Metano/Runtime/Decimal.cs` with `Version = "^10.6.0"` for auto-deps.
 - [x] `equals()` / `hashCode()` utilities — records auto-generate structural equality
-  and xxHash32-based hashCode via `@meta-sharp/runtime`'s `HashCode` helper.
+  and xxHash32-based hashCode via `metano-runtime`'s `HashCode` helper.
 - [ ] Serialization helpers: `toJSON()` / `fromJSON()` com validação
 
 ### LINQ Runtime — Migração para pipe-based (tree-shaking)
@@ -606,8 +606,8 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 > Enumerable.from(items).where(x => x > 0).select(x => x * 2).toArray();
 >
 > // Futuro (tree-shakeable)
-> import { from, pipe } from "@meta-sharp/runtime/linq";
-> import { where, select, toArray } from "@meta-sharp/runtime/linq/operators";
+> import { from, pipe } from "metano-runtime/linq";
+> import { where, select, toArray } from "metano-runtime/linq/operators";
 > from(items).pipe(where(x => x > 0), select(x => x * 2), toArray());
 > ```
 >
@@ -672,13 +672,13 @@ Plano detalhado em [sample-issue-tracker-plan.md](./sample-issue-tracker-plan.md
 ### Other Targets
 
 > The infrastructure is ready after the Compiler Refactor: each target is a separate project
-> that implements `ITranspilerTarget` and has its own AST + Printer. The `MetaSharp.Compiler`
+> that implements `ITranspilerTarget` and has its own AST + Printer. The `Metano.Compiler`
 > core (target-agnostic) handles project loading + Roslyn compilation + diagnostics + file
 > writes. Adding a new target = new project + new AST + new handlers, without touching the
 > core or the existing TypeScript target.
 
-- [ ] `MetaSharp.Compiler.Dart` — for use with Flutter
-- [ ] `MetaSharp.Compiler.Kotlin` — for native Android
+- [ ] `Metano.Compiler.Dart` — for use with Flutter
+- [ ] `Metano.Compiler.Kotlin` — for native Android
 - [ ] **JSX/TSX target via plugin in the TypeScript target** (option B) — `[JsxComponent]` attribute
   + `JsxComponentTransformer` + new `Tsx*` AST nodes; emits raw `.tsx` and lets
   Vite/SWC/Babel resolve it with the framework's plugin (Solid, React, etc.)

@@ -1,4 +1,4 @@
-import { HashCode } from "@meta-sharp/runtime";
+import { HashCode } from "metano-runtime";
 
 export class OperationResult<T> {
   constructor(readonly success: boolean, readonly value: T | null, readonly errorCode: string | null = null, readonly errorMessage: string | null = null) { }

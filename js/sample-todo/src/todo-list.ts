@@ -1,5 +1,5 @@
-import { isString } from "@meta-sharp/runtime";
-import { Enumerable } from "@meta-sharp/runtime";
+import { isString } from "metano-runtime";
+import { Enumerable } from "metano-runtime";
 import { Priority } from "#/priority";
 import { TodoItem } from "#/todo-item";
 

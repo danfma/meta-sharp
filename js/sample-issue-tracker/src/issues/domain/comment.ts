@@ -1,4 +1,4 @@
-import { HashCode } from "@meta-sharp/runtime";
+import { HashCode } from "metano-runtime";
 import { Temporal } from "@js-temporal/polyfill";
 import { UserId } from "#/shared-kernel/user-id";
 

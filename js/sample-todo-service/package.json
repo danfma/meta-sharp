@@ -12,7 +12,7 @@
     }
   },
   "dependencies": {
-    "@meta-sharp/runtime": "workspace:*",
+    "metano-runtime": "workspace:*",
     "sample-todo": "workspace:*",
     "hono": "^4.6.0"
   },
@@ -21,7 +21,7 @@
     "@typescript/native-preview": "^7.0.0-dev.20260225.1"
   },
   "scripts": {
-    "generate": "dotnet run --project ../../src/MetaSharp.Compiler.TypeScript/MetaSharp.Compiler.TypeScript.csproj -- -p ../../samples/SampleTodo.Service/SampleTodo.Service.csproj -o ./src --clean --time",
+    "generate": "dotnet run --project ../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj -- -p ../../samples/SampleTodo.Service/SampleTodo.Service.csproj -o ./src --clean --time",
     "build": "tsgo -b .",
     "test": "bun test"
   },

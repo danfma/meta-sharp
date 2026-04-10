@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="TUnit" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.Testing.Extensions.CodeCoverage" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Metano/Metano.csproj" />
+    <ProjectReference Include="../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="Expected/**/*.ts" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+</Project>

@@ -1,4 +1,4 @@
-using MetaSharp.Annotations;
+using Metano.Annotations;
 
 namespace SampleIssueTracker.SharedKernel;
 

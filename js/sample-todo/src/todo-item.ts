@@ -1,4 +1,4 @@
-import { HashCode } from "@meta-sharp/runtime";
+import { HashCode } from "metano-runtime";
 import { Priority } from "#/priority";
 
 export class TodoItem {

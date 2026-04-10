@@ -1,4 +1,4 @@
-import { isString } from "@meta-sharp/runtime";
+import { isString } from "metano-runtime";
 import type { IIssueRepository } from "#/issues/application/i-issue-repository";
 import { Issue } from "#/issues/domain/issue";
 import { IssueId } from "#/issues/domain/issue-id";

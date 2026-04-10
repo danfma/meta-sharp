@@ -1,5 +1,5 @@
-import { Enumerable } from "@meta-sharp/runtime";
-import type { Grouping } from "@meta-sharp/runtime";
+import { Enumerable } from "metano-runtime";
+import type { Grouping } from "metano-runtime";
 import type { Issue } from "#/issues/domain/issue";
 import { IssuePriority } from "#/issues/domain/issue-priority";
 import { IssueStatus } from "#/issues/domain/issue-status";

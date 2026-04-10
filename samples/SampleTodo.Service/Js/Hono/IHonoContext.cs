@@ -1,10 +1,10 @@
-using MetaSharp.Annotations;
+using Metano.Annotations;
 
 namespace SampleTodo.Service.Js.Hono;
 
 /// <summary>
 /// Structural shape of Hono's <c>Context</c> object. Decorated with <c>[NoEmit]</c>
-/// so MetaSharp recognizes the type in C# (parameter signatures, member access)
+/// so Metano recognizes the type in C# (parameter signatures, member access)
 /// without producing any TypeScript declaration — at runtime the user's transpiled
 /// code receives the real Hono context, and TypeScript infers its type from Hono's
 /// types via the <c>app.get/post/...</c> handler signature.
