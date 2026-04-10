@@ -1,5 +1,5 @@
 import { HashCode } from "metano-runtime";
-import { Priority } from "#/priority";
+import { Priority } from "./priority";
 
 export class TodoItem {
   constructor(readonly title: string, readonly completed: boolean = false, readonly priority: Priority = "medium") { }

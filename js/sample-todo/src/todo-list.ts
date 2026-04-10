@@ -1,7 +1,7 @@
 import { isString } from "metano-runtime";
 import { Enumerable } from "metano-runtime";
-import { Priority } from "#/priority";
-import { TodoItem } from "#/todo-item";
+import { Priority } from "./priority";
+import { TodoItem } from "./todo-item";
 
 export class TodoList {
   private readonly _items: TodoItem[] = [];

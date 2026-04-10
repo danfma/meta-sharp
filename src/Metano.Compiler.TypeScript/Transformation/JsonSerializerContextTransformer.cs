@@ -59,7 +59,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             var tsTypeName = TypeTransformer.GetTsTypeName(targetType);
             var fieldName = "_" + TypeScriptNaming.ToCamelCase(tsTypeName);
             var getterName = TypeScriptNaming.ToCamelCase(tsTypeName);
-            var specType = new TsNamedType("TypeSpec", [new TsNamedType(tsTypeName)]);
+            var runtimeJsonOrigin = new TsTypeOrigin("metano-runtime", "system/json");
+            var specType = new TsNamedType("TypeSpec", [new TsNamedType(tsTypeName)], runtimeJsonOrigin);
 
             // private _todoItem?: TypeSpec<TodoItem>;
             members.Add(

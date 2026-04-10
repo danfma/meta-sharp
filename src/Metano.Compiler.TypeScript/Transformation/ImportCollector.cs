@@ -463,6 +463,15 @@ public sealed class ImportCollector(
                 // resolution.
                 crossPackageOrigins[typeRef.Name] = typeRef.Origin;
                 break;
+            case TsIdentifier bareId:
+                // Bare identifiers starting with uppercase may reference transpilable
+                // types used as values (e.g., enum objects passed to descriptor specs).
+                if (bareId.Name.Length > 0 && char.IsUpper(bareId.Name[0]))
+                {
+                    names.Add(bareId.Name);
+                    valueNames.Add(bareId.Name);
+                }
+                break;
             case TsNewExpression newExpr:
                 if (newExpr.Callee is TsIdentifier id)
                 {

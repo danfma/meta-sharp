@@ -52,7 +52,7 @@ public static class CyclicReferenceDetector
         }
 
         // Build the import graph. Edges point from a file to every file it imports via
-        // the local package aliases (`#` or `#/...`).
+        // the local package aliases (`#` or `#/...`) or relative paths (`./...`).
         var graph = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         foreach (var file in files)
         {
@@ -61,7 +61,7 @@ public static class CyclicReferenceDetector
             foreach (var stmt in file.Statements)
             {
                 if (stmt is not TsImport import) continue;
-                if (!TryNormalizeLocalImport(import.From, out var targetImportKey)) continue;
+                if (!TryNormalizeLocalImport(import.From, key, out var targetImportKey)) continue;
                 if (byImportKey.TryGetValue(targetImportKey, out var canonicalTarget))
                     targets.Add(canonicalTarget);
             }
@@ -155,7 +155,7 @@ public static class CyclicReferenceDetector
             $"Cyclic import detected: {chain}. The TypeScript compiler may emit confusing errors; consider extracting the shared piece into its own file.");
     }
 
-    private static bool TryNormalizeLocalImport(string from, out string key)
+    private static bool TryNormalizeLocalImport(string from, string importerKey, out string key)
     {
         if (from == "#")
         {
@@ -166,6 +166,15 @@ public static class CyclicReferenceDetector
         if (from.StartsWith("#/", StringComparison.Ordinal))
         {
             key = from[2..];
+            return true;
+        }
+
+        // Relative imports (./foo) — resolve against the importer's directory.
+        if (from.StartsWith("./", StringComparison.Ordinal))
+        {
+            var dir = Path.GetDirectoryName(importerKey)?.Replace('\\', '/') ?? "";
+            var relative = from[2..];
+            key = dir.Length > 0 ? dir + "/" + relative : relative;
             return true;
         }
 

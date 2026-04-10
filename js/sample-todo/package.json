@@ -8,6 +8,11 @@
       "types": "./dist/*.d.ts",
       "import": "./dist/*.js",
       "default": "./src/*.ts"
+    },
+    "#": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./src/index.ts"
     }
   },
   "dependencies": {
@@ -26,6 +31,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./json-context": {
+      "types": "./dist/json-context.d.ts",
+      "import": "./dist/json-context.js"
     },
     "./priority": {
       "types": "./dist/priority.d.ts",

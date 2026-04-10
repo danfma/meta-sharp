@@ -66,14 +66,12 @@ public sealed class PathNaming(string rootNamespace)
             ? toRelative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
             : [];
 
-        // Same namespace: file-first fallback to avoid importing through the same
-        // namespace barrel that re-exports the current file.
+        // Same namespace: use relative file import to avoid importing through the same
+        // namespace barrel that re-exports the current file. This prevents trivial
+        // cycles like: issue.ts → barrel → ./issue.ts
         if (fromNs == toNs)
         {
-            var parts = new List<string> { "#" };
-            parts.AddRange(toParts);
-            parts.Add(SymbolHelper.ToKebabCase(typeName));
-            return string.Join("/", parts);
+            return "./" + SymbolHelper.ToKebabCase(typeName);
         }
 
         // Different namespace: import the namespace barrel.

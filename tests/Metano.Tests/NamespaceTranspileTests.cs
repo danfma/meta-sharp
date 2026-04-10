@@ -143,8 +143,8 @@ public class NamespaceTranspileTests
         );
 
         var moneyTs = result["money.ts"];
-        // Same namespace falls back to the concrete file to avoid a cycle through
-        // the same namespace barrel (`money.ts -> # -> index.ts -> ./money.ts`).
-        await Assert.That(moneyTs).Contains("from \"#/currency\"");
+        // Same namespace uses relative file import to avoid a cycle through
+        // the namespace barrel (`money.ts -> barrel -> ./money.ts`).
+        await Assert.That(moneyTs).Contains("from \"./currency\"");
     }
 }
