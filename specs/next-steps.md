@@ -347,6 +347,29 @@ diverge da regra desejada para simular o modelo de namespaces do C#:
 
 **Plano detalhado:** `specs/namespace-imports-plan.md`
 
+### Imports relativos no mesmo namespace
+
+**Status:** hoje o transpiler já trata arquivos do mesmo namespace como exceção ao
+barrel-first, mas ainda usa o alias do package (`#/foo/bar/type`) para esses imports.
+O próximo refinamento é simplificar esse caso para imports relativos locais, deixando a
+regra completa assim:
+
+- mesmo namespace → import relativo por arquivo (`./issue-workflow`)
+- namespace diferente no mesmo package → barrel de namespace (`#/issues/domain`)
+- cross-package → namespace barrel ou root do package
+
+**Tarefas:**
+
+- [ ] Trocar o fallback de mesmo namespace em `PathNaming` de `#/namespace/type` para
+      import relativo (`./type`) calculado a partir do arquivo atual.
+- [ ] Atualizar `CyclicReferenceDetector` para continuar analisando apenas aliases do
+      package (`#` e `#/*`) e ignorar imports relativos locais.
+- [ ] Ajustar testes que hoje ainda aceitam fallback file-first via alias do package.
+- [ ] Regenerar `js/sample-issue-tracker` e validar que `issues/domain/*` usa imports
+      relativos locais, enquanto `issues/application/*` continua usando barrels.
+
+**Plano detalhado:** `specs/same-namespace-relative-imports-plan.md`
+
 ---
 
 ## Validação e Verificação de Tipos em Runtime
