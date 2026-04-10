@@ -31,4 +31,5 @@ public sealed record CrossAssemblyEntry(
     INamedTypeSymbol Symbol,
     string PackageName,
     string AssemblyRootNamespace,
-    string? VersionOverride = null);
+    string? VersionOverride = null
+);

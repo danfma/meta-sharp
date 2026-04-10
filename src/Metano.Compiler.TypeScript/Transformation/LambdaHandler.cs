@@ -29,9 +29,7 @@ public sealed class LambdaHandler(ExpressionTransformer parent)
 
     public TsArrowFunction TransformParenthesizedLambda(ParenthesizedLambdaExpressionSyntax lambda)
     {
-        var parameters = lambda.ParameterList.Parameters
-            .Select(TransformLambdaParameter)
-            .ToList();
+        var parameters = lambda.ParameterList.Parameters.Select(TransformLambdaParameter).ToList();
         var body = TransformLambdaBody(lambda.Body);
         var isAsync = lambda.AsyncKeyword.IsKind(SyntaxKind.AsyncKeyword);
         return new TsArrowFunction(parameters, body, isAsync);

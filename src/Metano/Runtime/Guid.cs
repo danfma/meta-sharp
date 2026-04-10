@@ -18,9 +18,12 @@ using Metano.Annotations;
 
 // Guid.ToString("N") → strip hyphens via String.replace
 // Must be declared before the unfiltered fallback below.
-[assembly: MapMethod(typeof(Guid), nameof(Guid.ToString),
+[assembly: MapMethod(
+    typeof(Guid),
+    nameof(Guid.ToString),
     WhenArg0StringEquals = "N",
-    JsTemplate = "$this.replace(/-/g, \"\")")]
+    JsTemplate = "$this.replace(/-/g, \"\")"
+)]
 
 // Guid.ToString() / Guid.ToString(other-format) → identity (the value is already a
 // string at runtime). Acts as the fallback for any call that doesn't match a more

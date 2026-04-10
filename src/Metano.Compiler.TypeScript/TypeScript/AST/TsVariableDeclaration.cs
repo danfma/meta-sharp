@@ -10,4 +10,5 @@ public sealed record TsVariableDeclaration(
     string Name,
     TsExpression Initializer,
     bool Const = true,
-    bool Exported = false) : TsStatement;
+    bool Exported = false
+) : TsStatement;

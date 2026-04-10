@@ -17,70 +17,130 @@ using Metano.Annotations;
 
 // ─── ImmutableList<T> ───────────────────────────────────────
 
-[assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.Add),
+[assembly: MapMethod(
+    typeof(ImmutableList<>),
+    nameof(ImmutableList<int>.Add),
     JsTemplate = "ImmutableCollection.add($this, $0)",
-    RuntimeImports = "ImmutableCollection")]
+    RuntimeImports = "ImmutableCollection"
+)]
 
-[assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.AddRange),
+[assembly: MapMethod(
+    typeof(ImmutableList<>),
+    nameof(ImmutableList<int>.AddRange),
     JsTemplate = "ImmutableCollection.addRange($this, $0)",
-    RuntimeImports = "ImmutableCollection")]
+    RuntimeImports = "ImmutableCollection"
+)]
 
-[assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.Insert),
+[assembly: MapMethod(
+    typeof(ImmutableList<>),
+    nameof(ImmutableList<int>.Insert),
     JsTemplate = "ImmutableCollection.insert($this, $0, $1)",
-    RuntimeImports = "ImmutableCollection")]
+    RuntimeImports = "ImmutableCollection"
+)]
 
-[assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.RemoveAt),
+[assembly: MapMethod(
+    typeof(ImmutableList<>),
+    nameof(ImmutableList<int>.RemoveAt),
     JsTemplate = "ImmutableCollection.removeAt($this, $0)",
-    RuntimeImports = "ImmutableCollection")]
+    RuntimeImports = "ImmutableCollection"
+)]
 
-[assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.Remove),
+[assembly: MapMethod(
+    typeof(ImmutableList<>),
+    nameof(ImmutableList<int>.Remove),
     JsTemplate = "ImmutableCollection.remove($this, $0)",
-    RuntimeImports = "ImmutableCollection")]
+    RuntimeImports = "ImmutableCollection"
+)]
 
-[assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.Clear),
-    JsTemplate = "ImmutableCollection.clear()")]
+[assembly: MapMethod(
+    typeof(ImmutableList<>),
+    nameof(ImmutableList<int>.Clear),
+    JsTemplate = "ImmutableCollection.clear()"
+)]
 
-[assembly: MapProperty(typeof(ImmutableList<>), nameof(ImmutableList<int>.Empty),
-    JsTemplate = "[]")]
+[assembly: MapProperty(
+    typeof(ImmutableList<>),
+    nameof(ImmutableList<int>.Empty),
+    JsTemplate = "[]"
+)]
 
-[assembly: MapProperty(typeof(ImmutableList<>), nameof(ImmutableList<int>.Count),
-    JsProperty = "length")]
-[assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.IndexOf),
-    JsMethod = "indexOf")]
-[assembly: MapMethod(typeof(ImmutableList<>), nameof(ImmutableList<int>.Contains),
-    JsMethod = "includes")]
+[assembly: MapProperty(
+    typeof(ImmutableList<>),
+    nameof(ImmutableList<int>.Count),
+    JsProperty = "length"
+)]
+[assembly: MapMethod(
+    typeof(ImmutableList<>),
+    nameof(ImmutableList<int>.IndexOf),
+    JsMethod = "indexOf"
+)]
+[assembly: MapMethod(
+    typeof(ImmutableList<>),
+    nameof(ImmutableList<int>.Contains),
+    JsMethod = "includes"
+)]
 
 // ─── ImmutableArray<T> ──────────────────────────────────────
 
-[assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Add),
+[assembly: MapMethod(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.Add),
     JsTemplate = "ImmutableCollection.add($this, $0)",
-    RuntimeImports = "ImmutableCollection")]
+    RuntimeImports = "ImmutableCollection"
+)]
 
-[assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.AddRange),
+[assembly: MapMethod(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.AddRange),
     JsTemplate = "ImmutableCollection.addRange($this, $0)",
-    RuntimeImports = "ImmutableCollection")]
+    RuntimeImports = "ImmutableCollection"
+)]
 
-[assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Insert),
+[assembly: MapMethod(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.Insert),
     JsTemplate = "ImmutableCollection.insert($this, $0, $1)",
-    RuntimeImports = "ImmutableCollection")]
+    RuntimeImports = "ImmutableCollection"
+)]
 
-[assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.RemoveAt),
+[assembly: MapMethod(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.RemoveAt),
     JsTemplate = "ImmutableCollection.removeAt($this, $0)",
-    RuntimeImports = "ImmutableCollection")]
+    RuntimeImports = "ImmutableCollection"
+)]
 
-[assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Remove),
+[assembly: MapMethod(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.Remove),
     JsTemplate = "ImmutableCollection.remove($this, $0)",
-    RuntimeImports = "ImmutableCollection")]
+    RuntimeImports = "ImmutableCollection"
+)]
 
-[assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Clear),
-    JsTemplate = "ImmutableCollection.clear()")]
+[assembly: MapMethod(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.Clear),
+    JsTemplate = "ImmutableCollection.clear()"
+)]
 
-[assembly: MapProperty(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Empty),
-    JsTemplate = "[]")]
+[assembly: MapProperty(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.Empty),
+    JsTemplate = "[]"
+)]
 
-[assembly: MapProperty(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Length),
-    JsProperty = "length")]
-[assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.IndexOf),
-    JsMethod = "indexOf")]
-[assembly: MapMethod(typeof(ImmutableArray<>), nameof(ImmutableArray<int>.Contains),
-    JsMethod = "includes")]
+[assembly: MapProperty(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.Length),
+    JsProperty = "length"
+)]
+[assembly: MapMethod(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.IndexOf),
+    JsMethod = "indexOf"
+)]
+[assembly: MapMethod(
+    typeof(ImmutableArray<>),
+    nameof(ImmutableArray<int>.Contains),
+    JsMethod = "includes"
+)]

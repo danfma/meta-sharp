@@ -9,6 +9,4 @@ public sealed record TsConstructor(
 /// <summary>
 /// An overload signature for a constructor: constructor(x: number, y: number);
 /// </summary>
-public sealed record TsConstructorOverload(
-    IReadOnlyList<TsConstructorParam> Parameters
-);
+public sealed record TsConstructorOverload(IReadOnlyList<TsConstructorParam> Parameters);

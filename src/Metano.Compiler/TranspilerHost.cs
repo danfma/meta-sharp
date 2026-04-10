@@ -17,7 +17,10 @@ namespace Metano.Compiler;
 /// </summary>
 public static class TranspilerHost
 {
-    public static async Task<TranspileResult> RunAsync(TranspileOptions options, ITranspilerTarget target)
+    public static async Task<TranspileResult> RunAsync(
+        TranspileOptions options,
+        ITranspilerTarget target
+    )
     {
         var projectPath = Path.GetFullPath(options.ProjectPath);
         var outputDir = Path.GetFullPath(options.OutputDir);
@@ -56,7 +59,8 @@ public static class TranspilerHost
             return new TranspileResult(false, [], 0, 1);
         }
 
-        var roslynErrors = compilation.GetDiagnostics()
+        var roslynErrors = compilation
+            .GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();
 
@@ -103,9 +107,13 @@ public static class TranspilerHost
 
         foreach (var file in output.Files)
         {
-            var filePath = Path.Combine(outputDir, file.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            var filePath = Path.Combine(
+                outputDir,
+                file.RelativePath.Replace('/', Path.DirectorySeparatorChar)
+            );
             var fileDir = Path.GetDirectoryName(filePath);
-            if (fileDir is not null) Directory.CreateDirectory(fileDir);
+            if (fileDir is not null)
+                Directory.CreateDirectory(fileDir);
             await File.WriteAllTextAsync(filePath, file.Content);
             Console.WriteLine($"  Generated: {file.RelativePath}");
         }
@@ -124,7 +132,9 @@ public static class TranspilerHost
         return new TranspileResult(true, output.Files, warningCount, 0);
     }
 
-    private static (int Warnings, int Errors) ReportDiagnostics(IReadOnlyList<MetanoDiagnostic> diagnostics)
+    private static (int Warnings, int Errors) ReportDiagnostics(
+        IReadOnlyList<MetanoDiagnostic> diagnostics
+    )
     {
         var errorCount = 0;
         var warningCount = 0;

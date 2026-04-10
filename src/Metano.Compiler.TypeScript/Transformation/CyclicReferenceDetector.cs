@@ -26,9 +26,11 @@ public static class CyclicReferenceDetector
 {
     public static void DetectAndReport(
         IReadOnlyList<TsSourceFile> files,
-        Action<MetanoDiagnostic> reportDiagnostic)
+        Action<MetanoDiagnostic> reportDiagnostic
+    )
     {
-        if (files.Count == 0) return;
+        if (files.Count == 0)
+            return;
 
         // Build the file index keyed by the kebab-cased relative path WITHOUT the .ts
         // extension. For index files we also register the directory barrel alias:
@@ -60,8 +62,10 @@ public static class CyclicReferenceDetector
             var targets = new List<string>();
             foreach (var stmt in file.Statements)
             {
-                if (stmt is not TsImport import) continue;
-                if (!TryNormalizeLocalImport(import.From, key, out var targetImportKey)) continue;
+                if (stmt is not TsImport import)
+                    continue;
+                if (!TryNormalizeLocalImport(import.From, key, out var targetImportKey))
+                    continue;
                 if (byImportKey.TryGetValue(targetImportKey, out var canonicalTarget))
                     targets.Add(canonicalTarget);
             }
@@ -77,7 +81,8 @@ public static class CyclicReferenceDetector
 
         foreach (var start in graph.Keys)
         {
-            if (visited.Contains(start)) continue;
+            if (visited.Contains(start))
+                continue;
             DfsVisit(start, graph, visited, onStack, pathStack, seenCycles, reportDiagnostic);
         }
     }
@@ -89,7 +94,8 @@ public static class CyclicReferenceDetector
         HashSet<string> onStack,
         List<string> pathStack,
         HashSet<string> seenCycles,
-        Action<MetanoDiagnostic> reportDiagnostic)
+        Action<MetanoDiagnostic> reportDiagnostic
+    )
     {
         onStack.Add(node);
         pathStack.Add(node);
@@ -101,7 +107,8 @@ public static class CyclicReferenceDetector
                 // Back-edge → reconstruct the cycle by slicing the path stack from the
                 // target (where the cycle starts) to the current node, then report it.
                 var startIndex = pathStack.IndexOf(target);
-                if (startIndex < 0) continue; // shouldn't happen, defensive
+                if (startIndex < 0)
+                    continue; // shouldn't happen, defensive
                 var cycle = pathStack.GetRange(startIndex, pathStack.Count - startIndex);
                 cycle.Add(target); // close the loop visually
 
@@ -133,7 +140,8 @@ public static class CyclicReferenceDetector
     {
         // The closing node at the end is a duplicate of the first; drop it for canonicalization.
         var nodes = cycle.Take(cycle.Count - 1).ToList();
-        if (nodes.Count == 0) return "";
+        if (nodes.Count == 0)
+            return "";
 
         var minIndex = 0;
         for (var i = 1; i < nodes.Count; i++)
@@ -152,7 +160,8 @@ public static class CyclicReferenceDetector
         return new MetanoDiagnostic(
             MetanoDiagnosticSeverity.Warning,
             DiagnosticCodes.CyclicReference,
-            $"Cyclic import detected: {chain}. The TypeScript compiler may emit confusing errors; consider extracting the shared piece into its own file.");
+            $"Cyclic import detected: {chain}. The TypeScript compiler may emit confusing errors; consider extracting the shared piece into its own file."
+        );
     }
 
     private static bool TryNormalizeLocalImport(string from, string importerKey, out string key)
@@ -184,14 +193,13 @@ public static class CyclicReferenceDetector
 
     private static string ToDisplayImportPath(string key)
     {
-        if (key == "index") return "#";
+        if (key == "index")
+            return "#";
         if (key.EndsWith("/index", StringComparison.Ordinal))
             return "#/" + key[..^"/index".Length];
         return "#/" + key;
     }
 
     private static string StripTsExtension(string fileName) =>
-        fileName.EndsWith(".ts", StringComparison.Ordinal)
-            ? fileName[..^3]
-            : fileName;
+        fileName.EndsWith(".ts", StringComparison.Ordinal) ? fileName[..^3] : fileName;
 }

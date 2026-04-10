@@ -31,7 +31,8 @@ public sealed class TypeTransformer(Compilation compilation)
     /// and surfaced to the CLI driver so the package.json writer can merge the entries
     /// into <c>dependencies</c>.
     /// </summary>
-    public IReadOnlyDictionary<string, string> CrossPackageDependencies => _crossPackageDependencies;
+    public IReadOnlyDictionary<string, string> CrossPackageDependencies =>
+        _crossPackageDependencies;
 
     internal void ReportDiagnostic(MetanoDiagnostic diagnostic)
     {
@@ -45,13 +46,21 @@ public sealed class TypeTransformer(Compilation compilation)
     /// </summary>
     private void TransformNestedTypes(INamedTypeSymbol parent, List<TsTopLevel> statements)
     {
-        var nested = parent.GetTypeMembers()
+        var nested = parent
+            .GetTypeMembers()
             .Where(t => !t.IsImplicitlyDeclared)
             .Where(t => t.DeclaredAccessibility != Accessibility.Internal)
-            .Where(t => SymbolHelper.IsTranspilable(t, _context!.AssemblyWideTranspile, _context.CurrentAssembly))
+            .Where(t =>
+                SymbolHelper.IsTranspilable(
+                    t,
+                    _context!.AssemblyWideTranspile,
+                    _context.CurrentAssembly
+                )
+            )
             .ToList();
 
-        if (nested.Count == 0) return;
+        if (nested.Count == 0)
+            return;
 
         var members = new List<TsTopLevel>();
         foreach (var nestedType in nested)
@@ -65,10 +74,9 @@ public sealed class TypeTransformer(Compilation compilation)
 
         if (members.Count > 0)
         {
-            statements.Add(new TsNamespaceDeclaration(
-                GetTsTypeName(parent),
-                Functions: [],
-                Members: members));
+            statements.Add(
+                new TsNamespaceDeclaration(GetTsTypeName(parent), Functions: [], Members: members)
+            );
         }
     }
 
@@ -85,17 +93,29 @@ public sealed class TypeTransformer(Compilation compilation)
 
         // Detect [assembly: TranspileAssembly] — MUST happen before DiscoverTranspilableTypes
         // Check both semantic model (for real projects) and syntax tree (for inline compilation)
-        _assemblyWideTranspile = compilation.Assembly.GetAttributes()
-            .Any(a => a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly")
-            || compilation.SyntaxTrees.Any(tree => tree.GetRoot()
-                .DescendantNodes().OfType<AttributeListSyntax>()
-                .Any(al => al.Target?.Identifier.Text == "assembly"
-                    && al.Attributes.Any(a =>
-                    {
-                        var name = a.Name.ToString();
-                        return name is "TranspileAssembly" or "TranspileAssemblyAttribute"
-                            or "Metano.TranspileAssembly" or "Metano.TranspileAssemblyAttribute";
-                    })));
+        _assemblyWideTranspile =
+            compilation
+                .Assembly.GetAttributes()
+                .Any(a =>
+                    a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
+                )
+            || compilation.SyntaxTrees.Any(tree =>
+                tree.GetRoot()
+                    .DescendantNodes()
+                    .OfType<AttributeListSyntax>()
+                    .Any(al =>
+                        al.Target?.Identifier.Text == "assembly"
+                        && al.Attributes.Any(a =>
+                        {
+                            var name = a.Name.ToString();
+                            return name
+                                is "TranspileAssembly"
+                                    or "TranspileAssemblyAttribute"
+                                    or "Metano.TranspileAssembly"
+                                    or "Metano.TranspileAssemblyAttribute";
+                        })
+                    )
+            );
 
         var transpilableTypes = DiscoverTranspilableTypes();
         // Map by both C# name and TS name (when [Name] override differs)
@@ -109,7 +129,8 @@ public sealed class TypeTransformer(Compilation compilation)
         }
 
         // Register [Import] types as external (no .ts file generated, but importable)
-        _externalImportMap = new Dictionary<string, (string Name, string From, bool IsDefault, string? Version)>();
+        _externalImportMap =
+            new Dictionary<string, (string Name, string From, bool IsDefault, string? Version)>();
         foreach (var t in transpilableTypes.ToList())
         {
             var import = SymbolHelper.GetImport(t);
@@ -120,14 +141,16 @@ public sealed class TypeTransformer(Compilation compilation)
                     t.Name,
                     entry,
                     t.ToDisplayString(),
-                    t.Locations.FirstOrDefault());
+                    t.Locations.FirstOrDefault()
+                );
                 var tsName = GetTsTypeName(t);
                 if (tsName != t.Name)
                     RegisterExternalImportMapping(
                         tsName,
                         entry,
                         t.ToDisplayString(),
-                        t.Locations.FirstOrDefault());
+                        t.Locations.FirstOrDefault()
+                    );
             }
         }
 
@@ -157,7 +180,8 @@ public sealed class TypeTransformer(Compilation compilation)
             .ToList();
 
         _pathNaming = new PathNaming(
-            namespaces.Count > 0 ? PathNaming.FindCommonNamespacePrefix(namespaces) : "");
+            namespaces.Count > 0 ? PathNaming.FindCommonNamespacePrefix(namespaces) : ""
+        );
 
         // Read declarative [MapMethod]/[MapProperty] from the current assembly + every
         // referenced assembly. The registry is consulted by BclMapper before its hardcoded
@@ -174,7 +198,8 @@ public sealed class TypeTransformer(Compilation compilation)
             _guardNameToTypeMap,
             _pathNaming,
             declarativeMappings,
-            _diagnostics.Add);
+            _diagnostics.Add
+        );
 
         var files = new List<TsSourceFile>();
 
@@ -205,13 +230,16 @@ public sealed class TypeTransformer(Compilation compilation)
         // attribute and the producing assembly so the user knows where to fix it.
         foreach (var miss in TypeMapper.CrossPackageMisses.OrderBy(s => s, StringComparer.Ordinal))
         {
-            _diagnostics.Add(new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.CrossPackageResolution,
-                $"Cannot resolve cross-package import for type '{miss}': its containing " +
-                $"assembly declares [TranspileAssembly] but no [EmitPackage] for the " +
-                $"JavaScript target. Add [assembly: EmitPackage(\"<package-name>\")] to " +
-                $"the producing project so consumers can import this type."));
+            _diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.CrossPackageResolution,
+                    $"Cannot resolve cross-package import for type '{miss}': its containing "
+                        + $"assembly declares [TranspileAssembly] but no [EmitPackage] for the "
+                        + $"JavaScript target. Add [assembly: EmitPackage(\"<package-name>\")] to "
+                        + $"the producing project so consumers can import this type."
+                )
+            );
         }
 
         // Drain auto-generated cross-package dependencies. The map is already
@@ -229,8 +257,15 @@ public sealed class TypeTransformer(Compilation compilation)
     private bool _assemblyWideTranspile;
     private IAssemblySymbol? _currentAssembly;
     private Dictionary<string, INamedTypeSymbol> _transpilableTypeMap = [];
-    private Dictionary<string, (string Name, string From, bool IsDefault, string? Version)> _externalImportMap = [];
-    private Dictionary<string, (string ExportedName, string FromPackage, string Version)> _bclExportMap = [];
+    private Dictionary<
+        string,
+        (string Name, string From, bool IsDefault, string? Version)
+    > _externalImportMap = [];
+    private Dictionary<
+        string,
+        (string ExportedName, string FromPackage, string Version)
+    > _bclExportMap = [];
+
     /// <summary>
     /// Types discovered in referenced assemblies that declare both
     /// <c>[TranspileAssembly]</c> and <c>[EmitPackage(JavaScript)]</c>. Keyed by symbol
@@ -239,8 +274,9 @@ public sealed class TypeTransformer(Compilation compilation)
     /// origin of a referenced type, and by the import collector to emit cross-package
     /// import statements.
     /// </summary>
-    private Dictionary<ISymbol, CrossAssemblyEntry> _crossAssemblyTypeMap =
-        new(SymbolEqualityComparer.Default);
+    private Dictionary<ISymbol, CrossAssemblyEntry> _crossAssemblyTypeMap = new(
+        SymbolEqualityComparer.Default
+    );
 
     /// <summary>
     /// Referenced assemblies that have <c>[TranspileAssembly]</c> but lack
@@ -249,8 +285,10 @@ public sealed class TypeTransformer(Compilation compilation)
     /// it raises MS0007 in <see cref="TypeMapper.CrossPackageMisses"/> so the
     /// transformer can report the missing-attribute error at the consumer site.
     /// </summary>
-    private HashSet<IAssemblySymbol> _assembliesNeedingEmitPackage =
-        new(SymbolEqualityComparer.Default);
+    private HashSet<IAssemblySymbol> _assembliesNeedingEmitPackage = new(
+        SymbolEqualityComparer.Default
+    );
+
     /// <summary>
     /// Maps guard function names (e.g., "isCurrency") to the type they guard (e.g., "Currency").
     /// Used to resolve imports for cross-file guard calls.
@@ -284,12 +322,16 @@ public sealed class TypeTransformer(Compilation compilation)
             if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm)
                 continue;
             // Skip the assembly currently being compiled.
-            if (SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly)) continue;
+            if (SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
+                continue;
 
             // Cheap filter: only consider assemblies that opt into transpilation.
-            var hasTranspileAssembly = asm.GetAttributes().Any(a =>
-                a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly");
-            if (!hasTranspileAssembly) continue;
+            var hasTranspileAssembly = asm.GetAttributes()
+                .Any(a =>
+                    a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
+                );
+            if (!hasTranspileAssembly)
+                continue;
 
             // Must also declare an EmitPackage for the JavaScript target — without it,
             // we have no package name to import from. The assembly is still a candidate
@@ -315,9 +357,8 @@ public sealed class TypeTransformer(Compilation compilation)
                 .Select(PathNaming.GetNamespace)
                 .Where(ns => ns.Length > 0)
                 .ToList();
-            var rootNs = namespaces.Count > 0
-                ? PathNaming.FindCommonNamespacePrefix(namespaces)
-                : "";
+            var rootNs =
+                namespaces.Count > 0 ? PathNaming.FindCommonNamespacePrefix(namespaces) : "";
 
             // Second pass: register each type in the cross-assembly map. Tipos com
             // [Import] continuam acessíveis pro consumer mas vão para o
@@ -333,18 +374,25 @@ public sealed class TypeTransformer(Compilation compilation)
                         type.Name,
                         entry,
                         type.ToDisplayString(),
-                        type.Locations.FirstOrDefault());
+                        type.Locations.FirstOrDefault()
+                    );
                     var tsName = GetTsTypeName(type);
                     if (tsName != type.Name)
                         RegisterExternalImportMapping(
                             tsName,
                             entry,
                             type.ToDisplayString(),
-                            type.Locations.FirstOrDefault());
+                            type.Locations.FirstOrDefault()
+                        );
                     continue;
                 }
 
-                _crossAssemblyTypeMap[type] = new CrossAssemblyEntry(type, packageName, rootNs, versionOverride);
+                _crossAssemblyTypeMap[type] = new CrossAssemblyEntry(
+                    type,
+                    packageName,
+                    rootNs,
+                    versionOverride
+                );
             }
         }
     }
@@ -355,8 +403,7 @@ public sealed class TypeTransformer(Compilation compilation)
     /// with assembly-wide opt-in). Nested types are skipped — they're processed by
     /// their containing type as companion namespaces.
     /// </summary>
-    private static void CollectTypesFromNamespace(
-        INamespaceSymbol ns, List<INamedTypeSymbol> sink)
+    private static void CollectTypesFromNamespace(INamespaceSymbol ns, List<INamedTypeSymbol> sink)
     {
         foreach (var member in ns.GetMembers())
         {
@@ -367,9 +414,9 @@ public sealed class TypeTransformer(Compilation compilation)
                     break;
                 case INamedTypeSymbol type
                     when type.ContainingType is null
-                         && type.DeclaredAccessibility == Accessibility.Public
-                         && !SymbolHelper.HasNoTranspile(type)
-                         && !SymbolHelper.HasNoEmit(type):
+                        && type.DeclaredAccessibility == Accessibility.Public
+                        && !SymbolHelper.HasNoTranspile(type)
+                        && !SymbolHelper.HasNoEmit(type):
                     sink.Add(type);
                     break;
             }
@@ -389,11 +436,21 @@ public sealed class TypeTransformer(Compilation compilation)
             foreach (var typeDecl in root.DescendantNodes().OfType<BaseTypeDeclarationSyntax>())
             {
                 var symbol = model.GetDeclaredSymbol(typeDecl);
-                if (symbol is not INamedTypeSymbol namedType) continue;
+                if (symbol is not INamedTypeSymbol namedType)
+                    continue;
                 // Skip nested types — they're processed by their containing type as companion namespaces
-                if (namedType.ContainingType is not null) continue;
-                if (!SymbolHelper.IsTranspilable(namedType, _assemblyWideTranspile, _currentAssembly)) continue;
-                if (!seen.Add(namedType)) continue;
+                if (namedType.ContainingType is not null)
+                    continue;
+                if (
+                    !SymbolHelper.IsTranspilable(
+                        namedType,
+                        _assemblyWideTranspile,
+                        _currentAssembly
+                    )
+                )
+                    continue;
+                if (!seen.Add(namedType))
+                    continue;
                 types.Add(namedType);
             }
         }
@@ -403,7 +460,8 @@ public sealed class TypeTransformer(Compilation compilation)
 
     private void LoadBclExportMappings()
     {
-        _bclExportMap = new Dictionary<string, (string ExportedName, string FromPackage, string Version)>();
+        _bclExportMap =
+            new Dictionary<string, (string ExportedName, string FromPackage, string Version)>();
 
         // Read [ExportFromBcl] from the current assembly first, then from every
         // referenced assembly so that built-in mappings (e.g., decimal → Decimal from
@@ -412,8 +470,10 @@ public sealed class TypeTransformer(Compilation compilation)
         // is processed last so user overrides win on conflict.
         foreach (var reference in compilation.References)
         {
-            if (compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol asm
-                && !SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
+            if (
+                compilation.GetAssemblyOrModuleSymbol(reference) is IAssemblySymbol asm
+                && !SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly)
+            )
                 LoadBclExportFromAssembly(asm);
         }
         LoadBclExportFromAssembly(compilation.Assembly);
@@ -430,9 +490,11 @@ public sealed class TypeTransformer(Compilation compilation)
                 continue;
 
             // Constructor arg is typeof(Type)
-            if (attr.ConstructorArguments.Length == 0) continue;
+            if (attr.ConstructorArguments.Length == 0)
+                continue;
             var typeArg = attr.ConstructorArguments[0].Value as INamedTypeSymbol;
-            if (typeArg is null) continue;
+            if (typeArg is null)
+                continue;
 
             var exportedName = "";
             var fromPackage = "";
@@ -497,7 +559,9 @@ public sealed class TypeTransformer(Compilation compilation)
         {
             new JsonSerializerContextTransformer(_context!).Transform(type, sink);
         }
-        else if ((SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) && type.IsStatic)
+        else if (
+            (SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) && type.IsStatic
+        )
         {
             new ModuleTransformer(_context!).Transform(type, sink);
         }
@@ -546,7 +610,8 @@ public sealed class TypeTransformer(Compilation compilation)
                 anyEmitted = true;
         }
 
-        if (!anyEmitted) return null;
+        if (!anyEmitted)
+            return null;
 
         // The import collector takes a "current type" so it can elide self-imports for
         // a type's own guard function. We pass the first type in the group; for
@@ -558,8 +623,8 @@ public sealed class TypeTransformer(Compilation compilation)
             _context.ExternalImportMap,
             _context.BclExportMap,
             _context.GuardNameToTypeMap,
-            _context.PathNaming)
-            .Collect(primaryType, statements);
+            _context.PathNaming
+        ).Collect(primaryType, statements);
         statements.InsertRange(0, imports);
 
         var relativePath = _context!.PathNaming.GetRelativePath(group.Namespace, group.FileName);
@@ -587,23 +652,30 @@ public sealed class TypeTransformer(Compilation compilation)
         {
             var ns = PathNaming.GetNamespace(type);
             var explicitFile = SymbolHelper.GetEmitInFile(type);
-            var fileName = explicitFile is not null && explicitFile.Length > 0
-                ? SymbolHelper.ToKebabCase(explicitFile)
-                : SymbolHelper.ToKebabCase(GetTsTypeName(type));
+            var fileName =
+                explicitFile is not null && explicitFile.Length > 0
+                    ? SymbolHelper.ToKebabCase(explicitFile)
+                    : SymbolHelper.ToKebabCase(GetTsTypeName(type));
 
             // MS0008: when a type opts into [EmitInFile], the file name must be unique
             // per namespace. If we've seen the same file name in a different namespace,
             // that's an ambiguous folder placement.
-            if (explicitFile is not null && seenFileNames.TryGetValue(fileName, out var firstNs)
-                && firstNs != ns)
+            if (
+                explicitFile is not null
+                && seenFileNames.TryGetValue(fileName, out var firstNs)
+                && firstNs != ns
+            )
             {
-                _diagnostics.Add(new MetanoDiagnostic(
-                    MetanoDiagnosticSeverity.Error,
-                    DiagnosticCodes.EmitInFileConflict,
-                    $"[EmitInFile(\"{explicitFile}\")] on type '{type.ToDisplayString()}' " +
-                    $"conflicts with another type that uses the same file name in namespace " +
-                    $"'{firstNs}'. Co-located types must share a namespace.",
-                    type.Locations.FirstOrDefault()));
+                _diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.EmitInFileConflict,
+                        $"[EmitInFile(\"{explicitFile}\")] on type '{type.ToDisplayString()}' "
+                            + $"conflicts with another type that uses the same file name in namespace "
+                            + $"'{firstNs}'. Co-located types must share a namespace.",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
                 continue;
             }
             seenFileNames.TryAdd(fileName, ns);
@@ -621,13 +693,18 @@ public sealed class TypeTransformer(Compilation compilation)
         return groups;
     }
 
-    private sealed record TypeFileGroup(string Namespace, string FileName, List<INamedTypeSymbol> Types);
+    private sealed record TypeFileGroup(
+        string Namespace,
+        string FileName,
+        List<INamedTypeSymbol> Types
+    );
 
     private void RegisterExternalImportMapping(
         string key,
         (string Name, string From, bool IsDefault, string? Version) entry,
         string ownerDisplayName,
-        Location? location)
+        Location? location
+    )
     {
         if (!_externalImportMap.TryGetValue(key, out var existing))
         {
@@ -638,13 +715,16 @@ public sealed class TypeTransformer(Compilation compilation)
         if (existing == entry)
             return;
 
-        _diagnostics.Add(new MetanoDiagnostic(
-            MetanoDiagnosticSeverity.Warning,
-            DiagnosticCodes.AmbiguousConstruct,
-            $"External import name collision for '{key}'. Keeping '{existing.From}' " +
-            $"('{existing.Name}') and ignoring conflicting mapping from " +
-            $"'{ownerDisplayName}' to '{entry.From}' ('{entry.Name}').",
-            location));
+        _diagnostics.Add(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.AmbiguousConstruct,
+                $"External import name collision for '{key}'. Keeping '{existing.From}' "
+                    + $"('{existing.Name}') and ignoring conflicting mapping from "
+                    + $"'{ownerDisplayName}' to '{entry.From}' ('{entry.Name}').",
+                location
+            )
+        );
     }
 
     /// <summary>
@@ -660,7 +740,8 @@ public sealed class TypeTransformer(Compilation compilation)
         var current = type.BaseType;
         while (current is not null)
         {
-            if (current.ToDisplayString() == "System.Exception") return true;
+            if (current.ToDisplayString() == "System.Exception")
+                return true;
             current = current.BaseType;
         }
 
@@ -672,10 +753,7 @@ public sealed class TypeTransformer(Compilation compilation)
         var current = type.BaseType;
         while (current is not null)
         {
-            if (
-                current.ToDisplayString()
-                == "System.Text.Json.Serialization.JsonSerializerContext"
-            )
+            if (current.ToDisplayString() == "System.Text.Json.Serialization.JsonSerializerContext")
                 return true;
             current = current.BaseType;
         }
@@ -683,7 +761,10 @@ public sealed class TypeTransformer(Compilation compilation)
         return false;
     }
 
-    internal static bool TryGetInlineWrapperPrimitiveType(INamedTypeSymbol type, out TsType primitiveType)
+    internal static bool TryGetInlineWrapperPrimitiveType(
+        INamedTypeSymbol type,
+        out TsType primitiveType
+    )
     {
         primitiveType = new TsAnyType();
 
@@ -691,14 +772,19 @@ public sealed class TypeTransformer(Compilation compilation)
 
         foreach (var member in type.GetMembers())
         {
-            if (member.IsImplicitlyDeclared) continue;
-            if (member.IsStatic) continue;
-            if (member.DeclaredAccessibility != Accessibility.Public) continue;
-            if (SymbolHelper.HasIgnore(member)) continue;
+            if (member.IsImplicitlyDeclared)
+                continue;
+            if (member.IsStatic)
+                continue;
+            if (member.DeclaredAccessibility != Accessibility.Public)
+                continue;
+            if (SymbolHelper.HasIgnore(member))
+                continue;
 
             switch (member)
             {
-                case IPropertySymbol prop when prop.GetMethod is not null && prop.Parameters.Length == 0:
+                case IPropertySymbol prop
+                    when prop.GetMethod is not null && prop.Parameters.Length == 0:
                     valueMembers.Add(prop.Type);
                     break;
                 case IFieldSymbol field:
@@ -726,49 +812,59 @@ public sealed class TypeTransformer(Compilation compilation)
     internal static bool HasExtensionMembers(INamedTypeSymbol type)
     {
         // Classic extensions
-        if (type.GetMembers().OfType<IMethodSymbol>()
-            .Any(m => m.IsExtensionMethod && m.MethodKind == MethodKind.Ordinary))
+        if (
+            type.GetMembers()
+                .OfType<IMethodSymbol>()
+                .Any(m => m.IsExtensionMethod && m.MethodKind == MethodKind.Ordinary)
+        )
             return true;
 
         // C# 14 extension blocks — detected via syntax
         foreach (var syntaxRef in type.DeclaringSyntaxReferences)
         {
             var syntax = syntaxRef.GetSyntax();
-            if (syntax.DescendantNodes().Any(n => n.Kind().ToString() == "ExtensionBlockDeclaration"))
+            if (
+                syntax
+                    .DescendantNodes()
+                    .Any(n => n.Kind().ToString() == "ExtensionBlockDeclaration")
+            )
                 return true;
         }
 
         return false;
     }
 
-
-
-
-
     internal static IReadOnlyList<TsTypeParameter>? ExtractTypeParameters(INamedTypeSymbol type)
     {
-        if (type.TypeParameters.Length == 0) return null;
-        return type.TypeParameters.Select(tp =>
-        {
-            TsType? constraint = null;
-            if (tp.ConstraintTypes.Length > 0)
-                constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
-            return new TsTypeParameter(tp.Name, constraint);
-        }).ToList();
-    }
-
-    internal static IReadOnlyList<TsTypeParameter>? ExtractMethodTypeParameters(IMethodSymbol method)
-    {
-        // Method has its own type parameters
-        if (method.TypeParameters.Length > 0)
-        {
-            return method.TypeParameters.Select(tp =>
+        if (type.TypeParameters.Length == 0)
+            return null;
+        return type
+            .TypeParameters.Select(tp =>
             {
                 TsType? constraint = null;
                 if (tp.ConstraintTypes.Length > 0)
                     constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
                 return new TsTypeParameter(tp.Name, constraint);
-            }).ToList();
+            })
+            .ToList();
+    }
+
+    internal static IReadOnlyList<TsTypeParameter>? ExtractMethodTypeParameters(
+        IMethodSymbol method
+    )
+    {
+        // Method has its own type parameters
+        if (method.TypeParameters.Length > 0)
+        {
+            return method
+                .TypeParameters.Select(tp =>
+                {
+                    TsType? constraint = null;
+                    if (tp.ConstraintTypes.Length > 0)
+                        constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
+                    return new TsTypeParameter(tp.Name, constraint);
+                })
+                .ToList();
         }
 
         // Static methods in generic classes: promote class type params to method level
@@ -777,45 +873,48 @@ public sealed class TypeTransformer(Compilation compilation)
         {
             var classTypeParams = method.ContainingType.TypeParameters;
             // Check if the method actually uses any class type params
-            var usedParams = classTypeParams.Where(tp =>
-                ReferencesTypeParam(method.ReturnType, tp)
-                || method.Parameters.Any(p => ReferencesTypeParam(p.Type, tp))
-            ).ToList();
+            var usedParams = classTypeParams
+                .Where(tp =>
+                    ReferencesTypeParam(method.ReturnType, tp)
+                    || method.Parameters.Any(p => ReferencesTypeParam(p.Type, tp))
+                )
+                .ToList();
 
             if (usedParams.Count > 0)
             {
-                return usedParams.Select(tp =>
-                {
-                    TsType? constraint = null;
-                    if (tp.ConstraintTypes.Length > 0)
-                        constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
-                    return new TsTypeParameter(tp.Name, constraint);
-                }).ToList();
+                return usedParams
+                    .Select(tp =>
+                    {
+                        TsType? constraint = null;
+                        if (tp.ConstraintTypes.Length > 0)
+                            constraint = TypeMapper.Map(tp.ConstraintTypes[0]);
+                        return new TsTypeParameter(tp.Name, constraint);
+                    })
+                    .ToList();
             }
         }
 
         return null;
     }
 
-
     private static bool ReferencesTypeParam(ITypeSymbol type, ITypeParameterSymbol typeParam)
     {
-        if (SymbolEqualityComparer.Default.Equals(type, typeParam)) return true;
+        if (SymbolEqualityComparer.Default.Equals(type, typeParam))
+            return true;
         if (type is INamedTypeSymbol named)
             return named.TypeArguments.Any(arg => ReferencesTypeParam(arg, typeParam));
         return false;
     }
 
-    internal static TsAccessibility MapAccessibility(Accessibility accessibility) => accessibility switch
-    {
-        Accessibility.Private => TsAccessibility.Private,
-        Accessibility.Protected or Accessibility.ProtectedOrInternal => TsAccessibility.Protected,
-        _ => TsAccessibility.Public,
-    };
-
-
+    internal static TsAccessibility MapAccessibility(Accessibility accessibility) =>
+        accessibility switch
+        {
+            Accessibility.Private => TsAccessibility.Private,
+            Accessibility.Protected or Accessibility.ProtectedOrInternal =>
+                TsAccessibility.Protected,
+            _ => TsAccessibility.Public,
+        };
 
     private ExpressionTransformer CreateExpressionTransformer(SemanticModel semanticModel) =>
         _context!.CreateExpressionTransformer(semanticModel);
-
 }

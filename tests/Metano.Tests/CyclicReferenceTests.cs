@@ -30,7 +30,9 @@ public class CyclicReferenceTests
             """
         );
 
-        await Assert.That(diagnostics.Any(d => d.Code == DiagnosticCodes.CyclicReference)).IsFalse();
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.CyclicReference))
+            .IsFalse();
     }
 
     [Test]
@@ -83,6 +85,8 @@ public class CyclicReferenceTests
             """
         );
 
-        await Assert.That(diagnostics.Any(d => d.Code == DiagnosticCodes.CyclicReference)).IsFalse();
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.CyclicReference))
+            .IsFalse();
     }
 }

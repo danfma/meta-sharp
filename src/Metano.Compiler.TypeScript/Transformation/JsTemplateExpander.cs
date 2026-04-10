@@ -39,21 +39,21 @@ public static class JsTemplateExpander
     public static TsExpression Expand(
         string template,
         TsExpression? receiver,
-        IReadOnlyList<TsExpression> args) =>
-        new TsTemplate(template, receiver, args, [], []);
+        IReadOnlyList<TsExpression> args
+    ) => new TsTemplate(template, receiver, args, [], []);
 
     public static TsExpression Expand(
         string template,
         TsExpression? receiver,
         IReadOnlyList<TsExpression> args,
-        IReadOnlyList<string> typeArgumentNames) =>
-        new TsTemplate(template, receiver, args, typeArgumentNames, []);
+        IReadOnlyList<string> typeArgumentNames
+    ) => new TsTemplate(template, receiver, args, typeArgumentNames, []);
 
     public static TsExpression Expand(
         string template,
         TsExpression? receiver,
         IReadOnlyList<TsExpression> args,
         IReadOnlyList<string> typeArgumentNames,
-        IReadOnlyList<string> runtimeImports) =>
-        new TsTemplate(template, receiver, args, typeArgumentNames, runtimeImports);
+        IReadOnlyList<string> runtimeImports
+    ) => new TsTemplate(template, receiver, args, typeArgumentNames, runtimeImports);
 }

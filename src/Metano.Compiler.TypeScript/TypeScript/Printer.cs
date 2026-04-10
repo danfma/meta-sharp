@@ -40,8 +40,10 @@ public sealed class Printer(string indent = "  ")
         // anything else.
         var prevIsImport = prev is TsImport or TsReExport;
         var nextIsImport = next is TsImport or TsReExport;
-        if (prevIsImport && nextIsImport) return false;
-        if (prevIsImport != nextIsImport) return true;
+        if (prevIsImport && nextIsImport)
+            return false;
+        if (prevIsImport != nextIsImport)
+            return true;
 
         // For non-imports, separate everything by blank lines (types, functions, constants)
         return true;
@@ -53,23 +55,39 @@ public sealed class Printer(string indent = "  ")
     {
         switch (node)
         {
-            case TsImport n: PrintImport(n); break;
-            case TsReExport n: PrintReExport(n); break;
-            case TsTypeAlias n: PrintTypeAlias(n); break;
-            case TsInterface n: PrintInterface(n); break;
-            case TsFunction n: PrintFunction(n); break;
-            case TsEnum n: PrintEnum(n); break;
-            case TsConstObject n: PrintConstObject(n); break;
-            case TsNamespaceDeclaration n: PrintNamespace(n); break;
-            case TsClass n: PrintClass(n); break;
+            case TsImport n:
+                PrintImport(n);
+                break;
+            case TsReExport n:
+                PrintReExport(n);
+                break;
+            case TsTypeAlias n:
+                PrintTypeAlias(n);
+                break;
+            case TsInterface n:
+                PrintInterface(n);
+                break;
+            case TsFunction n:
+                PrintFunction(n);
+                break;
+            case TsEnum n:
+                PrintEnum(n);
+                break;
+            case TsConstObject n:
+                PrintConstObject(n);
+                break;
+            case TsNamespaceDeclaration n:
+                PrintNamespace(n);
+                break;
+            case TsClass n:
+                PrintClass(n);
+                break;
             case TsTopLevelStatement n:
                 PrintStatement(n.Inner);
                 _sb.WriteLn();
                 break;
             case TsModuleExport n:
-                _sb.Write(n.IsDefault
-                    ? $"export default {n.Name};"
-                    : $"export {{ {n.Name} }};");
+                _sb.Write(n.IsDefault ? $"export default {n.Name};" : $"export {{ {n.Name} }};");
                 _sb.WriteLn();
                 break;
         }
@@ -78,7 +96,8 @@ public sealed class Printer(string indent = "  ")
     private void PrintImport(TsImport import)
     {
         _sb.Write("import ");
-        if (import.TypeOnly) _sb.Write("type ");
+        if (import.TypeOnly)
+            _sb.Write("type ");
         if (import.IsDefault)
         {
             // `import Foo from "...";` — single name, no braces.
@@ -117,7 +136,8 @@ public sealed class Printer(string indent = "  ")
     private void PrintReExport(TsReExport reExport)
     {
         _sb.Write("export ");
-        if (reExport.TypeOnly) _sb.Write("type ");
+        if (reExport.TypeOnly)
+            _sb.Write("type ");
         if (reExport.Names is ["*"])
         {
             _sb.Write("* from ");
@@ -135,7 +155,8 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintTypeAlias(TsTypeAlias alias)
     {
-        if (alias.Exported) _sb.Write("export ");
+        if (alias.Exported)
+            _sb.Write("export ");
         _sb.Write("type ");
         _sb.Write(alias.Name);
         _sb.Write(" = ");
@@ -145,7 +166,8 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintInterface(TsInterface iface)
     {
-        if (iface.Exported) _sb.Write("export ");
+        if (iface.Exported)
+            _sb.Write("export ");
         _sb.Write("interface ");
         _sb.Write(iface.Name);
         PrintTypeParameters(iface.TypeParameters);
@@ -154,9 +176,11 @@ public sealed class Printer(string indent = "  ")
             foreach (var prop in iface.Properties)
             {
                 PrintAccessibility(prop.Accessibility);
-                if (prop.Readonly) _sb.Write("readonly ");
+                if (prop.Readonly)
+                    _sb.Write("readonly ");
                 _sb.Write(prop.Name);
-                if (prop.Optional) _sb.Write("?");
+                if (prop.Optional)
+                    _sb.Write("?");
                 _sb.Write(": ");
                 PrintType(prop.Type);
                 _sb.Write(";");
@@ -182,8 +206,10 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintFunction(TsFunction func)
     {
-        if (func.Exported) _sb.Write("export ");
-        if (func.Async) _sb.Write("async ");
+        if (func.Exported)
+            _sb.Write("export ");
+        if (func.Async)
+            _sb.Write("async ");
         _sb.Write(func.Generator ? "function* " : "function ");
         _sb.Write(func.Name);
         PrintTypeParameters(func.TypeParameters);
@@ -196,7 +222,8 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintEnum(TsEnum tsEnum)
     {
-        if (tsEnum.Exported) _sb.Write("export ");
+        if (tsEnum.Exported)
+            _sb.Write("export ");
         _sb.Write("enum ");
         _sb.Write(tsEnum.Name);
         _sb.WriteBlock(() =>
@@ -218,7 +245,8 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintNamespace(TsNamespaceDeclaration ns)
     {
-        if (ns.Exported) _sb.Write("export ");
+        if (ns.Exported)
+            _sb.Write("export ");
         _sb.Write("namespace ");
         _sb.Write(ns.Name);
         _sb.WriteBlock(() =>
@@ -226,7 +254,8 @@ public sealed class Printer(string indent = "  ")
             // Functions (used by InlineWrapper companions)
             for (var i = 0; i < ns.Functions.Count; i++)
             {
-                if (i > 0) _sb.WriteLn();
+                if (i > 0)
+                    _sb.WriteLn();
                 PrintFunction(ns.Functions[i]);
                 _sb.WriteLn();
             }
@@ -237,7 +266,8 @@ public sealed class Printer(string indent = "  ")
                 var startIdx = ns.Functions.Count;
                 for (var i = 0; i < ns.Members.Count; i++)
                 {
-                    if (startIdx + i > 0) _sb.WriteLn();
+                    if (startIdx + i > 0)
+                        _sb.WriteLn();
                     PrintTopLevel(ns.Members[i]);
                     _sb.WriteLn();
                 }
@@ -247,7 +277,8 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintConstObject(TsConstObject constObj)
     {
-        if (constObj.Exported) _sb.Write("export ");
+        if (constObj.Exported)
+            _sb.Write("export ");
         _sb.Write("const ");
         _sb.Write(constObj.Name);
         _sb.Write(" =");
@@ -269,7 +300,8 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintClass(TsClass tsClass)
     {
-        if (tsClass.Exported) _sb.Write("export ");
+        if (tsClass.Exported)
+            _sb.Write("export ");
         _sb.Write("class ");
         _sb.Write(tsClass.Name);
         PrintTypeParameters(tsClass.TypeParameters);
@@ -290,8 +322,10 @@ public sealed class Printer(string indent = "  ")
         var fields = tsClass.Members.Where(m => m is TsFieldMember).ToList();
         var accessors = tsClass.Members.Where(m => m is TsGetterMember or TsSetterMember).ToList();
         var methods = tsClass.Members.Where(m => m is TsMethodMember).ToList();
-        var others = tsClass.Members
-            .Where(m => m is not (TsFieldMember or TsGetterMember or TsSetterMember or TsMethodMember))
+        var others = tsClass
+            .Members.Where(m =>
+                m is not (TsFieldMember or TsGetterMember or TsSetterMember or TsMethodMember)
+            )
             .ToList();
 
         _sb.WriteBlock(() =>
@@ -300,12 +334,15 @@ public sealed class Printer(string indent = "  ")
 
             void PrintGroup(IReadOnlyList<TsClassMember> members)
             {
-                if (members.Count == 0) return;
-                if (!firstGroup) _sb.WriteLn();
+                if (members.Count == 0)
+                    return;
+                if (!firstGroup)
+                    _sb.WriteLn();
                 firstGroup = false;
                 for (var i = 0; i < members.Count; i++)
                 {
-                    if (i > 0) _sb.WriteLn();
+                    if (i > 0)
+                        _sb.WriteLn();
                     PrintClassMember(members[i]);
                 }
             }
@@ -316,7 +353,8 @@ public sealed class Printer(string indent = "  ")
             // Constructor
             if (tsClass.Constructor is not null)
             {
-                if (!firstGroup) _sb.WriteLn();
+                if (!firstGroup)
+                    _sb.WriteLn();
                 firstGroup = false;
                 PrintConstructor(tsClass.Constructor);
             }
@@ -377,12 +415,14 @@ public sealed class Printer(string indent = "  ")
         // Emit explicit "public" when not readonly but the param should still be a property.
         // None = plain parameter, no property created (used for exception constructors).
         if (p.Accessibility == TsAccessibility.None)
-        { /* no modifier — plain parameter */ }
+        { /* no modifier — plain parameter */
+        }
         else if (p.Accessibility == TsAccessibility.Public && !p.Readonly)
             _sb.Write("public ");
         else
             PrintAccessibility(p.Accessibility);
-        if (p.Readonly) _sb.Write("readonly ");
+        if (p.Readonly)
+            _sb.Write("readonly ");
         _sb.Write(p.Name);
         _sb.Write(": ");
         PrintType(p.Type);
@@ -398,7 +438,8 @@ public sealed class Printer(string indent = "  ")
         switch (member)
         {
             case TsGetterMember getter:
-                if (getter.Static) _sb.Write("static ");
+                if (getter.Static)
+                    _sb.Write("static ");
                 _sb.Write("get ");
                 _sb.Write(getter.Name);
                 _sb.Write("(): ");
@@ -421,10 +462,13 @@ public sealed class Printer(string indent = "  ")
 
             case TsFieldMember field:
                 PrintAccessibility(field.Accessibility);
-                if (field.Static) _sb.Write("static ");
-                if (field.Readonly) _sb.Write("readonly ");
+                if (field.Static)
+                    _sb.Write("static ");
+                if (field.Readonly)
+                    _sb.Write("readonly ");
                 _sb.Write(field.Name);
-                if (field.Optional) _sb.Write("?");
+                if (field.Optional)
+                    _sb.Write("?");
                 _sb.Write(": ");
                 PrintType(field.Type);
                 if (field.Initializer is not null)
@@ -443,7 +487,8 @@ public sealed class Printer(string indent = "  ")
                     foreach (var overload in method.Overloads)
                     {
                         PrintAccessibility(method.Accessibility);
-                        if (method.Static) _sb.Write("static ");
+                        if (method.Static)
+                            _sb.Write("static ");
                         _sb.Write(method.Name);
                         _sb.Write("(");
                         PrintParameters(overload.Parameters);
@@ -456,9 +501,12 @@ public sealed class Printer(string indent = "  ")
 
                 // Print the implementation (or single method)
                 PrintAccessibility(method.Accessibility);
-                if (method.Static) _sb.Write("static ");
-                if (method.Async) _sb.Write("async ");
-                if (method.Generator) _sb.Write("*");
+                if (method.Static)
+                    _sb.Write("static ");
+                if (method.Async)
+                    _sb.Write("async ");
+                if (method.Generator)
+                    _sb.Write("*");
                 _sb.Write(method.Name);
                 PrintTypeParameters(method.TypeParameters);
                 _sb.Write("(");
@@ -477,12 +525,24 @@ public sealed class Printer(string indent = "  ")
     {
         switch (type)
         {
-            case TsNumberType: _sb.Write("number"); break;
-            case TsStringType: _sb.Write("string"); break;
-            case TsBooleanType: _sb.Write("boolean"); break;
-            case TsVoidType: _sb.Write("void"); break;
-            case TsBigIntType: _sb.Write("bigint"); break;
-            case TsAnyType: _sb.Write("any"); break;
+            case TsNumberType:
+                _sb.Write("number");
+                break;
+            case TsStringType:
+                _sb.Write("string");
+                break;
+            case TsBooleanType:
+                _sb.Write("boolean");
+                break;
+            case TsVoidType:
+                _sb.Write("void");
+                break;
+            case TsBigIntType:
+                _sb.Write("bigint");
+                break;
+            case TsAnyType:
+                _sb.Write("any");
+                break;
 
             case TsNamedType named:
                 _sb.Write(named.Name);
@@ -569,7 +629,8 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsVariableDeclaration varDecl:
-                if (varDecl.Exported) _sb.Write("export ");
+                if (varDecl.Exported)
+                    _sb.Write("export ");
                 _sb.Write(varDecl.Const ? "const " : "let ");
                 _sb.Write(varDecl.Name);
                 _sb.Write(" = ");
@@ -720,7 +781,8 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsArrowFunction arrow:
-                if (arrow.Async) _sb.Write("async ");
+                if (arrow.Async)
+                    _sb.Write("async ");
                 _sb.Write("(");
                 PrintParameters(arrow.Parameters);
                 _sb.Write(") => ");
@@ -794,8 +856,7 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(text[i..dollar]);
 
             // Try $this first.
-            if (dollar + 5 <= text.Length
-                && text.AsSpan(dollar, 5).SequenceEqual("$this".AsSpan()))
+            if (dollar + 5 <= text.Length && text.AsSpan(dollar, 5).SequenceEqual("$this".AsSpan()))
             {
                 if (template.Receiver is not null)
                     PrintExpression(template.Receiver);
@@ -804,15 +865,24 @@ public sealed class Printer(string indent = "  ")
             }
 
             // Then $T<n> (type-argument name placeholder).
-            if (dollar + 2 < text.Length && text[dollar + 1] == 'T' && char.IsDigit(text[dollar + 2]))
+            if (
+                dollar + 2 < text.Length
+                && text[dollar + 1] == 'T'
+                && char.IsDigit(text[dollar + 2])
+            )
             {
                 var typeArgStart = dollar + 2;
                 var typeArgEnd = typeArgStart;
                 while (typeArgEnd < text.Length && char.IsDigit(text[typeArgEnd]))
                     typeArgEnd++;
 
-                if (int.TryParse(text.AsSpan(typeArgStart, typeArgEnd - typeArgStart), out var typeArgIndex)
-                    && typeArgIndex < template.TypeArgumentNames.Count)
+                if (
+                    int.TryParse(
+                        text.AsSpan(typeArgStart, typeArgEnd - typeArgStart),
+                        out var typeArgIndex
+                    )
+                    && typeArgIndex < template.TypeArgumentNames.Count
+                )
                 {
                     _sb.Write(template.TypeArgumentNames[typeArgIndex]);
                     i = typeArgEnd;
@@ -826,9 +896,11 @@ public sealed class Printer(string indent = "  ")
             while (argEnd < text.Length && char.IsDigit(text[argEnd]))
                 argEnd++;
 
-            if (argEnd > argStart
+            if (
+                argEnd > argStart
                 && int.TryParse(text.AsSpan(argStart, argEnd - argStart), out var argIndex)
-                && argIndex < template.Arguments.Count)
+                && argIndex < template.Arguments.Count
+            )
             {
                 PrintExpression(template.Arguments[argIndex]);
                 i = argEnd;
@@ -896,32 +968,39 @@ public sealed class Printer(string indent = "  ")
 
     private void PrintParameters(IReadOnlyList<TsParameter> parameters)
     {
-        _sb.WriteList(parameters, p =>
-        {
-            _sb.Write(p.Name);
-            // Null Type → skip the annotation entirely (used by lambdas whose source
-            // parameter is a [NoEmit] type, so TypeScript can infer from context).
-            if (p.Type is not null)
+        _sb.WriteList(
+            parameters,
+            p =>
             {
-                _sb.Write(": ");
-                PrintType(p.Type);
+                _sb.Write(p.Name);
+                // Null Type → skip the annotation entirely (used by lambdas whose source
+                // parameter is a [NoEmit] type, so TypeScript can infer from context).
+                if (p.Type is not null)
+                {
+                    _sb.Write(": ");
+                    PrintType(p.Type);
+                }
             }
-        });
+        );
     }
 
     private void PrintTypeParameters(IReadOnlyList<TsTypeParameter>? typeParams)
     {
-        if (typeParams is not { Count: > 0 }) return;
+        if (typeParams is not { Count: > 0 })
+            return;
         _sb.Write("<");
-        _sb.WriteList(typeParams, tp =>
-        {
-            _sb.Write(tp.Name);
-            if (tp.Constraint is not null)
+        _sb.WriteList(
+            typeParams,
+            tp =>
             {
-                _sb.Write(" extends ");
-                PrintType(tp.Constraint);
+                _sb.Write(tp.Name);
+                if (tp.Constraint is not null)
+                {
+                    _sb.Write(" extends ");
+                    PrintType(tp.Constraint);
+                }
             }
-        });
+        );
         _sb.Write(">");
     }
 
@@ -929,8 +1008,12 @@ public sealed class Printer(string indent = "  ")
     {
         switch (accessibility)
         {
-            case TsAccessibility.Private: _sb.Write("private "); break;
-            case TsAccessibility.Protected: _sb.Write("protected "); break;
+            case TsAccessibility.Private:
+                _sb.Write("private ");
+                break;
+            case TsAccessibility.Protected:
+                _sb.Write("protected ");
+                break;
         }
     }
 

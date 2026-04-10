@@ -19,7 +19,10 @@ public static class IssueQueries
             .GroupBy(issue => issue.Status)
             .ToDictionary(group => group.Key, group => group.Count());
 
-    public static IReadOnlyList<Issue> IssuesForAssignee(IReadOnlyList<Issue> issues, UserId assigneeId) =>
+    public static IReadOnlyList<Issue> IssuesForAssignee(
+        IReadOnlyList<Issue> issues,
+        UserId assigneeId
+    ) =>
         issues
             .Where(issue => issue.AssigneeId == assigneeId)
             .OrderBy(issue => issue.Status)

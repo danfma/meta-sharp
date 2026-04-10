@@ -7,8 +7,11 @@ public class IssueService(IIssueRepository repository)
 {
     private readonly IIssueRepository _repository = repository;
 
-    public Task<OperationResult<Issue>> CreateAsync(string title, string description, IssueType type) =>
-        CreateAsync(title, description, type, IssuePriority.Medium);
+    public Task<OperationResult<Issue>> CreateAsync(
+        string title,
+        string description,
+        IssueType type
+    ) => CreateAsync(title, description, type, IssuePriority.Medium);
 
     public async Task<OperationResult<Issue>> CreateAsync(
         string title,
@@ -56,7 +59,11 @@ public class IssueService(IIssueRepository repository)
         return loadResult;
     }
 
-    public async Task<OperationResult<Issue>> AddCommentAsync(IssueId issueId, UserId authorId, string message)
+    public async Task<OperationResult<Issue>> AddCommentAsync(
+        IssueId issueId,
+        UserId authorId,
+        string message
+    )
     {
         var loadResult = await LoadAsync(issueId);
         if (!loadResult.HasValue || loadResult.Value is null)
@@ -67,14 +74,22 @@ public class IssueService(IIssueRepository repository)
         return await AddCommentAsync(loadResult.Value, authorId, message);
     }
 
-    public async Task<OperationResult<Issue>> AddCommentAsync(Issue issue, UserId authorId, string message)
+    public async Task<OperationResult<Issue>> AddCommentAsync(
+        Issue issue,
+        UserId authorId,
+        string message
+    )
     {
         issue.AddComment(authorId, message);
         await _repository.SaveAsync(issue);
         return OperationResult<Issue>.Ok(issue);
     }
 
-    public async Task<OperationResult<Issue>> TransitionAsync(IssueId issueId, IssueStatus nextStatus, UserId actorId)
+    public async Task<OperationResult<Issue>> TransitionAsync(
+        IssueId issueId,
+        IssueStatus nextStatus,
+        UserId actorId
+    )
     {
         var loadResult = await LoadAsync(issueId);
         if (!loadResult.HasValue || loadResult.Value is null)
@@ -93,6 +108,5 @@ public class IssueService(IIssueRepository repository)
         UserId? assigneeId,
         string? sprintKey,
         PageRequest page
-    ) =>
-        _repository.SearchAsync(status, priority, assigneeId, sprintKey, page);
+    ) => _repository.SearchAsync(status, priority, assigneeId, sprintKey, page);
 }

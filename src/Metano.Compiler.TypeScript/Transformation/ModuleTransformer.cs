@@ -43,12 +43,15 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
             {
                 if (entryPoint is not null)
                 {
-                    _context.ReportDiagnostic(new MetanoDiagnostic(
-                        MetanoDiagnosticSeverity.Error,
-                        DiagnosticCodes.InvalidModuleEntryPoint,
-                        $"Type '{type.Name}' declares multiple [ModuleEntryPoint] methods. " +
-                        $"Only one is allowed per class.",
-                        m.Locations.FirstOrDefault()));
+                    _context.ReportDiagnostic(
+                        new MetanoDiagnostic(
+                            MetanoDiagnosticSeverity.Error,
+                            DiagnosticCodes.InvalidModuleEntryPoint,
+                            $"Type '{type.Name}' declares multiple [ModuleEntryPoint] methods. "
+                                + $"Only one is allowed per class.",
+                            m.Locations.FirstOrDefault()
+                        )
+                    );
                     continue;
                 }
                 entryPoint = m;
@@ -58,22 +61,26 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
         // Process direct members (classic extension methods, plain static functions)
         foreach (var member in type.GetMembers())
         {
-            if (SymbolHelper.HasIgnore(member)) continue;
+            if (SymbolHelper.HasIgnore(member))
+                continue;
 
             switch (member)
             {
                 case IMethodSymbol { MethodKind: MethodKind.Ordinary } method:
                     // [ModuleEntryPoint] methods are NOT emitted as ordinary functions —
                     // their body is unwrapped at the bottom of this method.
-                    if (SymbolHelper.HasModuleEntryPoint(method)) break;
+                    if (SymbolHelper.HasModuleEntryPoint(method))
+                        break;
                     var func = TransformModuleFunction(method);
-                    if (func is not null) statements.Add(func);
+                    if (func is not null)
+                        statements.Add(func);
                     break;
 
                 // Extension properties on classic style (parameters via Roslyn)
                 case IPropertySymbol prop when prop.Parameters.Length > 0:
                     var propFunc = TransformExtensionProperty(prop);
-                    if (propFunc is not null) statements.Add(propFunc);
+                    if (propFunc is not null)
+                        statements.Add(propFunc);
                     break;
             }
         }
@@ -86,7 +93,8 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
             var syntax = syntaxRef.GetSyntax();
             foreach (var node in syntax.DescendantNodes())
             {
-                if (node.Kind().ToString() != "ExtensionBlockDeclaration") continue;
+                if (node.Kind().ToString() != "ExtensionBlockDeclaration")
+                    continue;
                 TransformExtensionBlock(node, statements);
             }
         }
@@ -108,34 +116,43 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
     {
         if (method.Parameters.Length > 0)
         {
-            _context.ReportDiagnostic(new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.InvalidModuleEntryPoint,
-                $"[ModuleEntryPoint] method '{method.Name}' must have no parameters.",
-                method.Locations.FirstOrDefault()));
+            _context.ReportDiagnostic(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.InvalidModuleEntryPoint,
+                    $"[ModuleEntryPoint] method '{method.Name}' must have no parameters.",
+                    method.Locations.FirstOrDefault()
+                )
+            );
             return;
         }
 
         if (!IsValidEntryPointReturn(method.ReturnType))
         {
-            _context.ReportDiagnostic(new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.InvalidModuleEntryPoint,
-                $"[ModuleEntryPoint] method '{method.Name}' must return void, Task, or ValueTask. " +
-                $"Found: {method.ReturnType.ToDisplayString()}.",
-                method.Locations.FirstOrDefault()));
+            _context.ReportDiagnostic(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.InvalidModuleEntryPoint,
+                    $"[ModuleEntryPoint] method '{method.Name}' must return void, Task, or ValueTask. "
+                        + $"Found: {method.ReturnType.ToDisplayString()}.",
+                    method.Locations.FirstOrDefault()
+                )
+            );
             return;
         }
 
         var syntaxNode = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-        if (syntaxNode is not MethodDeclarationSyntax methodSyntax) return;
+        if (syntaxNode is not MethodDeclarationSyntax methodSyntax)
+            return;
 
         var semanticModel = _context.Compilation.GetSemanticModel(syntaxNode.SyntaxTree);
         var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
-        var body = exprTransformer.TransformBody(
-            methodSyntax.Body,
-            methodSyntax.ExpressionBody,
-            isVoid: method.ReturnsVoid)
+        var body = exprTransformer
+            .TransformBody(
+                methodSyntax.Body,
+                methodSyntax.ExpressionBody,
+                isVoid: method.ReturnsVoid
+            )
             .ToList();
 
         // [ExportVarFromBody]: promote a named local from the body to a module export.
@@ -147,13 +164,16 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
             // wouldn't bind.
             if (exportInfo.AsDefault && exportInfo.InPlace)
             {
-                _context.ReportDiagnostic(new MetanoDiagnostic(
-                    MetanoDiagnosticSeverity.Error,
-                    DiagnosticCodes.InvalidModuleEntryPoint,
-                    $"[ExportVarFromBody(\"{exportInfo.Name}\")] on '{method.Name}' cannot " +
-                    $"combine AsDefault = true with InPlace = true. Default exports must be " +
-                    $"emitted as a separate trailing statement; set InPlace = false.",
-                    method.Locations.FirstOrDefault()));
+                _context.ReportDiagnostic(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidModuleEntryPoint,
+                        $"[ExportVarFromBody(\"{exportInfo.Name}\")] on '{method.Name}' cannot "
+                            + $"combine AsDefault = true with InPlace = true. Default exports must be "
+                            + $"emitted as a separate trailing statement; set InPlace = false.",
+                        method.Locations.FirstOrDefault()
+                    )
+                );
                 exportInfo = null;
             }
         }
@@ -162,15 +182,20 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
         var foundLocal = false;
         for (var i = 0; i < body.Count; i++)
         {
-            if (exportInfo is not null
+            if (
+                exportInfo is not null
                 && body[i] is TsVariableDeclaration varDecl
-                && varDecl.Name == exportInfo.Name)
+                && varDecl.Name == exportInfo.Name
+            )
             {
                 foundLocal = true;
                 if (exportInfo.InPlace)
                 {
                     // Fold export into the declaration site (named export only).
-                    body[i] = varDecl with { Exported = true };
+                    body[i] = varDecl with
+                    {
+                        Exported = true,
+                    };
                 }
                 else
                 {
@@ -183,12 +208,15 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
 
         if (exportInfo is not null && !foundLocal)
         {
-            _context.ReportDiagnostic(new MetanoDiagnostic(
-                MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.InvalidModuleEntryPoint,
-                $"[ExportVarFromBody(\"{exportInfo.Name}\")] on '{method.Name}' did not find " +
-                $"a local variable named '{exportInfo.Name}' in the entry point body.",
-                method.Locations.FirstOrDefault()));
+            _context.ReportDiagnostic(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.InvalidModuleEntryPoint,
+                    $"[ExportVarFromBody(\"{exportInfo.Name}\")] on '{method.Name}' did not find "
+                        + $"a local variable named '{exportInfo.Name}' in the entry point body.",
+                    method.Locations.FirstOrDefault()
+                )
+            );
         }
 
         if (trailingExport is not null)
@@ -197,10 +225,10 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
 
     private static bool IsValidEntryPointReturn(ITypeSymbol returnType)
     {
-        if (returnType.SpecialType == SpecialType.System_Void) return true;
+        if (returnType.SpecialType == SpecialType.System_Void)
+            return true;
         var name = returnType.OriginalDefinition.ToDisplayString();
-        return name is "System.Threading.Tasks.Task"
-            or "System.Threading.Tasks.ValueTask";
+        return name is "System.Threading.Tasks.Task" or "System.Threading.Tasks.ValueTask";
     }
 
     /// <summary>
@@ -212,9 +240,14 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
         // ExtensionBlockDeclarationSyntax has ParameterList and Members
         var paramListProp = extensionBlock.GetType().GetProperty("ParameterList");
         var membersProp = extensionBlock.GetType().GetProperty("Members");
-        if (paramListProp?.GetValue(extensionBlock) is not ParameterListSyntax paramList) return;
-        if (membersProp?.GetValue(extensionBlock) is not SyntaxList<MemberDeclarationSyntax> members) return;
-        if (paramList.Parameters.Count == 0) return;
+        if (paramListProp?.GetValue(extensionBlock) is not ParameterListSyntax paramList)
+            return;
+        if (
+            membersProp?.GetValue(extensionBlock) is not SyntaxList<MemberDeclarationSyntax> members
+        )
+            return;
+        if (paramList.Parameters.Count == 0)
+            return;
 
         var receiverParamSyntax = paramList.Parameters[0];
         var semanticModel = _context.Compilation.GetSemanticModel(extensionBlock.SyntaxTree);
@@ -223,7 +256,8 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
         var receiverTypeSymbol = receiverParamSyntax.Type is null
             ? null
             : semanticModel.GetTypeInfo(receiverParamSyntax.Type).Type;
-        if (receiverTypeSymbol is null) return;
+        if (receiverTypeSymbol is null)
+            return;
         var receiverType = TypeMapper.Map(receiverTypeSymbol);
         var receiverParam = new TsParameter(receiverName, receiverType);
 
@@ -235,46 +269,77 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
             {
                 case MethodDeclarationSyntax methodSyntax:
                 {
-                    var methodSymbol = semanticModel.GetDeclaredSymbol(methodSyntax) as IMethodSymbol;
-                    if (methodSymbol is null) continue;
-                    if (methodSymbol.DeclaredAccessibility != Accessibility.Public) continue;
+                    var methodSymbol =
+                        semanticModel.GetDeclaredSymbol(methodSyntax) as IMethodSymbol;
+                    if (methodSymbol is null)
+                        continue;
+                    if (methodSymbol.DeclaredAccessibility != Accessibility.Public)
+                        continue;
 
-                    var name = SymbolHelper.GetNameOverride(methodSymbol)
+                    var name =
+                        SymbolHelper.GetNameOverride(methodSymbol)
                         ?? TypeScriptNaming.ToCamelCase(methodSymbol.Name);
                     var returnType = TypeMapper.Map(methodSymbol.ReturnType);
                     var parameters = new List<TsParameter> { receiverParam };
-                    parameters.AddRange(methodSymbol.Parameters.Select(p =>
-                        new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type))));
+                    parameters.AddRange(
+                        methodSymbol.Parameters.Select(p => new TsParameter(
+                            TypeScriptNaming.ToCamelCase(p.Name),
+                            TypeMapper.Map(p.Type)
+                        ))
+                    );
 
-                    var body = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody,
-                        isVoid: methodSymbol.ReturnsVoid);
-                    statements.Add(new TsFunction(name, parameters, returnType, body, Exported: true));
+                    var body = exprTransformer.TransformBody(
+                        methodSyntax.Body,
+                        methodSyntax.ExpressionBody,
+                        isVoid: methodSymbol.ReturnsVoid
+                    );
+                    statements.Add(
+                        new TsFunction(name, parameters, returnType, body, Exported: true)
+                    );
                     break;
                 }
                 case PropertyDeclarationSyntax propSyntax:
                 {
                     var propSymbol = semanticModel.GetDeclaredSymbol(propSyntax) as IPropertySymbol;
-                    if (propSymbol is null) continue;
-                    if (propSymbol.DeclaredAccessibility != Accessibility.Public) continue;
+                    if (propSymbol is null)
+                        continue;
+                    if (propSymbol.DeclaredAccessibility != Accessibility.Public)
+                        continue;
 
-                    var name = SymbolHelper.GetNameOverride(propSymbol)
+                    var name =
+                        SymbolHelper.GetNameOverride(propSymbol)
                         ?? TypeScriptNaming.ToCamelCase(propSymbol.Name);
                     var returnType = TypeMapper.Map(propSymbol.Type);
                     var parameters = new List<TsParameter> { receiverParam };
 
                     IReadOnlyList<TsStatement> body;
                     if (propSyntax.ExpressionBody is not null)
-                        body = [new TsReturnStatement(exprTransformer.TransformExpression(propSyntax.ExpressionBody.Expression))];
+                        body =
+                        [
+                            new TsReturnStatement(
+                                exprTransformer.TransformExpression(
+                                    propSyntax.ExpressionBody.Expression
+                                )
+                            ),
+                        ];
                     else if (propSyntax.AccessorList is not null)
                     {
-                        var getAccessor = propSyntax.AccessorList.Accessors
-                            .FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
-                        if (getAccessor is null) continue;
-                        body = exprTransformer.TransformBody(getAccessor.Body, getAccessor.ExpressionBody);
+                        var getAccessor = propSyntax.AccessorList.Accessors.FirstOrDefault(a =>
+                            a.IsKind(SyntaxKind.GetAccessorDeclaration)
+                        );
+                        if (getAccessor is null)
+                            continue;
+                        body = exprTransformer.TransformBody(
+                            getAccessor.Body,
+                            getAccessor.ExpressionBody
+                        );
                     }
-                    else continue;
+                    else
+                        continue;
 
-                    statements.Add(new TsFunction(name, parameters, returnType, body, Exported: true));
+                    statements.Add(
+                        new TsFunction(name, parameters, returnType, body, Exported: true)
+                    );
                     break;
                 }
             }
@@ -283,20 +348,26 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
 
     private TsFunction? TransformExtensionProperty(IPropertySymbol prop)
     {
-        if (prop.DeclaredAccessibility != Accessibility.Public) return null;
-        if (prop.IsImplicitlyDeclared) return null;
+        if (prop.DeclaredAccessibility != Accessibility.Public)
+            return null;
+        if (prop.IsImplicitlyDeclared)
+            return null;
 
         var name = SymbolHelper.GetNameOverride(prop) ?? TypeScriptNaming.ToCamelCase(prop.Name);
         var returnType = TypeMapper.Map(prop.Type);
 
         // The receiver parameter
-        var parameters = prop.Parameters
-            .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+        var parameters = prop
+            .Parameters.Select(p => new TsParameter(
+                TypeScriptNaming.ToCamelCase(p.Name),
+                TypeMapper.Map(p.Type)
+            ))
             .ToList();
 
         // Get the getter body
         var getter = prop.GetMethod;
-        if (getter is null) return null;
+        if (getter is null)
+            return null;
 
         var syntax = getter.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
         var semanticModel = _context.Compilation.GetSemanticModel(syntax!.SyntaxTree);
@@ -315,24 +386,33 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
 
     private TsFunction? TransformModuleFunction(IMethodSymbol method)
     {
-        if (method.DeclaredAccessibility != Accessibility.Public) return null;
-        if (method.IsImplicitlyDeclared) return null;
-        if (TypeScriptNaming.HasEmit(method)) return null;
+        if (method.DeclaredAccessibility != Accessibility.Public)
+            return null;
+        if (method.IsImplicitlyDeclared)
+            return null;
+        if (TypeScriptNaming.HasEmit(method))
+            return null;
         // Skip property accessors — extension properties are handled via their associated property
-        if (method.AssociatedSymbol is IPropertySymbol) return null;
+        if (method.AssociatedSymbol is IPropertySymbol)
+            return null;
 
         var syntaxNode = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-        if (syntaxNode is null) return null;
+        if (syntaxNode is null)
+            return null;
 
-        var name = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
+        var name =
+            SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
         var hasYield = syntaxNode.DescendantNodes().OfType<YieldStatementSyntax>().Any();
         var returnType = hasYield
             ? TypeMapper.MapForGeneratorReturn(method.ReturnType)
             : TypeMapper.Map(method.ReturnType);
         var isAsync = hasYield ? false : method.IsAsync;
 
-        var parameters = method.Parameters
-            .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+        var parameters = method
+            .Parameters.Select(p => new TsParameter(
+                TypeScriptNaming.ToCamelCase(p.Name),
+                TypeMapper.Map(p.Type)
+            ))
             .ToList();
 
         var semanticModel = _context.Compilation.GetSemanticModel(syntaxNode.SyntaxTree);
@@ -346,8 +426,15 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
         else
             return null;
 
-        return new TsFunction(name, parameters, returnType, body, Exported: true, Async: isAsync,
+        return new TsFunction(
+            name,
+            parameters,
+            returnType,
+            body,
+            Exported: true,
+            Async: isAsync,
             Generator: hasYield,
-            TypeParameters: TypeTransformer.ExtractMethodTypeParameters(method));
+            TypeParameters: TypeTransformer.ExtractMethodTypeParameters(method)
+        );
     }
 }

@@ -34,8 +34,9 @@ public sealed class StatementHandler(ExpressionTransformer parent)
 
             YieldStatementSyntax yieldReturn
                 when yieldReturn.IsKind(SyntaxKind.YieldReturnStatement)
-                    && yieldReturn.Expression is not null =>
-                new TsYieldStatement(_parent.TransformExpression(yieldReturn.Expression)),
+                    && yieldReturn.Expression is not null => new TsYieldStatement(
+                _parent.TransformExpression(yieldReturn.Expression)
+            ),
 
             YieldStatementSyntax yieldBreak
                 when yieldBreak.IsKind(SyntaxKind.YieldBreakStatement) =>
@@ -53,7 +54,9 @@ public sealed class StatementHandler(ExpressionTransformer parent)
 
             LocalDeclarationStatementSyntax localDecl => TransformLocalDeclaration(localDecl),
 
-            SwitchStatementSyntax switchStmt => _parent.Switches.TransformSwitchStatement(switchStmt),
+            SwitchStatementSyntax switchStmt => _parent.Switches.TransformSwitchStatement(
+                switchStmt
+            ),
 
             BlockSyntax block =>
             // Flatten single-statement blocks
@@ -70,14 +73,13 @@ public sealed class StatementHandler(ExpressionTransformer parent)
     public IReadOnlyList<TsStatement> TransformBody(
         BlockSyntax? block,
         ArrowExpressionClauseSyntax? arrow,
-        bool isVoid = false)
+        bool isVoid = false
+    )
     {
         if (arrow is not null)
         {
             var expr = _parent.TransformExpression(arrow.Expression);
-            return isVoid
-                ? [new TsExpressionStatement(expr)]
-                : [new TsReturnStatement(expr)];
+            return isVoid ? [new TsExpressionStatement(expr)] : [new TsReturnStatement(expr)];
         }
 
         if (block is not null)
@@ -132,24 +134,33 @@ public sealed class StatementHandler(ExpressionTransformer parent)
     private bool TryExpandTryGetValue(StatementSyntax stmt, List<TsStatement> sink)
     {
         // Shape check: if (<condition>) { … }
-        if (stmt is not IfStatementSyntax ifStmt) return false;
+        if (stmt is not IfStatementSyntax ifStmt)
+            return false;
 
         // Condition must be an invocation: dict.TryGetValue(key, out var value)
-        if (ifStmt.Condition is not InvocationExpressionSyntax invocation) return false;
-        if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess) return false;
+        if (ifStmt.Condition is not InvocationExpressionSyntax invocation)
+            return false;
+        if (invocation.Expression is not MemberAccessExpressionSyntax memberAccess)
+            return false;
 
         // Method must be TryGetValue on a dictionary-like type
         var symbol = _parent.Model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
-        if (symbol is null || symbol.Name != "TryGetValue") return false;
+        if (symbol is null || symbol.Name != "TryGetValue")
+            return false;
         var receiverType = _parent.Model.GetTypeInfo(memberAccess.Expression).Type;
-        if (!ExpressionTransformer.IsDictionaryLike(receiverType)) return false;
+        if (!ExpressionTransformer.IsDictionaryLike(receiverType))
+            return false;
 
         // Must have 2 args: key and `out var <name>`
-        if (invocation.ArgumentList.Arguments.Count != 2) return false;
+        if (invocation.ArgumentList.Arguments.Count != 2)
+            return false;
         var outArg = invocation.ArgumentList.Arguments[1];
-        if (!outArg.RefOrOutKeyword.IsKind(SyntaxKind.OutKeyword)) return false;
-        if (outArg.Expression is not DeclarationExpressionSyntax declExpr) return false;
-        if (declExpr.Designation is not SingleVariableDesignationSyntax designation) return false;
+        if (!outArg.RefOrOutKeyword.IsKind(SyntaxKind.OutKeyword))
+            return false;
+        if (outArg.Expression is not DeclarationExpressionSyntax declExpr)
+            return false;
+        if (declExpr.Designation is not SingleVariableDesignationSyntax designation)
+            return false;
 
         var varName = TypeScriptNaming.ToCamelCase(designation.Identifier.Text);
         var receiver = _parent.TransformExpression(memberAccess.Expression);
@@ -161,7 +172,10 @@ public sealed class StatementHandler(ExpressionTransformer parent)
 
         // 2. if (<varName> !== undefined) { <then> } else { <else> }
         var condition = new TsBinaryExpression(
-            new TsIdentifier(varName), "!==", new TsIdentifier("undefined"));
+            new TsIdentifier(varName),
+            "!==",
+            new TsIdentifier("undefined")
+        );
         var thenBody = TransformStatementBody(ifStmt.Statement);
         var elseBody = ifStmt.Else?.Statement is not null
             ? TransformStatementBody(ifStmt.Else.Statement)
@@ -183,7 +197,8 @@ public sealed class StatementHandler(ExpressionTransformer parent)
         // demote to `let` only when the local is mutated later in its enclosing scope
         // (assignment, compound assignment, ++/--, ref/out arg). This produces idiomatic
         // TS where most locals are immutable and the few mutable ones stand out.
-        var isConst = decl.IsConst
+        var isConst =
+            decl.IsConst
             || decl.Modifiers.Any(SyntaxKind.ReadOnlyKeyword)
             || !IsLocalMutated(variable);
 
@@ -207,29 +222,32 @@ public sealed class StatementHandler(ExpressionTransformer parent)
         // by an inner scope (different ILocalSymbol) is naturally excluded.
         SyntaxNode? scope = variable.FirstAncestorOrSelf<BlockSyntax>();
         scope ??= variable.FirstAncestorOrSelf<MemberDeclarationSyntax>();
-        if (scope is null) return true;
+        if (scope is null)
+            return true;
 
         foreach (var node in scope.DescendantNodes())
         {
             switch (node)
             {
-                case AssignmentExpressionSyntax assign
-                    when ResolvesTo(assign.Left, local):
+                case AssignmentExpressionSyntax assign when ResolvesTo(assign.Left, local):
                     return true;
                 case PrefixUnaryExpressionSyntax pre
-                    when (pre.IsKind(SyntaxKind.PreIncrementExpression)
-                          || pre.IsKind(SyntaxKind.PreDecrementExpression))
-                         && ResolvesTo(pre.Operand, local):
+                    when (
+                        pre.IsKind(SyntaxKind.PreIncrementExpression)
+                        || pre.IsKind(SyntaxKind.PreDecrementExpression)
+                    ) && ResolvesTo(pre.Operand, local):
                     return true;
                 case PostfixUnaryExpressionSyntax post
-                    when (post.IsKind(SyntaxKind.PostIncrementExpression)
-                          || post.IsKind(SyntaxKind.PostDecrementExpression))
-                         && ResolvesTo(post.Operand, local):
+                    when (
+                        post.IsKind(SyntaxKind.PostIncrementExpression)
+                        || post.IsKind(SyntaxKind.PostDecrementExpression)
+                    ) && ResolvesTo(post.Operand, local):
                     return true;
                 case ArgumentSyntax arg
-                    when (arg.RefKindKeyword.IsKind(SyntaxKind.RefKeyword)
-                          || arg.RefKindKeyword.IsKind(SyntaxKind.OutKeyword))
-                         && ResolvesTo(arg.Expression, local):
+                    when (
+                        arg.RefKindKeyword.IsKind(SyntaxKind.RefKeyword)
+                        || arg.RefKindKeyword.IsKind(SyntaxKind.OutKeyword)
+                    ) && ResolvesTo(arg.Expression, local):
                     return true;
             }
         }
@@ -238,16 +256,18 @@ public sealed class StatementHandler(ExpressionTransformer parent)
     }
 
     private bool ResolvesTo(ExpressionSyntax expr, ILocalSymbol local) =>
-        SymbolEqualityComparer.Default.Equals(
-            _parent.Model.GetSymbolInfo(expr).Symbol, local);
+        SymbolEqualityComparer.Default.Equals(_parent.Model.GetSymbolInfo(expr).Symbol, local);
 
     private TsStatement UnsupportedStatement(StatementSyntax statement)
     {
-        _parent.ReportDiagnostic?.Invoke(new MetanoDiagnostic(
-            MetanoDiagnosticSeverity.Warning,
-            DiagnosticCodes.UnsupportedFeature,
-            $"Statement '{statement.Kind()}' is not supported by the transpiler.",
-            statement.GetLocation()));
+        _parent.ReportDiagnostic?.Invoke(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                $"Statement '{statement.Kind()}' is not supported by the transpiler.",
+                statement.GetLocation()
+            )
+        );
         return new TsExpressionStatement(
             new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier("console"), "warn"),

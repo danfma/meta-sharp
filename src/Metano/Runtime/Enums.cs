@@ -15,5 +15,4 @@ using Metano.Annotations;
 // (the enum type) into the lowered expression. So `Enum.Parse<Status>("Active")` lowers
 // to `Status["Active" as keyof typeof Status]`, which TypeScript validates against the
 // enum's known member names at compile time.
-[assembly: MapMethod(typeof(Enum), nameof(Enum.Parse),
-    JsTemplate = "$T0[$0 as keyof typeof $T0]")]
+[assembly: MapMethod(typeof(Enum), nameof(Enum.Parse), JsTemplate = "$T0[$0 as keyof typeof $T0]")]

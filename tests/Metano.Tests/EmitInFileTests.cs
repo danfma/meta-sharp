@@ -18,7 +18,8 @@ public class EmitInFileTests
 
             [Transpile, EmitInFile("issue")]
             public enum IssueStatus { Open, Closed }
-            """);
+            """
+        );
 
         // Both types end up in the same file.
         await Assert.That(result.ContainsKey("issue.ts")).IsTrue();
@@ -41,7 +42,8 @@ public class EmitInFileTests
 
             [Transpile]
             public enum IssueStatus { Open, Closed }
-            """);
+            """
+        );
 
         await Assert.That(result.ContainsKey("issue.ts")).IsTrue();
         await Assert.That(result.ContainsKey("issue-status.ts")).IsTrue();
@@ -60,7 +62,8 @@ public class EmitInFileTests
 
             [Transpile, EmitInFile("issue")]
             public enum IssuePriority { Low, High }
-            """);
+            """
+        );
 
         var output = result["issue.ts"];
         await Assert.That(output).Contains("Issue");
@@ -85,7 +88,8 @@ public class EmitInFileTests
                 [Transpile, EmitInFile("issue")]
                 public enum IssueStatus { Open, Closed }
             }
-            """);
+            """
+        );
 
         // The exact path depends on root-namespace stripping. The file ends in `issue.ts`
         // and lives somewhere under the project's namespace tree.
@@ -109,7 +113,8 @@ public class EmitInFileTests
                 [Transpile, EmitInFile("shared")]
                 public record B(string Y);
             }
-            """);
+            """
+        );
 
         await Assert.That(diagnostics.Any(d => d.Code == "MS0008")).IsTrue();
     }
@@ -130,7 +135,8 @@ public class EmitInFileTests
 
             [Transpile, EmitInFile("issue")]
             public enum IssueStatus { Open, Closed }
-            """);
+            """
+        );
 
         var output = result["issue.ts"];
         // Tag lives in tag.ts and should be imported (type-only since it's only used

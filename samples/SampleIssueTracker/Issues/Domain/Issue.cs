@@ -2,7 +2,13 @@ using SampleIssueTracker.SharedKernel;
 
 namespace SampleIssueTracker.Issues.Domain;
 
-public class Issue(IssueId id, string title, string description, IssueType type, IssuePriority priority = IssuePriority.Medium)
+public class Issue(
+    IssueId id,
+    string title,
+    string description,
+    IssueType type,
+    IssuePriority priority = IssuePriority.Medium
+)
 {
     public IssueId Id { get; } = id;
 
@@ -76,7 +82,8 @@ public class Issue(IssueId id, string title, string description, IssueType type,
         Touch(DateTimeOffset.UtcNow);
     }
 
-    public void AddComment(UserId authorId, string message) => AddComment(authorId, message, DateTimeOffset.UtcNow);
+    public void AddComment(UserId authorId, string message) =>
+        AddComment(authorId, message, DateTimeOffset.UtcNow);
 
     public void AddComment(UserId authorId, string message, DateTimeOffset createdAt)
     {
@@ -93,11 +100,18 @@ public class Issue(IssueId id, string title, string description, IssueType type,
 
         if (!IssueWorkflow.CanTransition(previousStatus, nextStatus))
         {
-            throw new InvalidOperationException($"Cannot transition issue from {previousStatus} to {nextStatus}.");
+            throw new InvalidOperationException(
+                $"Cannot transition issue from {previousStatus} to {nextStatus}."
+            );
         }
 
         Status = nextStatus;
-        _comments.Add(Comment.System($"Status changed from {previousStatus} to {nextStatus} by {actorId}.", changedAt));
+        _comments.Add(
+            Comment.System(
+                $"Status changed from {previousStatus} to {nextStatus} by {actorId}.",
+                changedAt
+            )
+        );
         Touch(changedAt);
     }
 

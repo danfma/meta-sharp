@@ -1,6 +1,11 @@
 namespace SampleIssueTracker.SharedKernel;
 
-public record OperationResult<T>(bool Success, T? Value, string? ErrorCode = null, string? ErrorMessage = null)
+public record OperationResult<T>(
+    bool Success,
+    T? Value,
+    string? ErrorCode = null,
+    string? ErrorMessage = null
+)
 {
     public bool HasValue => Success && Value is not null;
 

@@ -26,7 +26,8 @@ public static class TypeCheckGenerator
         ITypeSymbol csharpType,
         int argIndex,
         bool assemblyWideTranspile,
-        IAssemblySymbol? currentAssembly)
+        IAssemblySymbol? currentAssembly
+    )
     {
         var argAccess = new TsIdentifier($"args[{argIndex}]");
         var fullName = csharpType.ToDisplayString();
@@ -37,22 +38,57 @@ public static class TypeCheckGenerator
             "string" => new TsCallExpression(new TsIdentifier("isString"), [argAccess]),
             "byte" => new TsCallExpression(new TsIdentifier("isByte"), [argAccess]),
             "sbyte" => new TsCallExpression(new TsIdentifier("isSByte"), [argAccess]),
-            "short" or "System.Int16" => new TsCallExpression(new TsIdentifier("isInt16"), [argAccess]),
-            "ushort" or "System.UInt16" => new TsCallExpression(new TsIdentifier("isUInt16"), [argAccess]),
-            "int" or "System.Int32" => new TsCallExpression(new TsIdentifier("isInt32"), [argAccess]),
-            "uint" or "System.UInt32" => new TsCallExpression(new TsIdentifier("isUInt32"), [argAccess]),
-            "long" or "System.Int64" => new TsCallExpression(new TsIdentifier("isInt64"), [argAccess]),
-            "ulong" or "System.UInt64" => new TsCallExpression(new TsIdentifier("isUInt64"), [argAccess]),
-            "float" or "System.Single" => new TsCallExpression(new TsIdentifier("isFloat32"), [argAccess]),
-            "double" or "System.Double" => new TsCallExpression(new TsIdentifier("isFloat64"), [argAccess]),
-            "bool" or "System.Boolean" => new TsCallExpression(new TsIdentifier("isBool"), [argAccess]),
-            "decimal" or "System.Decimal" => new TsCallExpression(new TsIdentifier("isFloat64"), [argAccess]),
-            "System.Numerics.BigInteger" => new TsCallExpression(new TsIdentifier("isBigInt"), [argAccess]),
+            "short" or "System.Int16" => new TsCallExpression(
+                new TsIdentifier("isInt16"),
+                [argAccess]
+            ),
+            "ushort" or "System.UInt16" => new TsCallExpression(
+                new TsIdentifier("isUInt16"),
+                [argAccess]
+            ),
+            "int" or "System.Int32" => new TsCallExpression(
+                new TsIdentifier("isInt32"),
+                [argAccess]
+            ),
+            "uint" or "System.UInt32" => new TsCallExpression(
+                new TsIdentifier("isUInt32"),
+                [argAccess]
+            ),
+            "long" or "System.Int64" => new TsCallExpression(
+                new TsIdentifier("isInt64"),
+                [argAccess]
+            ),
+            "ulong" or "System.UInt64" => new TsCallExpression(
+                new TsIdentifier("isUInt64"),
+                [argAccess]
+            ),
+            "float" or "System.Single" => new TsCallExpression(
+                new TsIdentifier("isFloat32"),
+                [argAccess]
+            ),
+            "double" or "System.Double" => new TsCallExpression(
+                new TsIdentifier("isFloat64"),
+                [argAccess]
+            ),
+            "bool" or "System.Boolean" => new TsCallExpression(
+                new TsIdentifier("isBool"),
+                [argAccess]
+            ),
+            "decimal" or "System.Decimal" => new TsCallExpression(
+                new TsIdentifier("isFloat64"),
+                [argAccess]
+            ),
+            "System.Numerics.BigInteger" => new TsCallExpression(
+                new TsIdentifier("isBigInt"),
+                [argAccess]
+            ),
 
             // Enums with [StringEnum] → exhaustive value check
             _ when csharpType is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumType
-                && SymbolHelper.HasStringEnum(enumType) =>
-                GenerateStringEnumCheck(enumType, argAccess),
+                    && SymbolHelper.HasStringEnum(enumType) => GenerateStringEnumCheck(
+                enumType,
+                argAccess
+            ),
 
             // Numeric enums → typeof number
             _ when csharpType is INamedTypeSymbol { TypeKind: TypeKind.Enum } =>
@@ -62,39 +98,49 @@ public static class TypeCheckGenerator
             _ when csharpType is INamedTypeSymbol { TypeKind: TypeKind.Interface } =>
                 new TsBinaryExpression(
                     new TsUnaryExpression("typeof ", argAccess),
-                    "===", new TsStringLiteral("object")),
+                    "===",
+                    new TsStringLiteral("object")
+                ),
 
             // InlineWrapper structs → typeof check on the underlying primitive
             _ when csharpType is INamedTypeSymbol inlineType
-                && SymbolHelper.HasInlineWrapper(inlineType)
-                && TypeTransformer.TryGetInlineWrapperPrimitiveType(inlineType, out var primType) =>
-                GenerateInlineWrapperCheck(primType, argAccess),
+                    && SymbolHelper.HasInlineWrapper(inlineType)
+                    && TypeTransformer.TryGetInlineWrapperPrimitiveType(
+                        inlineType,
+                        out var primType
+                    ) => GenerateInlineWrapperCheck(primType, argAccess),
 
             // Classes/records → instanceof
             _ when csharpType is INamedTypeSymbol named
-                && SymbolHelper.IsTranspilable(named, assemblyWideTranspile, currentAssembly) =>
+                    && SymbolHelper.IsTranspilable(named, assemblyWideTranspile, currentAssembly) =>
                 new TsBinaryExpression(argAccess, "instanceof", new TsIdentifier(named.Name)),
 
             // Arrays
-            _ when csharpType is IArrayTypeSymbol =>
-                new TsCallExpression(
-                    new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
-                    [argAccess]),
+            _ when csharpType is IArrayTypeSymbol => new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
+                [argAccess]
+            ),
 
             // Default: typeof check based on TS type
             _ => new TsBinaryExpression(
                 new TsUnaryExpression("typeof ", argAccess),
                 "===",
-                new TsStringLiteral("object"))
+                new TsStringLiteral("object")
+            ),
         };
     }
 
     /// <summary>
     /// <c>(value === "USD" || value === "EUR" || …)</c> for an enum tagged with [StringEnum].
     /// </summary>
-    private static TsExpression GenerateStringEnumCheck(INamedTypeSymbol enumType, TsExpression argAccess)
+    private static TsExpression GenerateStringEnumCheck(
+        INamedTypeSymbol enumType,
+        TsExpression argAccess
+    )
     {
-        var members = enumType.GetMembers().OfType<IFieldSymbol>()
+        var members = enumType
+            .GetMembers()
+            .OfType<IFieldSymbol>()
             .Where(f => f.HasConstantValue)
             .ToList();
 
@@ -115,7 +161,10 @@ public static class TypeCheckGenerator
     /// <summary>
     /// <c>typeof value === "string|number|boolean|bigint"</c> for inline wrapper structs.
     /// </summary>
-    private static TsExpression GenerateInlineWrapperCheck(TsType primitiveType, TsExpression argAccess)
+    private static TsExpression GenerateInlineWrapperCheck(
+        TsType primitiveType,
+        TsExpression argAccess
+    )
     {
         var jsType = primitiveType switch
         {
@@ -128,6 +177,7 @@ public static class TypeCheckGenerator
         return new TsBinaryExpression(
             new TsUnaryExpression("typeof ", argAccess),
             "===",
-            new TsStringLiteral(jsType));
+            new TsStringLiteral(jsType)
+        );
     }
 }

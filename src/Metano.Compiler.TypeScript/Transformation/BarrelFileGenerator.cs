@@ -52,7 +52,8 @@ public static class BarrelFileGenerator
                 foreach (var stmt in file.Statements)
                 {
                     var name = GetExportedName(stmt);
-                    if (name is null) continue;
+                    if (name is null)
+                        continue;
 
                     if (IsTypeOnlyExport(stmt))
                         typeOnlyNames.Add(name);
@@ -68,7 +69,13 @@ public static class BarrelFileGenerator
                     exports.Add(new TsReExport([.. valueNames.OrderBy(n => n)], $"./{moduleName}"));
 
                 if (typeOnlyNames.Count > 0)
-                    exports.Add(new TsReExport([.. typeOnlyNames.OrderBy(n => n)], $"./{moduleName}", TypeOnly: true));
+                    exports.Add(
+                        new TsReExport(
+                            [.. typeOnlyNames.OrderBy(n => n)],
+                            $"./{moduleName}",
+                            TypeOnly: true
+                        )
+                    );
             }
 
             // Leaf-only barrels: do NOT re-export subdirectories. Consumers must use full
@@ -78,7 +85,8 @@ public static class BarrelFileGenerator
             // Skip barrel generation if a user-defined type would collide with the barrel
             // file name (e.g., a type named "Index" produces "index.ts" already).
             var hasIndexCollision = files.Any(f =>
-                Path.GetFileName(f.FileName).Equals("index.ts", StringComparison.OrdinalIgnoreCase));
+                Path.GetFileName(f.FileName).Equals("index.ts", StringComparison.OrdinalIgnoreCase)
+            );
             if (hasIndexCollision)
                 continue;
 
@@ -92,17 +100,18 @@ public static class BarrelFileGenerator
         return indexFiles;
     }
 
-    private static string? GetExportedName(TsTopLevel node) => node switch
-    {
-        TsClass { Exported: true } c => c.Name,
-        TsFunction { Exported: true } f => f.Name,
-        TsEnum { Exported: true } e => e.Name,
-        TsTypeAlias { Exported: true } t => t.Name,
-        TsInterface { Exported: true } i => i.Name,
-        TsConstObject { Exported: true } co => co.Name,
-        TsNamespaceDeclaration { Exported: true } ns => ns.Name,
-        _ => null
-    };
+    private static string? GetExportedName(TsTopLevel node) =>
+        node switch
+        {
+            TsClass { Exported: true } c => c.Name,
+            TsFunction { Exported: true } f => f.Name,
+            TsEnum { Exported: true } e => e.Name,
+            TsTypeAlias { Exported: true } t => t.Name,
+            TsInterface { Exported: true } i => i.Name,
+            TsConstObject { Exported: true } co => co.Name,
+            TsNamespaceDeclaration { Exported: true } ns => ns.Name,
+            _ => null,
+        };
 
     /// <summary>
     /// Returns true if the export is type-only (no runtime value).

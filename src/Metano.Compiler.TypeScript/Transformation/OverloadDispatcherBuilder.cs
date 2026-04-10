@@ -35,21 +35,25 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
     public TsConstructor BuildConstructor(
         INamedTypeSymbol type,
         List<IMethodSymbol> constructors,
-        TsType? extendsType)
+        TsType? extendsType
+    )
     {
         // Sort: most specific first (more params first, then by type specificity)
         var sorted = constructors.OrderByDescending(c => c.Parameters.Length).ToList();
 
         // Generate overload signatures
-        var overloads = sorted.Select(ctor =>
-        {
-            var @params = ctor.Parameters
-                .Select(p => new TsConstructorParam(
-                    TypeScriptNaming.ToCamelCase(p.Name),
-                    TypeMapper.Map(p.Type)))
-                .ToList();
-            return new TsConstructorOverload(@params);
-        }).ToList();
+        var overloads = sorted
+            .Select(ctor =>
+            {
+                var @params = ctor
+                    .Parameters.Select(p => new TsConstructorParam(
+                        TypeScriptNaming.ToCamelCase(p.Name),
+                        TypeMapper.Map(p.Type)
+                    ))
+                    .ToList();
+                return new TsConstructorOverload(@params);
+            })
+            .ToList();
 
         // Generate dispatcher body
         var body = new List<TsStatement>();
@@ -61,13 +65,17 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
             TsExpression condition = new TsBinaryExpression(
                 new TsPropertyAccess(new TsIdentifier("args"), "length"),
                 "===",
-                new TsLiteral(paramCount.ToString()));
+                new TsLiteral(paramCount.ToString())
+            );
 
             for (var i = 0; i < paramCount; i++)
             {
                 var check = TypeCheckGenerator.GenerateForParam(
-                    ctor.Parameters[i].Type, i,
-                    _context.AssemblyWideTranspile, _context.CurrentAssembly);
+                    ctor.Parameters[i].Type,
+                    i,
+                    _context.AssemblyWideTranspile,
+                    _context.CurrentAssembly
+                );
                 condition = new TsBinaryExpression(condition, "&&", check);
             }
 
@@ -77,22 +85,35 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
             if (extendsType is not null)
             {
                 var syntax = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-                if (syntax is ConstructorDeclarationSyntax ctorSyntax && ctorSyntax.Initializer is not null
-                    && ctorSyntax.Initializer.ThisOrBaseKeyword.Text == "base")
+                if (
+                    syntax is ConstructorDeclarationSyntax ctorSyntax
+                    && ctorSyntax.Initializer is not null
+                    && ctorSyntax.Initializer.ThisOrBaseKeyword.Text == "base"
+                )
                 {
-                    var semanticModel = _context.Compilation.GetSemanticModel(ctorSyntax.SyntaxTree);
+                    var semanticModel = _context.Compilation.GetSemanticModel(
+                        ctorSyntax.SyntaxTree
+                    );
                     var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
-                    var superArgs = ctorSyntax.Initializer.ArgumentList.Arguments
-                        .Select(a => exprTransformer.TransformExpression(a.Expression))
+                    var superArgs = ctorSyntax
+                        .Initializer.ArgumentList.Arguments.Select(a =>
+                            exprTransformer.TransformExpression(a.Expression)
+                        )
                         .ToList();
-                    assignStatements.Add(new TsExpressionStatement(
-                        new TsCallExpression(new TsIdentifier("super"), superArgs)));
+                    assignStatements.Add(
+                        new TsExpressionStatement(
+                            new TsCallExpression(new TsIdentifier("super"), superArgs)
+                        )
+                    );
                 }
             }
 
             // Transform constructor body
             var ctorSyntaxNode = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
-            if (ctorSyntaxNode is ConstructorDeclarationSyntax ctorDecl && ctorDecl.Body is not null)
+            if (
+                ctorSyntaxNode is ConstructorDeclarationSyntax ctorDecl
+                && ctorDecl.Body is not null
+            )
             {
                 var semanticModel = _context.Compilation.GetSemanticModel(ctorDecl.SyntaxTree);
                 var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
@@ -102,12 +123,18 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
                     assignStatements.Add(exprTransformer.TransformStatement(stmt));
                 }
             }
-            else if (ctorSyntaxNode is ConstructorDeclarationSyntax ctorExpr && ctorExpr.ExpressionBody is not null)
+            else if (
+                ctorSyntaxNode is ConstructorDeclarationSyntax ctorExpr
+                && ctorExpr.ExpressionBody is not null
+            )
             {
                 var semanticModel = _context.Compilation.GetSemanticModel(ctorExpr.SyntaxTree);
                 var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
-                assignStatements.Add(new TsExpressionStatement(
-                    exprTransformer.TransformExpression(ctorExpr.ExpressionBody.Expression)));
+                assignStatements.Add(
+                    new TsExpressionStatement(
+                        exprTransformer.TransformExpression(ctorExpr.ExpressionBody.Expression)
+                    )
+                );
             }
 
             body.Add(new TsIfStatement(condition, assignStatements));
@@ -116,7 +143,7 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
         // Dispatcher constructor: (...args: unknown[])
         var dispatcherParams = new List<TsConstructorParam>
         {
-            new("...args", new TsNamedType("unknown[]"))
+            new("...args", new TsNamedType("unknown[]")),
         };
 
         return new TsConstructor(dispatcherParams, body, overloads);
@@ -128,11 +155,15 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
     /// and delegates to the matching fast path with cast arguments.
     /// </summary>
     public IReadOnlyList<TsClassMember> BuildMethod(
-        INamedTypeSymbol type, List<IMethodSymbol> methods)
+        INamedTypeSymbol type,
+        List<IMethodSymbol> methods
+    )
     {
         var sorted = methods.OrderByDescending(m => m.Parameters.Length).ToList();
         var firstName = sorted[0];
-        var name = SymbolHelper.GetNameOverride(firstName) ?? TypeScriptNaming.ToCamelCaseMember(firstName.Name);
+        var name =
+            SymbolHelper.GetNameOverride(firstName)
+            ?? TypeScriptNaming.ToCamelCaseMember(firstName.Name);
         var isStatic = firstName.IsStatic;
         var isAsync = sorted.Any(m => m.IsAsync);
         var accessibility = TypeTransformer.MapAccessibility(firstName.DeclaredAccessibility);
@@ -154,13 +185,18 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
         }
 
         // Generate overload signatures (kept on the dispatcher for backward compat)
-        var overloads = sorted.Select(m =>
-        {
-            var @params = m.Parameters
-                .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
-                .ToList();
-            return new TsMethodOverload(@params, TypeMapper.Map(m.ReturnType));
-        }).ToList();
+        var overloads = sorted
+            .Select(m =>
+            {
+                var @params = m
+                    .Parameters.Select(p => new TsParameter(
+                        TypeScriptNaming.ToCamelCase(p.Name),
+                        TypeMapper.Map(p.Type)
+                    ))
+                    .ToList();
+                return new TsMethodOverload(@params, TypeMapper.Map(m.ReturnType));
+            })
+            .ToList();
 
         // Compute fast-path names (one per overload, unique within the group)
         var fastPathNames = ComputeFastPathNames(name, sorted);
@@ -172,7 +208,8 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
             var method = sorted[i];
             var fastPathName = fastPathNames[i];
             var fastPathMethod = BuildFastPathMethod(method, fastPathName, isStatic);
-            if (fastPathMethod is not null) members.Add(fastPathMethod);
+            if (fastPathMethod is not null)
+                members.Add(fastPathMethod);
         }
 
         // Generate dispatcher body that delegates to fast-paths
@@ -186,13 +223,17 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
             TsExpression condition = new TsBinaryExpression(
                 new TsPropertyAccess(new TsIdentifier("args"), "length"),
                 "===",
-                new TsLiteral(paramCount.ToString()));
+                new TsLiteral(paramCount.ToString())
+            );
 
             for (var j = 0; j < paramCount; j++)
             {
                 var check = TypeCheckGenerator.GenerateForParam(
-                    method.Parameters[j].Type, j,
-                    _context.AssemblyWideTranspile, _context.CurrentAssembly);
+                    method.Parameters[j].Type,
+                    j,
+                    _context.AssemblyWideTranspile,
+                    _context.CurrentAssembly
+                );
                 condition = new TsBinaryExpression(condition, "&&", check);
             }
 
@@ -201,9 +242,7 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
             for (var j = 0; j < paramCount; j++)
             {
                 var paramType = TypeMapper.Map(method.Parameters[j].Type);
-                callArgs.Add(new TsCastExpression(
-                    new TsIdentifier($"args[{j}]"),
-                    paramType));
+                callArgs.Add(new TsCastExpression(new TsIdentifier($"args[{j}]"), paramType));
             }
 
             var receiver = isStatic
@@ -211,7 +250,8 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
                 : new TsIdentifier("this");
             var delegateCall = new TsCallExpression(
                 new TsPropertyAccess(receiver, fastPathName),
-                callArgs);
+                callArgs
+            );
 
             var branchStatements = new List<TsStatement>();
             if (method.ReturnsVoid)
@@ -228,18 +268,33 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
         }
 
         // Add throw at the end for unmatched overloads
-        body.Add(new TsThrowStatement(
-            new TsNewExpression(new TsIdentifier("Error"),
-                [new TsStringLiteral($"No matching overload for {name}")])));
+        body.Add(
+            new TsThrowStatement(
+                new TsNewExpression(
+                    new TsIdentifier("Error"),
+                    [new TsStringLiteral($"No matching overload for {name}")]
+                )
+            )
+        );
 
         // Dispatcher params: ...args: unknown[]
         var dispatcherParams = new List<TsParameter>
         {
-            new("...args", new TsNamedType("unknown[]"))
+            new("...args", new TsNamedType("unknown[]")),
         };
 
-        members.Add(new TsMethodMember(name, dispatcherParams, commonReturn, body,
-            Static: isStatic, Async: isAsync, Accessibility: accessibility, Overloads: overloads));
+        members.Add(
+            new TsMethodMember(
+                name,
+                dispatcherParams,
+                commonReturn,
+                body,
+                Static: isStatic,
+                Async: isAsync,
+                Accessibility: accessibility,
+                Overloads: overloads
+            )
+        );
 
         return members;
     }
@@ -249,20 +304,34 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
     /// dispatcher delegates to once a match is detected).
     /// </summary>
     private TsMethodMember? BuildFastPathMethod(
-        IMethodSymbol method, string fastPathName, bool isStatic)
+        IMethodSymbol method,
+        string fastPathName,
+        bool isStatic
+    )
     {
-        var syntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as MethodDeclarationSyntax;
-        if (syntax is null) return null;
+        var syntax =
+            method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+            as MethodDeclarationSyntax;
+        if (syntax is null)
+            return null;
 
         var semanticModel = _context.Compilation.GetSemanticModel(syntax.SyntaxTree);
         var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
-        if (!method.IsStatic) exprTransformer.SelfParameterName = "this";
+        if (!method.IsStatic)
+            exprTransformer.SelfParameterName = "this";
 
-        var parameters = method.Parameters
-            .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+        var parameters = method
+            .Parameters.Select(p => new TsParameter(
+                TypeScriptNaming.ToCamelCase(p.Name),
+                TypeMapper.Map(p.Type)
+            ))
             .ToList();
         var returnType = TypeMapper.Map(method.ReturnType);
-        var body = exprTransformer.TransformBody(syntax.Body, syntax.ExpressionBody, isVoid: method.ReturnsVoid);
+        var body = exprTransformer.TransformBody(
+            syntax.Body,
+            syntax.ExpressionBody,
+            isVoid: method.ReturnsVoid
+        );
 
         return new TsMethodMember(
             fastPathName,
@@ -271,7 +340,7 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
             body,
             Static: isStatic,
             Async: method.IsAsync,
-            Accessibility: TsAccessibility.Private,  // fast paths are internal — dispatcher is the public API
+            Accessibility: TsAccessibility.Private, // fast paths are internal — dispatcher is the public API
             TypeParameters: TypeTransformer.ExtractMethodTypeParameters(method)
         );
     }
@@ -280,7 +349,10 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
     /// Computes a unique fast-path name for each overload in a group.
     /// Strategy: name + capitalized param names (e.g., addXY). On conflict, append type names.
     /// </summary>
-    private static IReadOnlyList<string> ComputeFastPathNames(string baseName, IReadOnlyList<IMethodSymbol> methods)
+    private static IReadOnlyList<string> ComputeFastPathNames(
+        string baseName,
+        IReadOnlyList<IMethodSymbol> methods
+    )
     {
         var firstAttempt = methods
             .Select(m => baseName + string.Concat(m.Parameters.Select(p => Capitalize(p.Name))))
@@ -290,12 +362,15 @@ public sealed class OverloadDispatcherBuilder(TypeScriptTransformContext context
             return firstAttempt;
 
         // Conflict — fall back to type-based naming
-        return methods.Select(m =>
-        {
-            var typeSuffix = string.Concat(m.Parameters.Select(p =>
-                Capitalize(SimpleTypeName(p.Type))));
-            return baseName + typeSuffix;
-        }).ToList();
+        return methods
+            .Select(m =>
+            {
+                var typeSuffix = string.Concat(
+                    m.Parameters.Select(p => Capitalize(SimpleTypeName(p.Type)))
+                );
+                return baseName + typeSuffix;
+            })
+            .ToList();
     }
 
     private static string Capitalize(string s) =>

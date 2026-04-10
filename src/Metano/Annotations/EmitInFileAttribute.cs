@@ -39,7 +39,12 @@ namespace Metano.Annotations;
 /// <param name="fileName">Kebab-case file name (without <c>.ts</c>) under which the
 /// type is co-located. All types sharing this name in the same namespace land in the
 /// same file.</param>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum | AttributeTargets.Interface)]
+[AttributeUsage(
+    AttributeTargets.Class
+        | AttributeTargets.Struct
+        | AttributeTargets.Enum
+        | AttributeTargets.Interface
+)]
 public sealed class EmitInFileAttribute(string fileName) : Attribute
 {
     public string FileName { get; } = fileName;

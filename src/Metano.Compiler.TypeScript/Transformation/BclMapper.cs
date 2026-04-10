@@ -26,13 +26,20 @@ public static class BclMapper
         ExpressionTransformer transformer
     )
     {
-        if (symbol.ContainingType is null) return null;
+        if (symbol.ContainingType is null)
+            return null;
 
         var obj = transformer.TransformExpression(member.Expression);
 
         // 1. Declarative property mapping wins over any hardcoded fallback below.
-        if (symbol.Kind is SymbolKind.Property or SymbolKind.Field
-            && transformer.DeclarativeMappings.TryGetProperty(symbol.ContainingType, symbol.Name, out var propMapping))
+        if (
+            symbol.Kind is SymbolKind.Property or SymbolKind.Field
+            && transformer.DeclarativeMappings.TryGetProperty(
+                symbol.ContainingType,
+                symbol.Name,
+                out var propMapping
+            )
+        )
         {
             // For instance access (`x.Prop`), the receiver is `obj`. For static access
             // (`Type.Prop`), the receiver is dropped — `obj` would be the bare type
@@ -67,7 +74,8 @@ public static class BclMapper
         ExpressionTransformer transformer
     )
     {
-        if (method.ContainingType is null) return null;
+        if (method.ContainingType is null)
+            return null;
 
         var name = method.Name;
 
@@ -79,7 +87,13 @@ public static class BclMapper
         // Multiple entries per (Type, Name) are allowed when WhenArg0StringEquals filters
         // are used to discriminate between literal arg shapes. Walk in declaration order
         // and pick the first whose filter matches the call site.
-        if (transformer.DeclarativeMappings.TryGetMethods(method.ContainingType, name, out var methodMappings))
+        if (
+            transformer.DeclarativeMappings.TryGetMethods(
+                method.ContainingType,
+                name,
+                out var methodMappings
+            )
+        )
         {
             DeclarativeMappingEntry? match = null;
             foreach (var candidate in methodMappings)
@@ -101,19 +115,23 @@ public static class BclMapper
                 // access syntax) have no receiver to substitute.
                 TsExpression? receiver = null;
                 if (invocation.Expression is MemberAccessExpressionSyntax declarativeReceiverAccess)
-                    receiver = transformer.TransformExpression(declarativeReceiverAccess.Expression);
+                    receiver = transformer.TransformExpression(
+                        declarativeReceiverAccess.Expression
+                    );
 
                 // Apply source-receiver wrapping when the entry uses WrapReceiver and the
                 // receiver is not already a chained call from the same wrapper. The
                 // detection is generic over the wrapper namespace — see WrapReceiverIfNeeded.
                 if (match.HasWrapReceiver && receiver is not null)
-                    receiver = WrapReceiverIfNeeded(receiver, match.WrapReceiver!, transformer.DeclarativeMappings);
+                    receiver = WrapReceiverIfNeeded(
+                        receiver,
+                        match.WrapReceiver!,
+                        transformer.DeclarativeMappings
+                    );
 
                 // Capture generic method type-argument names for $T0/$T1/... template
                 // placeholders. For non-generic methods this is the empty list.
-                var typeArgNames = method.TypeArguments
-                    .Select(t => t.Name)
-                    .ToList();
+                var typeArgNames = method.TypeArguments.Select(t => t.Name).ToList();
 
                 return ApplyMethodMapping(match, receiver, args, typeArgNames);
             }
@@ -166,7 +184,8 @@ public static class BclMapper
     /// </summary>
     private static TsExpression ApplyPropertyMapping(
         DeclarativeMappingEntry mapping,
-        TsExpression? receiver)
+        TsExpression? receiver
+    )
     {
         if (mapping.HasTemplate)
         {
@@ -175,13 +194,12 @@ public static class BclMapper
                 receiver,
                 args: [],
                 typeArgumentNames: [],
-                runtimeImports: SplitRuntimeImports(mapping.RuntimeImports));
+                runtimeImports: SplitRuntimeImports(mapping.RuntimeImports)
+            );
         }
 
         var name = mapping.JsName!;
-        return receiver is not null
-            ? new TsPropertyAccess(receiver, name)
-            : new TsIdentifier(name);
+        return receiver is not null ? new TsPropertyAccess(receiver, name) : new TsIdentifier(name);
     }
 
     /// <summary>
@@ -206,7 +224,8 @@ public static class BclMapper
         DeclarativeMappingEntry mapping,
         TsExpression? receiver,
         IReadOnlyList<TsExpression> args,
-        IReadOnlyList<string> typeArgumentNames)
+        IReadOnlyList<string> typeArgumentNames
+    )
     {
         if (mapping.HasTemplate)
         {
@@ -215,7 +234,8 @@ public static class BclMapper
                 receiver,
                 args,
                 typeArgumentNames,
-                SplitRuntimeImports(mapping.RuntimeImports));
+                SplitRuntimeImports(mapping.RuntimeImports)
+            );
         }
 
         var name = mapping.JsName!;
@@ -232,12 +252,9 @@ public static class BclMapper
     /// </summary>
     private static IReadOnlyList<string> SplitRuntimeImports(string? raw)
     {
-        if (string.IsNullOrWhiteSpace(raw)) return [];
-        return raw!
-            .Split(',')
-            .Select(s => s.Trim())
-            .Where(s => s.Length > 0)
-            .ToList();
+        if (string.IsNullOrWhiteSpace(raw))
+            return [];
+        return raw!.Split(',').Select(s => s.Trim()).Where(s => s.Length > 0).ToList();
     }
 
     /// <summary>
@@ -246,10 +263,15 @@ public static class BclMapper
     /// an entry with <see cref="DeclarativeMappingEntry.WhenArg0StringEquals"/> matches
     /// only when arg 0 is a TS string literal whose value equals the filter.
     /// </summary>
-    private static bool MatchesArgFilter(DeclarativeMappingEntry entry, IReadOnlyList<TsExpression> args)
+    private static bool MatchesArgFilter(
+        DeclarativeMappingEntry entry,
+        IReadOnlyList<TsExpression> args
+    )
     {
-        if (!entry.HasArgFilter) return true;
-        if (args.Count < 1) return false;
+        if (!entry.HasArgFilter)
+            return true;
+        if (args.Count < 1)
+            return false;
         return args[0] is TsStringLiteral str && str.Value == entry.WhenArg0StringEquals;
     }
 
@@ -277,7 +299,8 @@ public static class BclMapper
     private static TsExpression WrapReceiverIfNeeded(
         TsExpression receiver,
         string wrapReceiver,
-        DeclarativeMappingRegistry mappings)
+        DeclarativeMappingRegistry mappings
+    )
     {
         if (IsAlreadyWrappedBy(receiver, wrapReceiver, mappings))
             return receiver;
@@ -300,18 +323,19 @@ public static class BclMapper
 
         var root = wrapReceiver[..dot];
         var member = wrapReceiver[(dot + 1)..];
-        return new TsCallExpression(
-            new TsPropertyAccess(new TsIdentifier(root), member),
-            [source]);
+        return new TsCallExpression(new TsPropertyAccess(new TsIdentifier(root), member), [source]);
     }
 
     private static bool IsAlreadyWrappedBy(
         TsExpression receiver,
         string wrapReceiver,
-        DeclarativeMappingRegistry mappings)
+        DeclarativeMappingRegistry mappings
+    )
     {
-        if (receiver is not TsCallExpression call) return false;
-        if (call.Callee is not TsPropertyAccess access) return false;
+        if (receiver is not TsCallExpression call)
+            return false;
+        if (call.Callee is not TsPropertyAccess access)
+            return false;
 
         // Detection 1: callee is a property access on the wrapper's root identifier.
         // Covers Enumerable.from(...), Enumerable.range(...), Enumerable.empty(), etc.

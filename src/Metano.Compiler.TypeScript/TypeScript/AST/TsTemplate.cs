@@ -35,15 +35,21 @@ public sealed record TsTemplate(
     TsExpression? Receiver,
     IReadOnlyList<TsExpression> Arguments,
     IReadOnlyList<string> TypeArgumentNames,
-    IReadOnlyList<string> RuntimeImports) : TsExpression
+    IReadOnlyList<string> RuntimeImports
+) : TsExpression
 {
-    public TsTemplate(string template, TsExpression? receiver, IReadOnlyList<TsExpression> arguments)
+    public TsTemplate(
+        string template,
+        TsExpression? receiver,
+        IReadOnlyList<TsExpression> arguments
+    )
         : this(template, receiver, arguments, [], []) { }
 
     public TsTemplate(
         string template,
         TsExpression? receiver,
         IReadOnlyList<TsExpression> arguments,
-        IReadOnlyList<string> typeArgumentNames)
+        IReadOnlyList<string> typeArgumentNames
+    )
         : this(template, receiver, arguments, typeArgumentNames, []) { }
 }

@@ -57,10 +57,7 @@ public class InMemoryIssueRepository : IIssueRepository
             .ThenBy(issue => issue.Title)
             .ToList();
 
-        var items = filtered
-            .Skip(page.Skip)
-            .Take(page.SafeSize)
-            .ToList();
+        var items = filtered.Skip(page.Skip).Take(page.SafeSize).ToList();
 
         return Task.FromResult(new PageResult<Issue>(items, filtered.Count, page));
     }

@@ -18,9 +18,12 @@ namespace Metano.Transformation;
 /// Field checks recurse into other transpilable guards via the supplied
 /// <see cref="_transpilableTypeMap"/>.
 /// </summary>
-public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbol> transpilableTypeMap)
+public sealed class TypeGuardBuilder(
+    IReadOnlyDictionary<string, INamedTypeSymbol> transpilableTypeMap
+)
 {
-    private readonly IReadOnlyDictionary<string, INamedTypeSymbol> _transpilableTypeMap = transpilableTypeMap;
+    private readonly IReadOnlyDictionary<string, INamedTypeSymbol> _transpilableTypeMap =
+        transpilableTypeMap;
 
     /// <summary>
     /// Returns null when the type doesn't need a guard (exceptions, ExportedAsModule,
@@ -28,9 +31,12 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
     /// </summary>
     public TsFunction? Generate(INamedTypeSymbol type)
     {
-        if (TypeTransformer.IsExceptionType(type)) return null;
-        if (SymbolHelper.HasExportedAsModule(type) || TypeTransformer.HasExtensionMembers(type)) return null;
-        if (SymbolHelper.HasImport(type)) return null;
+        if (TypeTransformer.IsExceptionType(type))
+            return null;
+        if (SymbolHelper.HasExportedAsModule(type) || TypeTransformer.HasExtensionMembers(type))
+            return null;
+        if (SymbolHelper.HasImport(type))
+            return null;
 
         var tsName = TypeTransformer.GetTsTypeName(type);
         var guardName = $"is{tsName}";
@@ -49,10 +55,17 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
     }
 
     private static TsFunction GenerateEnumGuard(
-        INamedTypeSymbol type, string guardName, string tsName, TsParameter valueParam)
+        INamedTypeSymbol type,
+        string guardName,
+        string tsName,
+        TsParameter valueParam
+    )
     {
         var isStringEnum = SymbolHelper.HasStringEnum(type);
-        var members = type.GetMembers().OfType<IFieldSymbol>().Where(f => f.HasConstantValue).ToList();
+        var members = type.GetMembers()
+            .OfType<IFieldSymbol>()
+            .Where(f => f.HasConstantValue)
+            .ToList();
 
         TsExpression condition;
 
@@ -64,7 +77,10 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
                 {
                     var name = SymbolHelper.GetNameOverride(m) ?? m.Name;
                     return new TsBinaryExpression(
-                        new TsIdentifier("value"), "===", new TsStringLiteral(name));
+                        new TsIdentifier("value"),
+                        "===",
+                        new TsStringLiteral(name)
+                    );
                 })
                 .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
         }
@@ -72,60 +88,89 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
         {
             // typeof value === "number" && (value === 0 || value === 1 || ...)
             var valueChecks = members
-                .Select<IFieldSymbol, TsExpression>(m =>
-                    new TsBinaryExpression(
-                        new TsIdentifier("value"), "===", new TsLiteral(m.ConstantValue!.ToString()!)))
+                .Select<IFieldSymbol, TsExpression>(m => new TsBinaryExpression(
+                    new TsIdentifier("value"),
+                    "===",
+                    new TsLiteral(m.ConstantValue!.ToString()!)
+                ))
                 .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
 
             condition = new TsBinaryExpression(
                 new TsBinaryExpression(
                     new TsUnaryExpression("typeof ", new TsIdentifier("value")),
-                    "===", new TsStringLiteral("number")),
+                    "===",
+                    new TsStringLiteral("number")
+                ),
                 "&&",
-                new TsParenthesized(valueChecks));
+                new TsParenthesized(valueChecks)
+            );
         }
 
-        return new TsFunction(guardName, [valueParam],
+        return new TsFunction(
+            guardName,
+            [valueParam],
             new TsTypePredicateType("value", new TsNamedType(tsName)),
-            [new TsReturnStatement(condition)]);
+            [new TsReturnStatement(condition)]
+        );
     }
 
     private TsFunction GenerateShapeGuard(
-        INamedTypeSymbol type, string guardName, string tsName, TsParameter valueParam,
-        bool useInstanceof)
+        INamedTypeSymbol type,
+        string guardName,
+        string tsName,
+        TsParameter valueParam,
+        bool useInstanceof
+    )
     {
         var body = new List<TsStatement>();
 
         // instanceof fast path (for classes/records only)
         if (useInstanceof)
         {
-            body.Add(new TsIfStatement(
-                new TsBinaryExpression(new TsIdentifier("value"), "instanceof", new TsIdentifier(tsName)),
-                [new TsReturnStatement(new TsLiteral("true"))]
-            ));
+            body.Add(
+                new TsIfStatement(
+                    new TsBinaryExpression(
+                        new TsIdentifier("value"),
+                        "instanceof",
+                        new TsIdentifier(tsName)
+                    ),
+                    [new TsReturnStatement(new TsLiteral("true"))]
+                )
+            );
         }
 
         // Null/object check
-        body.Add(new TsIfStatement(
-            new TsBinaryExpression(
-                new TsBinaryExpression(new TsIdentifier("value"), "==", new TsLiteral("null")),
-                "||",
+        body.Add(
+            new TsIfStatement(
                 new TsBinaryExpression(
-                    new TsUnaryExpression("typeof ", new TsIdentifier("value")),
-                    "!==", new TsStringLiteral("object"))),
-            [new TsReturnStatement(new TsLiteral("false"))]
-        ));
+                    new TsBinaryExpression(new TsIdentifier("value"), "==", new TsLiteral("null")),
+                    "||",
+                    new TsBinaryExpression(
+                        new TsUnaryExpression("typeof ", new TsIdentifier("value")),
+                        "!==",
+                        new TsStringLiteral("object")
+                    )
+                ),
+                [new TsReturnStatement(new TsLiteral("false"))]
+            )
+        );
 
         // const v = value as any;
-        body.Add(new TsVariableDeclaration("v",
-            new TsCastExpression(new TsIdentifier("value"), new TsAnyType())));
+        body.Add(
+            new TsVariableDeclaration(
+                "v",
+                new TsCastExpression(new TsIdentifier("value"), new TsAnyType())
+            )
+        );
 
         // Field checks
         var fields = GetAllFieldsForGuard(type);
         if (fields.Count > 0)
         {
             TsExpression fieldChecks = fields
-                .Select(f => GenerateFieldCheck(new TsPropertyAccess(new TsIdentifier("v"), f.Name), f.Type))
+                .Select(f =>
+                    GenerateFieldCheck(new TsPropertyAccess(new TsIdentifier("v"), f.Name), f.Type)
+                )
                 .Aggregate((a, b) => new TsBinaryExpression(a, "&&", b));
 
             body.Add(new TsReturnStatement(fieldChecks));
@@ -135,35 +180,50 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
             body.Add(new TsReturnStatement(new TsLiteral("true")));
         }
 
-        return new TsFunction(guardName, [valueParam],
-            new TsTypePredicateType("value", new TsNamedType(tsName)), body);
+        return new TsFunction(
+            guardName,
+            [valueParam],
+            new TsTypePredicateType("value", new TsNamedType(tsName)),
+            body
+        );
     }
 
     /// <summary>
     /// Gets all fields (own + inherited) for guard validation.
     /// </summary>
-    private static IReadOnlyList<(string Name, TsType Type)> GetAllFieldsForGuard(INamedTypeSymbol type)
+    private static IReadOnlyList<(string Name, TsType Type)> GetAllFieldsForGuard(
+        INamedTypeSymbol type
+    )
     {
         var fields = new List<(string Name, TsType Type)>();
 
         // Collect from all levels of hierarchy
         var current = type;
-        while (current is not null && current.SpecialType == SpecialType.None
-            && current.ToDisplayString() is not "System.Object" and not "System.ValueType")
+        while (
+            current is not null
+            && current.SpecialType == SpecialType.None
+            && current.ToDisplayString() is not "System.Object" and not "System.ValueType"
+        )
         {
             foreach (var member in current.GetMembers().OfType<IPropertySymbol>())
             {
-                if (member.IsImplicitlyDeclared) continue;
-                if (member.IsStatic) continue;
+                if (member.IsImplicitlyDeclared)
+                    continue;
+                if (member.IsStatic)
+                    continue;
                 // Unified policy: exclude Private, Internal, and NotApplicable.
                 // ProtectedAndInternal (C# `private protected`) and
                 // ProtectedOrInternal (C# `protected internal`) are treated as
                 // TS `protected` — included in the guard because TS has no
                 // assembly-level visibility distinction.
-                if (!IsGuardVisible(member.DeclaredAccessibility)) continue;
-                if (SymbolHelper.HasIgnore(member)) continue;
+                if (!IsGuardVisible(member.DeclaredAccessibility))
+                    continue;
+                if (SymbolHelper.HasIgnore(member))
+                    continue;
 
-                var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
+                var name =
+                    SymbolHelper.GetNameOverride(member)
+                    ?? TypeScriptNaming.ToCamelCase(member.Name);
                 var tsType = TypeMapper.Map(member.Type);
 
                 // Avoid duplicates (from overrides)
@@ -173,13 +233,20 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
 
             foreach (var member in current.GetMembers().OfType<IFieldSymbol>())
             {
-                if (member.IsImplicitlyDeclared) continue;
-                if (member.IsStatic) continue;
-                if (member.AssociatedSymbol is not null) continue;
-                if (!IsGuardVisible(member.DeclaredAccessibility)) continue;
-                if (SymbolHelper.HasIgnore(member)) continue;
+                if (member.IsImplicitlyDeclared)
+                    continue;
+                if (member.IsStatic)
+                    continue;
+                if (member.AssociatedSymbol is not null)
+                    continue;
+                if (!IsGuardVisible(member.DeclaredAccessibility))
+                    continue;
+                if (SymbolHelper.HasIgnore(member))
+                    continue;
 
-                var name = SymbolHelper.GetNameOverride(member) ?? TypeScriptNaming.ToCamelCase(member.Name);
+                var name =
+                    SymbolHelper.GetNameOverride(member)
+                    ?? TypeScriptNaming.ToCamelCase(member.Name);
                 var tsType = TypeMapper.Map(member.Type);
 
                 if (fields.All(f => f.Name != name))
@@ -201,10 +268,11 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
     /// excluded.
     /// </summary>
     private static bool IsGuardVisible(Accessibility accessibility) =>
-        accessibility is Accessibility.Public
-            or Accessibility.Protected
-            or Accessibility.ProtectedOrInternal
-            or Accessibility.ProtectedAndInternal;
+        accessibility
+            is Accessibility.Public
+                or Accessibility.Protected
+                or Accessibility.ProtectedOrInternal
+                or Accessibility.ProtectedAndInternal;
 
     /// <summary>
     /// Generates a runtime type check expression for a single field.
@@ -220,43 +288,61 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
 
             TsArrayType => new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
-                [fieldAccess]),
+                [fieldAccess]
+            ),
 
             TsNamedType { Name: "Map" } => new TsBinaryExpression(
-                fieldAccess, "instanceof", new TsIdentifier("Map")),
+                fieldAccess,
+                "instanceof",
+                new TsIdentifier("Map")
+            ),
 
             TsNamedType { Name: "Set" } => new TsBinaryExpression(
-                fieldAccess, "instanceof", new TsIdentifier("Set")),
+                fieldAccess,
+                "instanceof",
+                new TsIdentifier("Set")
+            ),
 
             // Temporal types
-            TsNamedType { Name: var n } when n.StartsWith("Temporal.") =>
-                new TsBinaryExpression(fieldAccess, "instanceof", new TsIdentifier(n)),
+            TsNamedType { Name: var n } when n.StartsWith("Temporal.") => new TsBinaryExpression(
+                fieldAccess,
+                "instanceof",
+                new TsIdentifier(n)
+            ),
 
             // Transpilable named type → call guard recursively
             TsNamedType { Name: var n } when _transpilableTypeMap.ContainsKey(n) =>
                 new TsCallExpression(new TsIdentifier($"is{n}"), [fieldAccess]),
 
             // Union with null (nullable) → field == null || innerCheck
-            TsUnionType { Types: var types } when types.Any(t => t is TsNamedType { Name: "null" }) =>
-                NullableFieldCheck(fieldAccess, types),
+            TsUnionType { Types: var types }
+                when types.Any(t => t is TsNamedType { Name: "null" }) => NullableFieldCheck(
+                fieldAccess,
+                types
+            ),
 
             // String literal union (from StringEnum that's not transpilable)
-            TsUnionType { Types: var types } when types.All(t => t is TsStringLiteralType) =>
-                types.Cast<TsStringLiteralType>()
-                    .Select<TsStringLiteralType, TsExpression>(t =>
-                        new TsBinaryExpression(fieldAccess, "===", new TsStringLiteral(t.Value)))
-                    .Aggregate((a, b) => new TsBinaryExpression(a, "||", b)),
+            TsUnionType { Types: var types } when types.All(t => t is TsStringLiteralType) => types
+                .Cast<TsStringLiteralType>()
+                .Select<TsStringLiteralType, TsExpression>(t => new TsBinaryExpression(
+                    fieldAccess,
+                    "===",
+                    new TsStringLiteral(t.Value)
+                ))
+                .Aggregate((a, b) => new TsBinaryExpression(a, "||", b)),
 
-            TsTupleType { Elements: var elements } =>
+            TsTupleType { Elements: var elements } => new TsBinaryExpression(
+                new TsCallExpression(
+                    new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
+                    [fieldAccess]
+                ),
+                "&&",
                 new TsBinaryExpression(
-                    new TsCallExpression(
-                        new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
-                        [fieldAccess]),
-                    "&&",
-                    new TsBinaryExpression(
-                        new TsPropertyAccess(fieldAccess, "length"),
-                        "===",
-                        new TsLiteral(elements.Count.ToString()))),
+                    new TsPropertyAccess(fieldAccess, "length"),
+                    "===",
+                    new TsLiteral(elements.Count.ToString())
+                )
+            ),
 
             TsAnyType or TsVoidType or TsPromiseType => new TsLiteral("true"),
 
@@ -269,22 +355,29 @@ public sealed class TypeGuardBuilder(IReadOnlyDictionary<string, INamedTypeSymbo
         new TsBinaryExpression(
             new TsUnaryExpression("typeof ", expr),
             "===",
-            new TsStringLiteral(typeName));
+            new TsStringLiteral(typeName)
+        );
 
-    private TsExpression NullableFieldCheck(TsExpression fieldAccess, IReadOnlyList<TsType> unionTypes)
+    private TsExpression NullableFieldCheck(
+        TsExpression fieldAccess,
+        IReadOnlyList<TsType> unionTypes
+    )
     {
         var nonNullTypes = unionTypes.Where(t => t is not TsNamedType { Name: "null" }).ToList();
-        if (nonNullTypes.Count == 0) return new TsLiteral("true");
+        if (nonNullTypes.Count == 0)
+            return new TsLiteral("true");
 
-        var innerCheck = nonNullTypes.Count == 1
-            ? GenerateFieldCheck(fieldAccess, nonNullTypes[0])
-            : nonNullTypes
-                .Select(t => GenerateFieldCheck(fieldAccess, t))
-                .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
+        var innerCheck =
+            nonNullTypes.Count == 1
+                ? GenerateFieldCheck(fieldAccess, nonNullTypes[0])
+                : nonNullTypes
+                    .Select(t => GenerateFieldCheck(fieldAccess, t))
+                    .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
 
         return new TsBinaryExpression(
             new TsBinaryExpression(fieldAccess, "==", new TsLiteral("null")),
             "||",
-            innerCheck);
+            innerCheck
+        );
     }
 }

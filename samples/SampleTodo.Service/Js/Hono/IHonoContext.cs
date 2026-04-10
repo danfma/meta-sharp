@@ -12,22 +12,34 @@ namespace SampleTodo.Service.Js.Hono;
 [NoEmit]
 public interface IHonoContext
 {
-    [Name("text")] IHonoContext Text(string text);
-    [Name("text")] IHonoContext Text(string text, int status);
+    [Name("text")]
+    IHonoContext Text(string text);
 
-    [Name("json")] IHonoContext Json<T>(T value);
-    [Name("json")] IHonoContext Json<T>(T value, int status);
+    [Name("text")]
+    IHonoContext Text(string text, int status);
+
+    [Name("json")]
+    IHonoContext Json<T>(T value);
+
+    [Name("json")]
+    IHonoContext Json<T>(T value, int status);
 
     /// <summary>
     /// Returns a response with no body. Use for status codes that disallow content
     /// (204 No Content, 304 Not Modified, etc.) — Hono's <c>text()</c> overload
     /// rejects those because its return type is restricted to ContentfulStatusCode.
     /// </summary>
-    [Name("body")] IHonoContext Body(string? data, int status);
+    [Name("body")]
+    IHonoContext Body(string? data, int status);
 
-    [Name("notFound")] IHonoContext NotFound();
+    [Name("notFound")]
+    IHonoContext NotFound();
 
-    IHonoRequest Req { [Name("req")] get; }
+    IHonoRequest Req
+    {
+        [Name("req")]
+        get;
+    }
 }
 
 /// <summary>
@@ -41,12 +53,14 @@ public interface IHonoRequest
     /// Reads a path parameter (e.g., <c>:id</c>). Returns null when the key isn't
     /// declared in the route pattern.
     /// </summary>
-    [Name("param")] string? Param(string key);
+    [Name("param")]
+    string? Param(string key);
 
     /// <summary>
     /// Parses the request body as JSON and casts to <typeparamref name="T"/>. The
     /// runtime is Hono's plain JSON parser — no validation. Pair with
     /// <c>[PlainObject]</c> DTOs to keep the type contract honest at the boundary.
     /// </summary>
-    [Name("json")] Task<T> Json<T>();
+    [Name("json")]
+    Task<T> Json<T>();
 }

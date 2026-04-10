@@ -128,7 +128,9 @@ public class GenericTranspileTests
         );
 
         var output = result["finder.ts"];
-        await Assert.That(output).Contains("function find<T extends IEntity>(items: T[], id: string): T");
+        await Assert
+            .That(output)
+            .Contains("function find<T extends IEntity>(items: T[], id: string): T");
     }
 
     [Test]

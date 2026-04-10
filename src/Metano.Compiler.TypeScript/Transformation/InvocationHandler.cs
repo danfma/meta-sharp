@@ -40,8 +40,8 @@ public sealed class InvocationHandler(ExpressionTransformer parent)
             var emit = TypeScriptNaming.GetEmit(methodSymbol);
             if (emit is not null)
             {
-                var emitArgs = invocation.ArgumentList.Arguments
-                    .Select(a => _parent.TransformExpression(a.Expression))
+                var emitArgs = invocation
+                    .ArgumentList.Arguments.Select(a => _parent.TransformExpression(a.Expression))
                     .ToList();
                 return ExpandEmit(emit, emitArgs);
             }
@@ -54,18 +54,24 @@ public sealed class InvocationHandler(ExpressionTransformer parent)
             // `methodName(obj, args)` since the type has no class wrapper at runtime
             // — methods are emitted as standalone helpers that take the receiver as
             // their first parameter (see RecordClassTransformer.EmitPlainObjectMethods).
-            if (!methodSymbol.IsStatic
+            if (
+                !methodSymbol.IsStatic
                 && methodSymbol.MethodKind == MethodKind.Ordinary
                 && methodSymbol.ContainingType is { } container
                 && SymbolHelper.HasPlainObject(container)
-                && invocation.Expression is MemberAccessExpressionSyntax memberAccess)
+                && invocation.Expression is MemberAccessExpressionSyntax memberAccess
+            )
             {
                 var receiver = _parent.TransformExpression(memberAccess.Expression);
-                var fnName = SymbolHelper.GetNameOverride(methodSymbol)
+                var fnName =
+                    SymbolHelper.GetNameOverride(methodSymbol)
                     ?? TypeScriptNaming.ToCamelCase(methodSymbol.Name);
                 var helperArgs = new List<TsExpression> { receiver };
-                helperArgs.AddRange(invocation.ArgumentList.Arguments
-                    .Select(a => _parent.TransformExpression(a.Expression)));
+                helperArgs.AddRange(
+                    invocation.ArgumentList.Arguments.Select(a =>
+                        _parent.TransformExpression(a.Expression)
+                    )
+                );
                 return new TsCallExpression(new TsIdentifier(fnName), helperArgs);
             }
         }

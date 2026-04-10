@@ -22,7 +22,9 @@ public class EnumExtensionTests
         );
 
         var output = result["priority-extensions.ts"];
-        await Assert.That(output).Contains("export function isElevated(priority: Priority): boolean");
+        await Assert
+            .That(output)
+            .Contains("export function isElevated(priority: Priority): boolean");
         await Assert.That(output).Contains("Priority.High");
         await Assert.That(output).Contains("Priority.Urgent");
     }

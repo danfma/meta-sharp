@@ -16,10 +16,7 @@ public sealed record TsMethodMember(
 /// <summary>
 /// An overload signature for a method: methodName(param: Type): ReturnType;
 /// </summary>
-public sealed record TsMethodOverload(
-    IReadOnlyList<TsParameter> Parameters,
-    TsType ReturnType
-);
+public sealed record TsMethodOverload(IReadOnlyList<TsParameter> Parameters, TsType ReturnType);
 
 public enum TsAccessibility
 {

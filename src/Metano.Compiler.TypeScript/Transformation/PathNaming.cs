@@ -26,9 +26,10 @@ public sealed class PathNaming(string rootNamespace)
     public string GetRelativePath(string ns, string typeName)
     {
         var relative = StripRootNamespace(ns);
-        var segments = relative.Length > 0
-            ? relative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
-            : [];
+        var segments =
+            relative.Length > 0
+                ? relative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
+                : [];
 
         var fileName = SymbolHelper.ToKebabCase(typeName);
         return segments.Length > 0
@@ -38,8 +39,10 @@ public sealed class PathNaming(string rootNamespace)
 
     public string StripRootNamespace(string ns)
     {
-        if (RootNamespace.Length == 0 || ns.Length == 0) return ns;
-        if (ns == RootNamespace) return "";
+        if (RootNamespace.Length == 0 || ns.Length == 0)
+            return ns;
+        if (ns == RootNamespace)
+            return "";
         if (ns.StartsWith(RootNamespace + "."))
             return ns[(RootNamespace.Length + 1)..];
         return ns;
@@ -62,9 +65,10 @@ public sealed class PathNaming(string rootNamespace)
     public string ComputeRelativeImportPath(string fromNs, string toNs, string typeName)
     {
         var toRelative = StripRootNamespace(toNs);
-        var toParts = toRelative.Length > 0
-            ? toRelative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
-            : [];
+        var toParts =
+            toRelative.Length > 0
+                ? toRelative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
+                : [];
 
         // Same namespace: use relative file import to avoid importing through the same
         // namespace barrel that re-exports the current file. This prevents trivial
@@ -75,7 +79,8 @@ public sealed class PathNaming(string rootNamespace)
         }
 
         // Different namespace: import the namespace barrel.
-        if (toParts.Length == 0) return "#";
+        if (toParts.Length == 0)
+            return "#";
         return "#/" + string.Join("/", toParts);
     }
 
@@ -91,23 +96,27 @@ public sealed class PathNaming(string rootNamespace)
     ///
     /// No <c>#/</c> prefix and no <c>.ts</c> suffix.
     /// </summary>
-    public static string ComputeSubPath(string assemblyRootNamespace, string typeNamespace, string typeName)
+    public static string ComputeSubPath(
+        string assemblyRootNamespace,
+        string typeNamespace,
+        string typeName
+    )
     {
         var relative = typeNamespace;
         if (assemblyRootNamespace.Length > 0)
         {
-            if (typeNamespace == assemblyRootNamespace) relative = "";
+            if (typeNamespace == assemblyRootNamespace)
+                relative = "";
             else if (typeNamespace.StartsWith(assemblyRootNamespace + "."))
                 relative = typeNamespace[(assemblyRootNamespace.Length + 1)..];
         }
 
-        var segments = relative.Length > 0
-            ? relative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
-            : [];
+        var segments =
+            relative.Length > 0
+                ? relative.Split('.').Select(SymbolHelper.ToKebabCase).ToArray()
+                : [];
 
-        return segments.Length > 0
-            ? string.Join("/", segments)
-            : "";
+        return segments.Length > 0 ? string.Join("/", segments) : "";
     }
 
     /// <summary>
@@ -116,8 +125,10 @@ public sealed class PathNaming(string rootNamespace)
     /// </summary>
     public static string FindCommonNamespacePrefix(IReadOnlyList<string> namespaces)
     {
-        if (namespaces.Count == 0) return "";
-        if (namespaces.Count == 1) return namespaces[0];
+        if (namespaces.Count == 0)
+            return "";
+        if (namespaces.Count == 1)
+            return namespaces[0];
 
         var parts = namespaces[0].Split('.');
         var commonLength = parts.Length;

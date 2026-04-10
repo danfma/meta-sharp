@@ -7,8 +7,18 @@ public static class IssueWorkflow
         {
             IssueStatus.Backlog => [IssueStatus.Ready, IssueStatus.Cancelled],
             IssueStatus.Ready => [IssueStatus.InProgress, IssueStatus.Cancelled],
-            IssueStatus.InProgress => [IssueStatus.InReview, IssueStatus.Backlog, IssueStatus.Cancelled],
-            IssueStatus.InReview => [IssueStatus.Done, IssueStatus.InProgress, IssueStatus.Cancelled],
+            IssueStatus.InProgress =>
+            [
+                IssueStatus.InReview,
+                IssueStatus.Backlog,
+                IssueStatus.Cancelled,
+            ],
+            IssueStatus.InReview =>
+            [
+                IssueStatus.Done,
+                IssueStatus.InProgress,
+                IssueStatus.Cancelled,
+            ],
             _ => [],
         };
 

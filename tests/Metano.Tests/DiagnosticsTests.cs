@@ -28,9 +28,14 @@ public class DiagnosticsTests
         );
 
         await Assert.That(diagnostics.Count).IsGreaterThan(0);
-        await Assert.That(diagnostics.Any(d =>
-            d.Severity == MetanoDiagnosticSeverity.Warning &&
-            d.Code == DiagnosticCodes.UnsupportedFeature)).IsTrue();
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Severity == MetanoDiagnosticSeverity.Warning
+                    && d.Code == DiagnosticCodes.UnsupportedFeature
+                )
+            )
+            .IsTrue();
     }
 
     [Test]
@@ -74,7 +79,8 @@ public class DiagnosticsTests
             MetanoDiagnosticSeverity.Warning,
             "MS0001",
             "Test message",
-            null);
+            null
+        );
 
         await Assert.That(diag.Format()).IsEqualTo("warning MS0001: Test message");
     }

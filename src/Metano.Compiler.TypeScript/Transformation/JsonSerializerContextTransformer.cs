@@ -44,11 +44,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             new TsGetterMember(
                 "default",
                 new TsNamedType(contextName),
-                [
-                    new TsReturnStatement(
-                        new TsPropertyAccess(new TsIdentifier("this"), "_default")
-                    ),
-                ],
+                [new TsReturnStatement(new TsPropertyAccess(new TsIdentifier("this"), "_default"))],
                 Static: true
             )
         );
@@ -60,7 +56,11 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             var fieldName = "_" + TypeScriptNaming.ToCamelCase(tsTypeName);
             var getterName = TypeScriptNaming.ToCamelCase(tsTypeName);
             var runtimeJsonOrigin = new TsTypeOrigin("metano-runtime", "system/json");
-            var specType = new TsNamedType("TypeSpec", [new TsNamedType(tsTypeName)], runtimeJsonOrigin);
+            var specType = new TsNamedType(
+                "TypeSpec",
+                [new TsNamedType(tsTypeName)],
+                runtimeJsonOrigin
+            );
 
             // private _todoItem?: TypeSpec<TodoItem>;
             members.Add(
@@ -84,10 +84,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                                 new TsPropertyAccess(new TsIdentifier("this"), fieldName),
                                 "??=",
                                 new TsCallExpression(
-                                    new TsPropertyAccess(
-                                        new TsIdentifier("this"),
-                                        "createSpec"
-                                    ),
+                                    new TsPropertyAccess(new TsIdentifier("this"), "createSpec"),
                                     [specObject]
                                 )
                             )
@@ -120,8 +117,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         {
             if (
                 attr.AttributeClass?.Name
-                is not ("JsonSourceGenerationOptionsAttribute"
-                    or "JsonSourceGenerationOptions")
+                is not ("JsonSourceGenerationOptionsAttribute" or "JsonSourceGenerationOptions")
             )
                 continue;
 
@@ -165,8 +161,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         foreach (var attr in contextType.GetAttributes())
         {
             if (
-                attr.AttributeClass?.Name
-                is not ("JsonSerializableAttribute" or "JsonSerializable")
+                attr.AttributeClass?.Name is not ("JsonSerializableAttribute" or "JsonSerializable")
             )
                 continue;
 
@@ -223,25 +218,33 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
         // factory: (p) => new TodoItem(p.title as string, ...)
         var factoryArgs = properties
-            .Select(x => new TsCastExpression(
-                new TsPropertyAccess(new TsIdentifier("p"), x.TsName),
-                TypeMapper.Map(x.Property.Type)
-            ) as TsExpression)
+            .Select(x =>
+                new TsCastExpression(
+                    new TsPropertyAccess(new TsIdentifier("p"), x.TsName),
+                    TypeMapper.Map(x.Property.Type)
+                ) as TsExpression
+            )
             .ToList();
 
         var factoryProperty = new TsObjectProperty(
             "factory",
             new TsArrowFunction(
-                [new TsParameter("p", new TsNamedType("Record", [new TsStringType(), new TsNamedType("unknown")]))],
-                [new TsReturnStatement(new TsNewExpression(new TsIdentifier(tsTypeName), factoryArgs))]
+                [
+                    new TsParameter(
+                        "p",
+                        new TsNamedType("Record", [new TsStringType(), new TsNamedType("unknown")])
+                    ),
+                ],
+                [
+                    new TsReturnStatement(
+                        new TsNewExpression(new TsIdentifier(tsTypeName), factoryArgs)
+                    ),
+                ]
             )
         );
 
         // properties: [...]
-        var propertiesProperty = new TsObjectProperty(
-            "properties",
-            new TsArrayLiteral(propSpecs)
-        );
+        var propertiesProperty = new TsObjectProperty("properties", new TsArrayLiteral(propSpecs));
 
         var objectProps = new List<TsObjectProperty> { typeProperty };
         if (baseProperty is not null)
@@ -256,10 +259,11 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
     /// Collects public properties from the type, excluding [JsonIgnore], and computes
     /// both the TS field name and the JSON wire name.
     /// </summary>
-    private static List<(IPropertySymbol Property, string JsonName, string TsName)> CollectSerializableProperties(
-        INamedTypeSymbol type,
-        Func<string, string>? namingPolicy
-    )
+    private static List<(
+        IPropertySymbol Property,
+        string JsonName,
+        string TsName
+    )> CollectSerializableProperties(INamedTypeSymbol type, Func<string, string>? namingPolicy)
     {
         var result = new List<(IPropertySymbol, string, string)>();
 
@@ -276,8 +280,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             if (prop.IsIndexer)
                 continue;
 
-            var tsName = SymbolHelper.GetNameOverride(prop)
-                ?? TypeScriptNaming.ToCamelCase(prop.Name);
+            var tsName =
+                SymbolHelper.GetNameOverride(prop) ?? TypeScriptNaming.ToCamelCase(prop.Name);
 
             // JSON name: [JsonPropertyName] wins, otherwise apply naming policy
             var jsonName = GetJsonPropertyName(prop) ?? ApplyNamingPolicy(prop.Name, namingPolicy);
@@ -296,8 +300,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         foreach (var attr in prop.GetAttributes())
         {
             if (
-                attr.AttributeClass?.Name
-                is not ("JsonPropertyNameAttribute" or "JsonPropertyName")
+                attr.AttributeClass?.Name is not ("JsonPropertyNameAttribute" or "JsonPropertyName")
             )
                 continue;
 
@@ -427,10 +430,11 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
         // Add optional: true for nullable types
         if (
             prop.Type.NullableAnnotation == NullableAnnotation.Annotated
-            || prop.Type is INamedTypeSymbol
-            {
-                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
-            }
+            || prop.Type
+                is INamedTypeSymbol
+                {
+                    OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+                }
         )
         {
             props.Add(new TsObjectProperty("optional", new TsLiteral("true")));
@@ -450,27 +454,20 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             {
                 var innerType = UnwrapNullable(type);
                 var innerKind = ClassifyPropertyType(innerType);
-                return new TsObjectLiteral(
-                    [
-                        new TsObjectProperty("kind", new TsStringLiteral("nullable")),
-                        new TsObjectProperty("inner", BuildTypeDescriptor(innerType, innerKind)),
-                    ]
-                );
+                return new TsObjectLiteral([
+                    new TsObjectProperty("kind", new TsStringLiteral("nullable")),
+                    new TsObjectProperty("inner", BuildTypeDescriptor(innerType, innerKind)),
+                ]);
             }
 
             case "array":
             {
                 var elementType = GetElementType(type);
                 var elementKind = ClassifyPropertyType(elementType);
-                return new TsObjectLiteral(
-                    [
-                        new TsObjectProperty("kind", new TsStringLiteral("array")),
-                        new TsObjectProperty(
-                            "element",
-                            BuildTypeDescriptor(elementType, elementKind)
-                        ),
-                    ]
-                );
+                return new TsObjectLiteral([
+                    new TsObjectProperty("kind", new TsStringLiteral("array")),
+                    new TsObjectProperty("element", BuildTypeDescriptor(elementType, elementKind)),
+                ]);
             }
 
             case "map":
@@ -478,19 +475,17 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                 var named = (INamedTypeSymbol)type;
                 var keyType = named.TypeArguments[0];
                 var valueType = named.TypeArguments[1];
-                return new TsObjectLiteral(
-                    [
-                        new TsObjectProperty("kind", new TsStringLiteral("map")),
-                        new TsObjectProperty(
-                            "key",
-                            BuildTypeDescriptor(keyType, ClassifyPropertyType(keyType))
-                        ),
-                        new TsObjectProperty(
-                            "value",
-                            BuildTypeDescriptor(valueType, ClassifyPropertyType(valueType))
-                        ),
-                    ]
-                );
+                return new TsObjectLiteral([
+                    new TsObjectProperty("kind", new TsStringLiteral("map")),
+                    new TsObjectProperty(
+                        "key",
+                        BuildTypeDescriptor(keyType, ClassifyPropertyType(keyType))
+                    ),
+                    new TsObjectProperty(
+                        "value",
+                        BuildTypeDescriptor(valueType, ClassifyPropertyType(valueType))
+                    ),
+                ]);
             }
 
             case "hashSet":
@@ -498,67 +493,55 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                 var named = (INamedTypeSymbol)type;
                 var elementType = named.TypeArguments[0];
                 var elementKind = ClassifyPropertyType(elementType);
-                return new TsObjectLiteral(
-                    [
-                        new TsObjectProperty("kind", new TsStringLiteral("hashSet")),
-                        new TsObjectProperty(
-                            "element",
-                            BuildTypeDescriptor(elementType, elementKind)
-                        ),
-                    ]
-                );
+                return new TsObjectLiteral([
+                    new TsObjectProperty("kind", new TsStringLiteral("hashSet")),
+                    new TsObjectProperty("element", BuildTypeDescriptor(elementType, elementKind)),
+                ]);
             }
 
             case "temporal":
             {
                 var tsType = TypeMapper.Map(type);
-                var typeName =
-                    tsType is TsNamedType namedTs ? namedTs.Name : "Temporal.PlainDateTime";
-                return new TsObjectLiteral(
-                    [
-                        new TsObjectProperty("kind", new TsStringLiteral("temporal")),
-                        new TsObjectProperty(
-                            "parse",
-                            new TsPropertyAccess(new TsIdentifier(typeName), "from")
-                        ),
-                    ]
-                );
+                var typeName = tsType is TsNamedType namedTs
+                    ? namedTs.Name
+                    : "Temporal.PlainDateTime";
+                return new TsObjectLiteral([
+                    new TsObjectProperty("kind", new TsStringLiteral("temporal")),
+                    new TsObjectProperty(
+                        "parse",
+                        new TsPropertyAccess(new TsIdentifier(typeName), "from")
+                    ),
+                ]);
             }
 
             case "branded":
             {
                 var tsTypeName = TypeTransformer.GetTsTypeName((INamedTypeSymbol)type);
-                return new TsObjectLiteral(
-                    [
-                        new TsObjectProperty("kind", new TsStringLiteral("branded")),
-                        new TsObjectProperty(
-                            "create",
-                            new TsPropertyAccess(new TsIdentifier(tsTypeName), "create")
-                        ),
-                    ]
-                );
+                return new TsObjectLiteral([
+                    new TsObjectProperty("kind", new TsStringLiteral("branded")),
+                    new TsObjectProperty(
+                        "create",
+                        new TsPropertyAccess(new TsIdentifier(tsTypeName), "create")
+                    ),
+                ]);
             }
 
             case "enum":
             {
                 var tsTypeName = TypeTransformer.GetTsTypeName((INamedTypeSymbol)type);
-                return new TsObjectLiteral(
-                    [
-                        new TsObjectProperty("kind", new TsStringLiteral("enum")),
-                        new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
-                    ]
-                );
+                return new TsObjectLiteral([
+                    new TsObjectProperty("kind", new TsStringLiteral("enum")),
+                    new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
+                ]);
             }
 
             case "numericEnum":
             {
                 var tsTypeName = TypeTransformer.GetTsTypeName((INamedTypeSymbol)type);
-                return new TsObjectLiteral(
-                    [
-                        new TsObjectProperty("kind", new TsStringLiteral("numericEnum")),
-                        new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
-                    ]
-                );
+                return new TsObjectLiteral([
+                    new TsObjectProperty("kind", new TsStringLiteral("numericEnum")),
+                    new TsObjectProperty("values", new TsIdentifier(tsTypeName)),
+                ]);
             }
 
             case "ref":
@@ -566,31 +549,24 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
                 var tsType = TypeMapper.Map(type);
                 var refName = tsType is TsNamedType namedTs ? namedTs.Name : "unknown";
                 var getterName = TypeScriptNaming.ToCamelCase(refName);
-                return new TsObjectLiteral(
-                    [
-                        new TsObjectProperty("kind", new TsStringLiteral("ref")),
-                        new TsObjectProperty(
-                            "spec",
-                            new TsArrowFunction(
-                                [],
-                                [
-                                    new TsReturnStatement(
-                                        new TsPropertyAccess(
-                                            new TsIdentifier("this"),
-                                            getterName
-                                        )
-                                    ),
-                                ]
-                            )
-                        ),
-                    ]
-                );
+                return new TsObjectLiteral([
+                    new TsObjectProperty("kind", new TsStringLiteral("ref")),
+                    new TsObjectProperty(
+                        "spec",
+                        new TsArrowFunction(
+                            [],
+                            [
+                                new TsReturnStatement(
+                                    new TsPropertyAccess(new TsIdentifier("this"), getterName)
+                                ),
+                            ]
+                        )
+                    ),
+                ]);
             }
 
             default: // primitive, decimal
-                return new TsObjectLiteral(
-                    [new TsObjectProperty("kind", new TsStringLiteral(kind))]
-                );
+                return new TsObjectLiteral([new TsObjectProperty("kind", new TsStringLiteral(kind))]);
         }
     }
 
@@ -621,7 +597,6 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
     private static bool IsSystemObject(INamedTypeSymbol type)
     {
-        return type.SpecialType == SpecialType.System_Object
-            || type.ToDisplayString() == "object";
+        return type.SpecialType == SpecialType.System_Object || type.ToDisplayString() == "object";
     }
 }

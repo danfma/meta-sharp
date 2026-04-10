@@ -57,7 +57,8 @@ public class TodoStore
         // separately via IndexOf — reference equality, the item is the same object
         // we just retrieved so it always succeeds.
         var existing = _items.Find(t => t.Id == id);
-        if (existing is null) return null;
+        if (existing is null)
+            return null;
 
         var item = existing.Item;
         if (patch.Title is not null)
@@ -75,7 +76,8 @@ public class TodoStore
     public bool Remove(string id)
     {
         var existing = _items.Find(t => t.Id == id);
-        if (existing is null) return false;
+        if (existing is null)
+            return false;
         _items.Remove(existing);
         return true;
     }

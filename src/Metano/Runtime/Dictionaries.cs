@@ -17,15 +17,39 @@ using Metano.Annotations;
 
 // ─── Count → size ───────────────────────────────────────────
 
-[assembly: MapProperty(typeof(Dictionary<,>), nameof(Dictionary<int, int>.Count), JsProperty = "size")]
-[assembly: MapProperty(typeof(IDictionary<,>), nameof(IDictionary<int, int>.Count), JsProperty = "size")]
-[assembly: MapProperty(typeof(IReadOnlyDictionary<,>), nameof(IReadOnlyDictionary<int, int>.Count), JsProperty = "size")]
+[assembly: MapProperty(
+    typeof(Dictionary<,>),
+    nameof(Dictionary<int, int>.Count),
+    JsProperty = "size"
+)]
+[assembly: MapProperty(
+    typeof(IDictionary<,>),
+    nameof(IDictionary<int, int>.Count),
+    JsProperty = "size"
+)]
+[assembly: MapProperty(
+    typeof(IReadOnlyDictionary<,>),
+    nameof(IReadOnlyDictionary<int, int>.Count),
+    JsProperty = "size"
+)]
 
 // ─── ContainsKey → has ──────────────────────────────────────
 
-[assembly: MapMethod(typeof(Dictionary<,>), nameof(Dictionary<int, int>.ContainsKey), JsMethod = "has")]
-[assembly: MapMethod(typeof(IDictionary<,>), nameof(IDictionary<int, int>.ContainsKey), JsMethod = "has")]
-[assembly: MapMethod(typeof(IReadOnlyDictionary<,>), nameof(IReadOnlyDictionary<int, int>.ContainsKey), JsMethod = "has")]
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    nameof(Dictionary<int, int>.ContainsKey),
+    JsMethod = "has"
+)]
+[assembly: MapMethod(
+    typeof(IDictionary<,>),
+    nameof(IDictionary<int, int>.ContainsKey),
+    JsMethod = "has"
+)]
+[assembly: MapMethod(
+    typeof(IReadOnlyDictionary<,>),
+    nameof(IReadOnlyDictionary<int, int>.ContainsKey),
+    JsMethod = "has"
+)]
 
 // ─── Add(key, value) → set(key, value) ──────────────────────
 
@@ -34,13 +58,25 @@ using Metano.Annotations;
 
 // ─── Remove → delete ────────────────────────────────────────
 
-[assembly: MapMethod(typeof(Dictionary<,>), nameof(Dictionary<int, int>.Remove), JsMethod = "delete")]
-[assembly: MapMethod(typeof(IDictionary<,>), nameof(IDictionary<int, int>.Remove), JsMethod = "delete")]
+[assembly: MapMethod(
+    typeof(Dictionary<,>),
+    nameof(Dictionary<int, int>.Remove),
+    JsMethod = "delete"
+)]
+[assembly: MapMethod(
+    typeof(IDictionary<,>),
+    nameof(IDictionary<int, int>.Remove),
+    JsMethod = "delete"
+)]
 
 // ─── Clear → clear ──────────────────────────────────────────
 
 [assembly: MapMethod(typeof(Dictionary<,>), nameof(Dictionary<int, int>.Clear), JsMethod = "clear")]
-[assembly: MapMethod(typeof(IDictionary<,>), nameof(IDictionary<int, int>.Clear), JsMethod = "clear")]
+[assembly: MapMethod(
+    typeof(IDictionary<,>),
+    nameof(IDictionary<int, int>.Clear),
+    JsMethod = "clear"
+)]
 
 // ─── TryGetValue (intentionally not mapped) ─────────────────
 // TryGetValue uses an out-parameter idiom that doesn't translate cleanly to JS Map.get

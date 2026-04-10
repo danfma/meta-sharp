@@ -122,14 +122,18 @@ public class CrossPackageImportTests
             }
             """;
 
-        var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(library, consumer);
+        var (files, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            library,
+            consumer
+        );
         var output = files["holder.ts"];
 
         // No import line is generated (we have no package name to import from).
         await Assert.That(output).DoesNotContain("import { Item }");
         // But MS0007 is raised so the user knows what to fix.
-        await Assert.That(diagnostics.Any(d =>
-            d.Code == "MS0007" && d.Message.Contains("Lib.Item"))).IsTrue();
+        await Assert
+            .That(diagnostics.Any(d => d.Code == "MS0007" && d.Message.Contains("Lib.Item")))
+            .IsTrue();
     }
 
     [Test]
@@ -201,7 +205,9 @@ public class CrossPackageImportTests
         var transformer = new Metano.Transformation.TypeTransformer(consumerCompilation);
         transformer.TransformAll();
 
-        await Assert.That(transformer.CrossPackageDependencies["@acme/lib"]).IsEqualTo("workspace:*");
+        await Assert
+            .That(transformer.CrossPackageDependencies["@acme/lib"])
+            .IsEqualTo("workspace:*");
     }
 
     [Test]
@@ -225,7 +231,8 @@ public class CrossPackageImportTests
             {
                 public Hono Server { get; } = new Hono();
             }
-            """);
+            """
+        );
 
         // Use the helper that exposes the transformer's tracked dependencies. We
         // re-compile here so we can read TypeMapper.UsedCrossPackages directly via the
@@ -244,7 +251,8 @@ public class CrossPackageImportTests
             {
                 public Hono Server { get; } = new Hono();
             }
-            """);
+            """
+        );
 
         var transformer = new Metano.Transformation.TypeTransformer(compilation);
         transformer.TransformAll();
@@ -269,7 +277,8 @@ public class CrossPackageImportTests
             {
                 public Hono Server { get; } = new Hono();
             }
-            """);
+            """
+        );
 
         var transformer = new Metano.Transformation.TypeTransformer(compilation);
         transformer.TransformAll();
@@ -312,11 +321,16 @@ public class CrossPackageImportTests
 
         await Assert.That(output).Contains("import { Moment } from \"local-moment\"");
         await Assert.That(output).DoesNotContain("shared-moment");
-        await Assert.That(transformer.Diagnostics.Any(d =>
-            d.Code == DiagnosticCodes.AmbiguousConstruct &&
-            d.Message.Contains("Moment") &&
-            d.Message.Contains("local-moment") &&
-            d.Message.Contains("shared-moment"))).IsTrue();
+        await Assert
+            .That(
+                transformer.Diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.AmbiguousConstruct
+                    && d.Message.Contains("Moment")
+                    && d.Message.Contains("local-moment")
+                    && d.Message.Contains("shared-moment")
+                )
+            )
+            .IsTrue();
     }
 
     [Test]
@@ -356,14 +370,19 @@ public class CrossPackageImportTests
         var consumerCompilation = TranspileHelper.CompileConsumer(
             consumer,
             libACompilation,
-            libBCompilation);
+            libBCompilation
+        );
 
         var transformer = new Metano.Transformation.TypeTransformer(consumerCompilation);
         transformer.TransformAll();
 
-        await Assert.That(transformer.Diagnostics.Any(d =>
-            d.Code == DiagnosticCodes.AmbiguousConstruct &&
-            d.Message.Contains("Moment"))).IsTrue();
+        await Assert
+            .That(
+                transformer.Diagnostics.Any(d =>
+                    d.Code == DiagnosticCodes.AmbiguousConstruct && d.Message.Contains("Moment")
+                )
+            )
+            .IsTrue();
     }
 
     [Test]
@@ -545,7 +564,8 @@ public class CrossPackageImportTests
             [assembly: TranspileAssembly]
 
             public record Price(decimal Amount);
-            """);
+            """
+        );
 
         var transformer = new Metano.Transformation.TypeTransformer(compilation);
         transformer.TransformAll();
@@ -586,7 +606,9 @@ public class CrossPackageImportTests
         var transformer = new Metano.Transformation.TypeTransformer(consumerCompilation);
         transformer.TransformAll();
 
-        await Assert.That(transformer.CrossPackageDependencies.ContainsKey("@acme/unused")).IsFalse();
+        await Assert
+            .That(transformer.CrossPackageDependencies.ContainsKey("@acme/unused"))
+            .IsFalse();
     }
 
     [Test]
@@ -612,8 +634,13 @@ public class CrossPackageImportTests
             public class HolderC { public Lib.Item? C { get; set; } }
             """;
 
-        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(library, consumer);
-        var ms0007 = diagnostics.Where(d => d.Code == "MS0007" && d.Message.Contains("Lib.Item")).ToList();
+        var (_, diagnostics) = TranspileHelper.TranspileWithLibraryAndDiagnostics(
+            library,
+            consumer
+        );
+        var ms0007 = diagnostics
+            .Where(d => d.Code == "MS0007" && d.Message.Contains("Lib.Item"))
+            .ToList();
         await Assert.That(ms0007.Count).IsEqualTo(1);
     }
 }

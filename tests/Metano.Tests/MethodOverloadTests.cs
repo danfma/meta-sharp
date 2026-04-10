@@ -162,7 +162,9 @@ public class MethodOverloadTests
 
         var output = result["builder.ts"];
         // All three overload signatures
-        await Assert.That(output).Contains("build(name: string, count: number, flag: boolean): string;");
+        await Assert
+            .That(output)
+            .Contains("build(name: string, count: number, flag: boolean): string;");
         await Assert.That(output).Contains("build(name: string, count: number): string;");
         await Assert.That(output).Contains("build(name: string): string;");
         // Dispatcher

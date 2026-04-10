@@ -30,7 +30,8 @@ namespace Metano.Annotations;
 /// or <c>"@scope/name"</c> for npm).</param>
 /// <param name="target">Which compiler target this declaration applies to.</param>
 [AttributeUsage(AttributeTargets.Assembly, AllowMultiple = true)]
-public sealed class EmitPackageAttribute(string name, EmitTarget target = EmitTarget.JavaScript) : Attribute
+public sealed class EmitPackageAttribute(string name, EmitTarget target = EmitTarget.JavaScript)
+    : Attribute
 {
     public string Name { get; } = name;
     public EmitTarget Target { get; } = target;

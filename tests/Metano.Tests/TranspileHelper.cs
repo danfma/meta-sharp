@@ -1,8 +1,8 @@
-using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp;
 using Metano.Annotations;
 using Metano.Transformation;
 using Metano.TypeScript;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace Metano.Tests;
 
@@ -11,8 +11,9 @@ namespace Metano.Tests;
 /// </summary>
 public static class TranspileHelper
 {
-    private static readonly string MetanoAssemblyPath =
-        typeof(TranspileAttribute).Assembly.Location;
+    private static readonly string MetanoAssemblyPath = typeof(TranspileAttribute)
+        .Assembly
+        .Location;
 
     /// <summary>
     /// Compiles C# source code and transpiles all [Transpile]-annotated types.
@@ -27,8 +28,10 @@ public static class TranspileHelper
             {csharpSource}
             """;
 
-        var syntaxTree = CSharpSyntaxTree.ParseText(source,
-            new CSharpParseOptions(LanguageVersion.Preview));
+        var syntaxTree = CSharpSyntaxTree.ParseText(
+            source,
+            new CSharpParseOptions(LanguageVersion.Preview)
+        );
 
         var references = new List<MetadataReference>
         {
@@ -41,7 +44,8 @@ public static class TranspileHelper
         var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
         foreach (var dll in Directory.GetFiles(runtimeDir, "*.dll"))
         {
-            if (references.Any(r => r.Display == dll)) continue;
+            if (references.Any(r => r.Display == dll))
+                continue;
             try
             {
                 references.Add(MetadataReference.CreateFromFile(dll));
@@ -65,7 +69,8 @@ public static class TranspileHelper
         );
 
         // Check for errors
-        var errors = compilation.GetDiagnostics()
+        var errors = compilation
+            .GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();
 
@@ -92,8 +97,10 @@ public static class TranspileHelper
     /// Compiles C# source code, transpiles it, and returns both the generated files and
     /// any diagnostics emitted by the transformer.
     /// </summary>
-    public static (Dictionary<string, string> Files, IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics)
-        TranspileWithDiagnostics(string csharpSource)
+    public static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileWithDiagnostics(string csharpSource)
     {
         var source = $"""
             using System;
@@ -102,8 +109,10 @@ public static class TranspileHelper
             {csharpSource}
             """;
 
-        var syntaxTree = CSharpSyntaxTree.ParseText(source,
-            new CSharpParseOptions(LanguageVersion.Preview));
+        var syntaxTree = CSharpSyntaxTree.ParseText(
+            source,
+            new CSharpParseOptions(LanguageVersion.Preview)
+        );
 
         var references = new List<MetadataReference>
         {
@@ -115,8 +124,12 @@ public static class TranspileHelper
         var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
         foreach (var dll in Directory.GetFiles(runtimeDir, "*.dll"))
         {
-            if (references.Any(r => r.Display == dll)) continue;
-            try { references.Add(MetadataReference.CreateFromFile(dll)); }
+            if (references.Any(r => r.Display == dll))
+                continue;
+            try
+            {
+                references.Add(MetadataReference.CreateFromFile(dll));
+            }
             catch { }
         }
 
@@ -125,8 +138,11 @@ public static class TranspileHelper
             references.Add(MetadataReference.CreateFromFile(netstandardPath));
 
         var compilation = CSharpCompilation.Create(
-            "TestAssembly", [syntaxTree], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            "TestAssembly",
+            [syntaxTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
 
         var transformer = new TypeTransformer(compilation);
         var files = transformer.TransformAll();
@@ -152,15 +168,19 @@ public static class TranspileHelper
     /// emitted by the consumer's transformation. Used for tests that assert MS00xx
     /// codes around cross-package resolution.
     /// </summary>
-    public static (Dictionary<string, string> Files, IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics)
-        TranspileWithLibraryAndDiagnostics(string librarySource, string consumerSource)
+    public static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileWithLibraryAndDiagnostics(string librarySource, string consumerSource)
     {
         var (files, diagnostics) = TranspileWithLibraryCore(librarySource, consumerSource);
         return (files, diagnostics);
     }
 
     public static Dictionary<string, string> TranspileWithLibrary(
-        string librarySource, string consumerSource)
+        string librarySource,
+        string consumerSource
+    )
     {
         var (files, _) = TranspileWithLibraryCore(librarySource, consumerSource);
         return files;
@@ -172,8 +192,8 @@ public static class TranspileHelper
     /// directly (e.g., <c>CrossPackageDependencies</c>) instead of just asserting on
     /// the generated TS files.
     /// </summary>
-    public static CSharpCompilation CompileLibrary(string librarySource)
-        => CompileLibrary(librarySource, "TestLibrary");
+    public static CSharpCompilation CompileLibrary(string librarySource) =>
+        CompileLibrary(librarySource, "TestLibrary");
 
     /// <summary>
     /// Compiles a library source into an in-memory <see cref="CSharpCompilation"/>
@@ -188,18 +208,25 @@ public static class TranspileHelper
             using Metano.Annotations;
             {librarySource}
             """;
-        var tree = CSharpSyntaxTree.ParseText(source,
-            new CSharpParseOptions(LanguageVersion.Preview));
+        var tree = CSharpSyntaxTree.ParseText(
+            source,
+            new CSharpParseOptions(LanguageVersion.Preview)
+        );
         var compilation = CSharpCompilation.Create(
-            assemblyName, [tree], BuildBaseReferences(),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            assemblyName,
+            [tree],
+            BuildBaseReferences(),
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
 
-        var errors = compilation.GetDiagnostics()
+        var errors = compilation
+            .GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();
         if (errors.Count > 0)
             throw new InvalidOperationException(
-                $"Library compilation failed:\n{string.Join("\n", errors)}");
+                $"Library compilation failed:\n{string.Join("\n", errors)}"
+            );
         return compilation;
     }
 
@@ -209,8 +236,9 @@ public static class TranspileHelper
     /// as a metadata reference (in-memory).
     /// </summary>
     public static CSharpCompilation CompileConsumer(
-        string consumerSource, CSharpCompilation libraryCompilation)
-        => CompileConsumer(consumerSource, [libraryCompilation]);
+        string consumerSource,
+        CSharpCompilation libraryCompilation
+    ) => CompileConsumer(consumerSource, [libraryCompilation]);
 
     /// <summary>
     /// Compiles a consumer source that references multiple previously built library
@@ -218,7 +246,9 @@ public static class TranspileHelper
     /// one referenced assembly.
     /// </summary>
     public static CSharpCompilation CompileConsumer(
-        string consumerSource, params CSharpCompilation[] libraryCompilations)
+        string consumerSource,
+        params CSharpCompilation[] libraryCompilations
+    )
     {
         var source = $"""
             using System;
@@ -226,25 +256,32 @@ public static class TranspileHelper
             using Metano.Annotations;
             {consumerSource}
             """;
-        var tree = CSharpSyntaxTree.ParseText(source,
-            new CSharpParseOptions(LanguageVersion.Preview));
+        var tree = CSharpSyntaxTree.ParseText(
+            source,
+            new CSharpParseOptions(LanguageVersion.Preview)
+        );
         var compilation = CSharpCompilation.Create(
             "TestConsumer",
             [tree],
             BuildBaseReferences().Concat(libraryCompilations.Select(c => c.ToMetadataReference())),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
 
-        var errors = compilation.GetDiagnostics()
+        var errors = compilation
+            .GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();
         if (errors.Count > 0)
             throw new InvalidOperationException(
-                $"Consumer compilation failed:\n{string.Join("\n", errors)}");
+                $"Consumer compilation failed:\n{string.Join("\n", errors)}"
+            );
         return compilation;
     }
 
-    private static (Dictionary<string, string> Files, IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics)
-        TranspileWithLibraryCore(string librarySource, string consumerSource)
+    private static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileWithLibraryCore(string librarySource, string consumerSource)
     {
         var libSource = $"""
             using System;
@@ -261,33 +298,45 @@ public static class TranspileHelper
 
         var references = BuildBaseReferences();
 
-        var libTree = CSharpSyntaxTree.ParseText(libSource,
-            new CSharpParseOptions(LanguageVersion.Preview));
+        var libTree = CSharpSyntaxTree.ParseText(
+            libSource,
+            new CSharpParseOptions(LanguageVersion.Preview)
+        );
         var libCompilation = CSharpCompilation.Create(
-            "TestLibrary", [libTree], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            "TestLibrary",
+            [libTree],
+            references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
 
-        var libErrors = libCompilation.GetDiagnostics()
+        var libErrors = libCompilation
+            .GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();
         if (libErrors.Count > 0)
             throw new InvalidOperationException(
-                $"Library compilation failed:\n{string.Join("\n", libErrors)}");
+                $"Library compilation failed:\n{string.Join("\n", libErrors)}"
+            );
 
-        var consTree = CSharpSyntaxTree.ParseText(consSource,
-            new CSharpParseOptions(LanguageVersion.Preview));
+        var consTree = CSharpSyntaxTree.ParseText(
+            consSource,
+            new CSharpParseOptions(LanguageVersion.Preview)
+        );
         var consumerCompilation = CSharpCompilation.Create(
             "TestConsumer",
             [consTree],
             references.Concat([libCompilation.ToMetadataReference()]),
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
 
-        var consErrors = consumerCompilation.GetDiagnostics()
+        var consErrors = consumerCompilation
+            .GetDiagnostics()
             .Where(d => d.Severity == DiagnosticSeverity.Error)
             .ToList();
         if (consErrors.Count > 0)
             throw new InvalidOperationException(
-                $"Consumer compilation failed:\n{string.Join("\n", consErrors)}");
+                $"Consumer compilation failed:\n{string.Join("\n", consErrors)}"
+            );
 
         var transformer = new TypeTransformer(consumerCompilation);
         var files = transformer.TransformAll();
@@ -310,8 +359,12 @@ public static class TranspileHelper
         var runtimeDir = Path.GetDirectoryName(typeof(object).Assembly.Location)!;
         foreach (var dll in Directory.GetFiles(runtimeDir, "*.dll"))
         {
-            if (references.Any(r => r.Display == dll)) continue;
-            try { references.Add(MetadataReference.CreateFromFile(dll)); }
+            if (references.Any(r => r.Display == dll))
+                continue;
+            try
+            {
+                references.Add(MetadataReference.CreateFromFile(dll));
+            }
             catch { }
         }
         var netstandardPath = Path.Combine(runtimeDir, "netstandard.dll");

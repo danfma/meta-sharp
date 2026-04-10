@@ -60,7 +60,8 @@ public sealed class IndentedStringBuilder
     {
         for (var i = 0; i < items.Count; i++)
         {
-            if (i > 0) Write(separator);
+            if (i > 0)
+                Write(separator);
             writeItem(items[i]);
         }
     }

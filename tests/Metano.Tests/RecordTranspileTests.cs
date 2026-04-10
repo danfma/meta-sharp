@@ -5,10 +5,12 @@ public class RecordTranspileTests
     [Test]
     public async Task SimpleRecord_GeneratesClass()
     {
-        var result = TranspileHelper.Transpile("""
+        var result = TranspileHelper.Transpile(
+            """
             [Transpile]
             public readonly record struct Point(int X, int Y);
-            """);
+            """
+        );
 
         var expected = TranspileHelper.ReadExpected("simple-record.ts");
         await Assert.That(result["point.ts"]).IsEqualTo(expected);
@@ -20,7 +22,8 @@ public class RecordTranspileTests
         // Uses int (not decimal) so the assertion stays focused on record-class shape
         // and doesn't accidentally exercise the decimal → Decimal mapping introduced
         // for the decimal.js integration.
-        var result = TranspileHelper.Transpile("""
+        var result = TranspileHelper.Transpile(
+            """
             [Transpile]
             public readonly record struct Amount(int Value)
             {
@@ -28,7 +31,8 @@ public class RecordTranspileTests
 
                 public static Amount FromValue(int value) => new(value);
             }
-            """);
+            """
+        );
 
         var expected = TranspileHelper.ReadExpected("record-with-methods.ts");
         await Assert.That(result["amount.ts"]).IsEqualTo(expected);
@@ -37,13 +41,15 @@ public class RecordTranspileTests
     [Test]
     public async Task InstanceMethod_QualifiesWithSelfParameter()
     {
-        var result = TranspileHelper.Transpile("""
+        var result = TranspileHelper.Transpile(
+            """
             [Transpile]
             public readonly record struct Amount(int Value)
             {
                 public int Doubled() => Value * 2;
             }
-            """);
+            """
+        );
 
         // Instance methods use 'this' now (class-based pattern)
         await Assert.That(result["amount.ts"]).Contains("this.value");

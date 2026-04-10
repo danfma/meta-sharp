@@ -39,37 +39,44 @@ public sealed class PatternMatchingHandler(ExpressionTransformer parent)
         {
             // x is null → x === null
             ConstantPatternSyntax { Expression: LiteralExpressionSyntax literal }
-                when literal.IsKind(SyntaxKind.NullLiteralExpression) =>
-                new TsBinaryExpression(expr, "===", new TsLiteral("null")),
+                when literal.IsKind(SyntaxKind.NullLiteralExpression) => new TsBinaryExpression(
+                expr,
+                "===",
+                new TsLiteral("null")
+            ),
 
             // x is "value" or x is 42
-            ConstantPatternSyntax constant =>
-                new TsBinaryExpression(expr, "===", _parent.TransformExpression(constant.Expression)),
+            ConstantPatternSyntax constant => new TsBinaryExpression(
+                expr,
+                "===",
+                _parent.TransformExpression(constant.Expression)
+            ),
 
             // x is not pattern → !(condition)
-            UnaryPatternSyntax { OperatorToken.Text: "not" } unary =>
-                new TsUnaryExpression("!", new TsParenthesized(TransformPatternToCondition(expr, unary.Pattern))),
+            UnaryPatternSyntax { OperatorToken.Text: "not" } unary => new TsUnaryExpression(
+                "!",
+                new TsParenthesized(TransformPatternToCondition(expr, unary.Pattern))
+            ),
 
             // x is Type → x instanceof Type
-            DeclarationPatternSyntax declaration =>
-                TransformTypePattern(expr, declaration.Type),
+            DeclarationPatternSyntax declaration => TransformTypePattern(expr, declaration.Type),
 
             // x is Type (without variable)
-            TypePatternSyntax typePattern =>
-                TransformTypePattern(expr, typePattern.Type),
+            TypePatternSyntax typePattern => TransformTypePattern(expr, typePattern.Type),
 
             // x is > 0
-            RelationalPatternSyntax relational =>
-                new TsBinaryExpression(expr, MapBinaryOperator(relational.OperatorToken.Text),
-                    _parent.TransformExpression(relational.Expression)),
+            RelationalPatternSyntax relational => new TsBinaryExpression(
+                expr,
+                MapBinaryOperator(relational.OperatorToken.Text),
+                _parent.TransformExpression(relational.Expression)
+            ),
 
             // x is >= 0 and < 100
-            BinaryPatternSyntax binary =>
-                new TsBinaryExpression(
-                    TransformPatternToCondition(expr, binary.Left),
-                    binary.OperatorToken.Text == "and" ? "&&" : "||",
-                    TransformPatternToCondition(expr, binary.Right)
-                ),
+            BinaryPatternSyntax binary => new TsBinaryExpression(
+                TransformPatternToCondition(expr, binary.Left),
+                binary.OperatorToken.Text == "and" ? "&&" : "||",
+                TransformPatternToCondition(expr, binary.Right)
+            ),
 
             // x is { Prop: value }
             RecursivePatternSyntax recursive when recursive.PropertyPatternClause is not null =>
@@ -78,7 +85,7 @@ public sealed class PatternMatchingHandler(ExpressionTransformer parent)
             // Discard _
             DiscardPatternSyntax => new TsLiteral("true"),
 
-            _ => new TsLiteral($"true /* unsupported pattern: {pattern.Kind()} */")
+            _ => new TsLiteral($"true /* unsupported pattern: {pattern.Kind()} */"),
         };
     }
 
@@ -88,30 +95,46 @@ public sealed class PatternMatchingHandler(ExpressionTransformer parent)
         var type = typeInfo.Type;
 
         if (type is null)
-            return new TsBinaryExpression(expr, "instanceof", new TsIdentifier(typeSyntax.ToString()));
+            return new TsBinaryExpression(
+                expr,
+                "instanceof",
+                new TsIdentifier(typeSyntax.ToString())
+            );
 
         // Primitive type checks → typeof
         return type.SpecialType switch
         {
-            SpecialType.System_Int32 or SpecialType.System_Int64 or SpecialType.System_Double
-                or SpecialType.System_Single or SpecialType.System_Decimal =>
-                new TsBinaryExpression(new TsUnaryExpression("typeof ", expr), "===",
-                    new TsStringLiteral("number")),
+            SpecialType.System_Int32
+            or SpecialType.System_Int64
+            or SpecialType.System_Double
+            or SpecialType.System_Single
+            or SpecialType.System_Decimal => new TsBinaryExpression(
+                new TsUnaryExpression("typeof ", expr),
+                "===",
+                new TsStringLiteral("number")
+            ),
 
-            SpecialType.System_String =>
-                new TsBinaryExpression(new TsUnaryExpression("typeof ", expr), "===",
-                    new TsStringLiteral("string")),
+            SpecialType.System_String => new TsBinaryExpression(
+                new TsUnaryExpression("typeof ", expr),
+                "===",
+                new TsStringLiteral("string")
+            ),
 
-            SpecialType.System_Boolean =>
-                new TsBinaryExpression(new TsUnaryExpression("typeof ", expr), "===",
-                    new TsStringLiteral("boolean")),
+            SpecialType.System_Boolean => new TsBinaryExpression(
+                new TsUnaryExpression("typeof ", expr),
+                "===",
+                new TsStringLiteral("boolean")
+            ),
 
             // Class/struct → instanceof
-            _ => new TsBinaryExpression(expr, "instanceof", new TsIdentifier(type.Name))
+            _ => new TsBinaryExpression(expr, "instanceof", new TsIdentifier(type.Name)),
         };
     }
 
-    private TsExpression TransformPropertyPattern(TsExpression expr, RecursivePatternSyntax recursive)
+    private TsExpression TransformPropertyPattern(
+        TsExpression expr,
+        RecursivePatternSyntax recursive
+    )
     {
         TsExpression? result = null;
 
@@ -134,10 +157,11 @@ public sealed class PatternMatchingHandler(ExpressionTransformer parent)
         return result ?? new TsLiteral("true");
     }
 
-    private static string MapBinaryOperator(string op) => op switch
-    {
-        "==" => "===",
-        "!=" => "!==",
-        _ => op
-    };
+    private static string MapBinaryOperator(string op) =>
+        op switch
+        {
+            "==" => "===",
+            "!=" => "!==",
+            _ => op,
+        };
 }

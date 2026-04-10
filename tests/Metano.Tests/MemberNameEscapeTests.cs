@@ -25,7 +25,8 @@ public class MemberNameEscapeTests
                 public void Delete() { }
                 public void New() { }
             }
-            """);
+            """
+        );
 
         var output = result["bag.ts"];
         // Method declarations don't get the underscore.
@@ -51,7 +52,8 @@ public class MemberNameEscapeTests
             {
                 public void Cleanup(Bag b) => b.Delete();
             }
-            """);
+            """
+        );
 
         var output = result["user.ts"];
         await Assert.That(output).Contains("b.delete()");
@@ -77,7 +79,8 @@ public class MemberNameEscapeTests
             {
                 public UserId Make() => UserId.New();
             }
-            """);
+            """
+        );
 
         var idOutput = result["user-id.ts"];
         var svcOutput = result["service.ts"];
@@ -108,7 +111,8 @@ public class MemberNameEscapeTests
             {
                 public void Cleanup(Bag b) => b.Remove();
             }
-            """);
+            """
+        );
 
         await Assert.That(result["bag.ts"]).Contains("delete():");
         await Assert.That(result["user.ts"]).Contains("b.delete()");

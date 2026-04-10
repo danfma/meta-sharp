@@ -13,15 +13,19 @@ public static class SymbolHelper
 {
     public static bool HasAttribute(ISymbol symbol, string attributeName)
     {
-        return symbol.GetAttributes().Any(a =>
-            a.AttributeClass?.Name == attributeName
-            || a.AttributeClass?.Name == attributeName + "Attribute");
+        return symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name == attributeName
+                || a.AttributeClass?.Name == attributeName + "Attribute"
+            );
     }
 
     public static string? GetNameOverride(ISymbol symbol)
     {
-        var attr = symbol.GetAttributes().FirstOrDefault(a =>
-            a.AttributeClass?.Name is "NameAttribute" or "Name");
+        var attr = symbol
+            .GetAttributes()
+            .FirstOrDefault(a => a.AttributeClass?.Name is "NameAttribute" or "Name");
 
         if (attr is { ConstructorArguments.Length: > 0 })
             return attr.ConstructorArguments[0].Value?.ToString();
@@ -33,13 +37,15 @@ public static class SymbolHelper
 
     public static bool HasStringEnum(ISymbol symbol) => HasAttribute(symbol, "StringEnum");
 
-    public static bool HasFlags(ISymbol symbol) => HasAttribute(symbol, "Flags") || HasAttribute(symbol, "FlagsAttribute");
+    public static bool HasFlags(ISymbol symbol) =>
+        HasAttribute(symbol, "Flags") || HasAttribute(symbol, "FlagsAttribute");
 
     public static bool HasIgnore(ISymbol symbol) => HasAttribute(symbol, "Ignore");
 
     public static bool HasModule(ISymbol symbol) => HasAttribute(symbol, "Module");
 
-    public static bool HasExportedAsModule(ISymbol symbol) => HasAttribute(symbol, "ExportedAsModule");
+    public static bool HasExportedAsModule(ISymbol symbol) =>
+        HasAttribute(symbol, "ExportedAsModule");
 
     public static bool HasImport(ISymbol symbol) => HasAttribute(symbol, "Import");
 
@@ -49,7 +55,8 @@ public static class SymbolHelper
 
     public static bool HasNoEmit(ISymbol symbol) => HasAttribute(symbol, "NoEmit");
 
-    public static bool HasModuleEntryPoint(ISymbol symbol) => HasAttribute(symbol, "ModuleEntryPoint");
+    public static bool HasModuleEntryPoint(ISymbol symbol) =>
+        HasAttribute(symbol, "ModuleEntryPoint");
 
     public static bool HasPlainObject(ISymbol symbol) => HasAttribute(symbol, "PlainObject");
 
@@ -60,9 +67,11 @@ public static class SymbolHelper
     /// </summary>
     public static string? GetEmitInFile(ISymbol symbol)
     {
-        var attr = symbol.GetAttributes().FirstOrDefault(a =>
-            a.AttributeClass?.Name is "EmitInFileAttribute" or "EmitInFile");
-        if (attr is null || attr.ConstructorArguments.Length == 0) return null;
+        var attr = symbol
+            .GetAttributes()
+            .FirstOrDefault(a => a.AttributeClass?.Name is "EmitInFileAttribute" or "EmitInFile");
+        if (attr is null || attr.ConstructorArguments.Length == 0)
+            return null;
         return attr.ConstructorArguments[0].Value as string;
     }
 
@@ -72,21 +81,29 @@ public static class SymbolHelper
     /// </summary>
     public static ExportVarFromBodyInfo? GetExportVarFromBody(ISymbol symbol)
     {
-        var attr = symbol.GetAttributes().FirstOrDefault(a =>
-            a.AttributeClass?.Name is "ExportVarFromBodyAttribute" or "ExportVarFromBody");
-        if (attr is null) return null;
+        var attr = symbol
+            .GetAttributes()
+            .FirstOrDefault(a =>
+                a.AttributeClass?.Name is "ExportVarFromBodyAttribute" or "ExportVarFromBody"
+            );
+        if (attr is null)
+            return null;
 
-        var name = attr.ConstructorArguments.Length > 0
-            ? attr.ConstructorArguments[0].Value?.ToString()
-            : null;
-        if (name is null) return null;
+        var name =
+            attr.ConstructorArguments.Length > 0
+                ? attr.ConstructorArguments[0].Value?.ToString()
+                : null;
+        if (name is null)
+            return null;
 
         var asDefault = false;
         var inPlace = false;
         foreach (var named in attr.NamedArguments)
         {
-            if (named.Key == "AsDefault" && named.Value.Value is bool ad) asDefault = ad;
-            else if (named.Key == "InPlace" && named.Value.Value is bool ip) inPlace = ip;
+            if (named.Key == "AsDefault" && named.Value.Value is bool ad)
+                asDefault = ad;
+            else if (named.Key == "InPlace" && named.Value.Value is bool ip)
+                inPlace = ip;
         }
 
         return new ExportVarFromBodyInfo(name, asDefault, inPlace);
@@ -111,16 +128,18 @@ public static class SymbolHelper
                 continue;
 
             // Constructor: (string name, EmitTarget target = JavaScript)
-            if (attr.ConstructorArguments.Length == 0) continue;
+            if (attr.ConstructorArguments.Length == 0)
+                continue;
             var name = attr.ConstructorArguments[0].Value as string;
-            if (string.IsNullOrEmpty(name)) continue;
+            if (string.IsNullOrEmpty(name))
+                continue;
 
             // Target arg may be omitted (default = JavaScript = 0) or present.
             var target = 0;
-            if (attr.ConstructorArguments.Length > 1
-                && attr.ConstructorArguments[1].Value is int t)
+            if (attr.ConstructorArguments.Length > 1 && attr.ConstructorArguments[1].Value is int t)
                 target = t;
-            if (target != targetEnumValue) continue;
+            if (target != targetEnumValue)
+                continue;
 
             string? version = null;
             foreach (var named in attr.NamedArguments)
@@ -155,17 +174,27 @@ public static class SymbolHelper
     /// 3. [Transpile] → always included
     /// 4. assemblyWideTranspile + public → included
     /// </summary>
-    public static bool IsTranspilable(ISymbol symbol, bool assemblyWideTranspile = false,
-        IAssemblySymbol? currentAssembly = null)
+    public static bool IsTranspilable(
+        ISymbol symbol,
+        bool assemblyWideTranspile = false,
+        IAssemblySymbol? currentAssembly = null
+    )
     {
-        if (HasNoTranspile(symbol)) return false;
-        if (HasNoEmit(symbol)) return false;
-        if (HasTranspile(symbol)) return true;
+        if (HasNoTranspile(symbol))
+            return false;
+        if (HasNoEmit(symbol))
+            return false;
+        if (HasTranspile(symbol))
+            return true;
         // Assembly-wide: only for types in the current compilation's assembly (not BCL/referenced assemblies)
-        if (assemblyWideTranspile
+        if (
+            assemblyWideTranspile
             && symbol.DeclaredAccessibility == Accessibility.Public
-            && (currentAssembly is null
-                || SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, currentAssembly)))
+            && (
+                currentAssembly is null
+                || SymbolEqualityComparer.Default.Equals(symbol.ContainingAssembly, currentAssembly)
+            )
+        )
             return true;
         return false;
     }
@@ -176,21 +205,31 @@ public static class SymbolHelper
     /// </summary>
     public static ImportInfo? GetImport(ISymbol symbol)
     {
-        var attr = symbol.GetAttributes().FirstOrDefault(a =>
-            a.AttributeClass?.Name is "ImportAttribute" or "Import");
+        var attr = symbol
+            .GetAttributes()
+            .FirstOrDefault(a => a.AttributeClass?.Name is "ImportAttribute" or "Import");
 
-        if (attr is null) return null;
+        if (attr is null)
+            return null;
 
-        var name = attr.ConstructorArguments.Length > 0 ? attr.ConstructorArguments[0].Value?.ToString() : null;
-        var from = attr.ConstructorArguments.Length > 1 ? attr.ConstructorArguments[1].Value?.ToString() : null;
+        var name =
+            attr.ConstructorArguments.Length > 0
+                ? attr.ConstructorArguments[0].Value?.ToString()
+                : null;
+        var from =
+            attr.ConstructorArguments.Length > 1
+                ? attr.ConstructorArguments[1].Value?.ToString()
+                : null;
 
-        if (name is null || from is null) return null;
+        if (name is null || from is null)
+            return null;
 
         var asDefault = false;
         string? version = null;
         foreach (var named in attr.NamedArguments)
         {
-            if (named.Key == "AsDefault" && named.Value.Value is bool ad) asDefault = ad;
+            if (named.Key == "AsDefault" && named.Value.Value is bool ad)
+                asDefault = ad;
             else if (named.Key == "Version" && named.Value.Value is string v && v.Length > 0)
                 version = v;
         }
@@ -198,7 +237,12 @@ public static class SymbolHelper
         return new ImportInfo(name, from, asDefault, version);
     }
 
-    public sealed record ImportInfo(string Name, string From, bool AsDefault = false, string? Version = null);
+    public sealed record ImportInfo(
+        string Name,
+        string From,
+        bool AsDefault = false,
+        string? Version = null
+    );
 
     /// <summary>
     /// Converts PascalCase to kebab-case for file paths.
@@ -207,7 +251,8 @@ public static class SymbolHelper
     /// </summary>
     public static string ToKebabCase(string name)
     {
-        if (string.IsNullOrEmpty(name)) return name;
+        if (string.IsNullOrEmpty(name))
+            return name;
         var sb = new System.Text.StringBuilder(name.Length + 4);
         for (var i = 0; i < name.Length; i++)
         {

@@ -1,5 +1,5 @@
-using Microsoft.CodeAnalysis;
 using Metano.Compiler;
+using Microsoft.CodeAnalysis;
 
 namespace Metano.Transformation;
 
@@ -20,8 +20,9 @@ public static class TypeScriptNaming
     /// </summary>
     public static string? GetEmit(ISymbol symbol)
     {
-        var attr = symbol.GetAttributes().FirstOrDefault(a =>
-            a.AttributeClass?.Name is "EmitAttribute" or "Emit");
+        var attr = symbol
+            .GetAttributes()
+            .FirstOrDefault(a => a.AttributeClass?.Name is "EmitAttribute" or "Emit");
 
         if (attr is { ConstructorArguments.Length: > 0 })
             return attr.ConstructorArguments[0].Value?.ToString();
@@ -36,8 +37,10 @@ public static class TypeScriptNaming
     /// </summary>
     public static string ToCamelCase(string name)
     {
-        if (string.IsNullOrEmpty(name)) return name;
-        if (char.IsLower(name[0])) return name;
+        if (string.IsNullOrEmpty(name))
+            return name;
+        if (char.IsLower(name[0]))
+            return name;
         var result = char.ToLowerInvariant(name[0]) + name[1..];
         // Escape JS/TS reserved words by appending underscore
         if (IsReservedWord(result))
@@ -56,18 +59,57 @@ public static class TypeScriptNaming
     /// </summary>
     public static string ToCamelCaseMember(string name)
     {
-        if (string.IsNullOrEmpty(name)) return name;
-        if (char.IsLower(name[0])) return name;
+        if (string.IsNullOrEmpty(name))
+            return name;
+        if (char.IsLower(name[0]))
+            return name;
         return char.ToLowerInvariant(name[0]) + name[1..];
     }
 
     private static readonly HashSet<string> JsReservedWords =
     [
-        "break", "case", "catch", "class", "const", "continue", "debugger", "default",
-        "delete", "do", "else", "enum", "export", "extends", "false", "finally", "for",
-        "function", "if", "import", "in", "instanceof", "let", "new", "null", "return",
-        "super", "switch", "this", "throw", "true", "try", "typeof", "undefined", "var",
-        "void", "while", "with", "yield", "async", "await", "of"
+        "break",
+        "case",
+        "catch",
+        "class",
+        "const",
+        "continue",
+        "debugger",
+        "default",
+        "delete",
+        "do",
+        "else",
+        "enum",
+        "export",
+        "extends",
+        "false",
+        "finally",
+        "for",
+        "function",
+        "if",
+        "import",
+        "in",
+        "instanceof",
+        "let",
+        "new",
+        "null",
+        "return",
+        "super",
+        "switch",
+        "this",
+        "throw",
+        "true",
+        "try",
+        "typeof",
+        "undefined",
+        "var",
+        "void",
+        "while",
+        "with",
+        "yield",
+        "async",
+        "await",
+        "of",
     ];
 
     private static bool IsReservedWord(string name) => JsReservedWords.Contains(name);

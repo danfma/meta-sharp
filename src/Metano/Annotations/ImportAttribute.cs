@@ -9,7 +9,12 @@ namespace Metano.Annotations;
 /// <c>import Name from "from";</c>. This is the right form for libraries whose primary
 /// export is the type itself (e.g., a UMD-style class).</para>
 /// </summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Method | AttributeTargets.Property)]
+[AttributeUsage(
+    AttributeTargets.Class
+        | AttributeTargets.Struct
+        | AttributeTargets.Method
+        | AttributeTargets.Property
+)]
 public sealed class ImportAttribute(string name, string from) : Attribute
 {
     public string Name { get; } = name;

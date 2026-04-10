@@ -19,7 +19,8 @@ public class IncrementExpressionTests
                 private int _next = 0;
                 public int Next() { var id = _next++; return id; }
             }
-            """);
+            """
+        );
 
         var output = result["counter.ts"];
         await Assert.That(output).Contains("this._next++");
@@ -36,7 +37,8 @@ public class IncrementExpressionTests
                 private int _n = 10;
                 public void Tick() { _n--; }
             }
-            """);
+            """
+        );
 
         await Assert.That(result["counter.ts"]).Contains("this._n--");
     }
@@ -54,7 +56,8 @@ public class IncrementExpressionTests
                 private int _n = 0;
                 public int Bump() => ++_n;
             }
-            """);
+            """
+        );
 
         await Assert.That(result["counter.ts"]).Contains("++this._n");
     }
@@ -72,7 +75,8 @@ public class IncrementExpressionTests
                 private int _id = 5;
                 public int Take() => _id++;
             }
-            """);
+            """
+        );
 
         await Assert.That(result["bag.ts"]).Contains("this._id++");
     }

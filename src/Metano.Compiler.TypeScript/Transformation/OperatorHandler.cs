@@ -48,8 +48,11 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
         }
 
         // Decimal arithmetic / comparison: lower to method call on decimal.js Decimal.
-        if (IsDecimalOperand(bin.Left) && IsDecimalOperand(bin.Right)
-            && TryMapDecimalBinary(bin.OperatorToken.Text) is { } method)
+        if (
+            IsDecimalOperand(bin.Left)
+            && IsDecimalOperand(bin.Right)
+            && TryMapDecimalBinary(bin.OperatorToken.Text) is { } method
+        )
         {
             var left = _parent.TransformExpression(bin.Left);
             var right = _parent.TransformExpression(bin.Right);
@@ -74,9 +77,13 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
         // JS Map doesn't support bracket assignment. Only fires for the simple `=`
         // operator — compound forms (`dict[k] += 1`) on a dictionary aren't legal in
         // C# anyway.
-        if (assign.OperatorToken.Text == "="
+        if (
+            assign.OperatorToken.Text == "="
             && assign.Left is ElementAccessExpressionSyntax elemAccess
-            && ExpressionTransformer.IsDictionaryLike(_parent.Model.GetTypeInfo(elemAccess.Expression).Type))
+            && ExpressionTransformer.IsDictionaryLike(
+                _parent.Model.GetTypeInfo(elemAccess.Expression).Type
+            )
+        )
         {
             var receiver = _parent.TransformExpression(elemAccess.Expression);
             var key = _parent.TransformExpression(elemAccess.ArgumentList.Arguments[0].Expression);
@@ -98,7 +105,8 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
         {
             return new TsCallExpression(
                 new TsPropertyAccess(_parent.TransformExpression(prefix.Operand), "neg"),
-                []);
+                []
+            );
         }
 
         return new TsUnaryExpression(
@@ -115,7 +123,8 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
     public TsExpression TransformPostfixUnary(PostfixUnaryExpressionSyntax postfix) =>
         new TsPostfixUnaryExpression(
             _parent.TransformExpression(postfix.Operand),
-            postfix.OperatorToken.Text);
+            postfix.OperatorToken.Text
+        );
 
     private bool IsDecimalOperand(ExpressionSyntax expr)
     {
@@ -133,32 +142,35 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
     /// Returns null when the operator has no decimal equivalent (logical &amp;&amp;/||,
     /// bitwise &amp;/|/^, etc. — those don't apply to monetary types in practice).
     /// </summary>
-    private static string? TryMapDecimalBinary(string op) => op switch
-    {
-        "+" => "plus",
-        "-" => "minus",
-        "*" => "times",
-        "/" => "div",
-        "%" => "mod",
-        "==" => "eq",
-        "!=" => "!eq",
-        "<" => "lt",
-        ">" => "gt",
-        "<=" => "lte",
-        ">=" => "gte",
-        _ => null,
-    };
+    private static string? TryMapDecimalBinary(string op) =>
+        op switch
+        {
+            "+" => "plus",
+            "-" => "minus",
+            "*" => "times",
+            "/" => "div",
+            "%" => "mod",
+            "==" => "eq",
+            "!=" => "!eq",
+            "<" => "lt",
+            ">" => "gt",
+            "<=" => "lte",
+            ">=" => "gte",
+            _ => null,
+        };
 
-    private static string MapBinaryOperator(string op) => op switch
-    {
-        "==" => "===",
-        "!=" => "!==",
-        _ => op
-    };
+    private static string MapBinaryOperator(string op) =>
+        op switch
+        {
+            "==" => "===",
+            "!=" => "!==",
+            _ => op,
+        };
 
-    private static string MapAssignmentOperator(string op) => op switch
-    {
-        "??=" => "??=",
-        _ => op
-    };
+    private static string MapAssignmentOperator(string op) =>
+        op switch
+        {
+            "??=" => "??=",
+            _ => op,
+        };
 }

@@ -27,9 +27,21 @@ using Metano.Annotations;
 
 [assembly: MapProperty(typeof(List<>), nameof(List<int>.Count), JsProperty = "length")]
 [assembly: MapProperty(typeof(IList<>), nameof(IList<int>.Count), JsProperty = "length")]
-[assembly: MapProperty(typeof(ICollection<>), nameof(ICollection<int>.Count), JsProperty = "length")]
-[assembly: MapProperty(typeof(IReadOnlyList<>), nameof(IReadOnlyList<int>.Count), JsProperty = "length")]
-[assembly: MapProperty(typeof(IReadOnlyCollection<>), nameof(IReadOnlyCollection<int>.Count), JsProperty = "length")]
+[assembly: MapProperty(
+    typeof(ICollection<>),
+    nameof(ICollection<int>.Count),
+    JsProperty = "length"
+)]
+[assembly: MapProperty(
+    typeof(IReadOnlyList<>),
+    nameof(IReadOnlyList<int>.Count),
+    JsProperty = "length"
+)]
+[assembly: MapProperty(
+    typeof(IReadOnlyCollection<>),
+    nameof(IReadOnlyCollection<int>.Count),
+    JsProperty = "length"
+)]
 
 // ─── Add ────────────────────────────────────────────────────
 // Add exists on the mutable interfaces. IReadOnlyList<T> and IReadOnlyCollection<T> do
@@ -53,7 +65,11 @@ using Metano.Annotations;
 
 [assembly: MapMethod(typeof(List<>), nameof(List<int>.Contains), JsMethod = "includes")]
 [assembly: MapMethod(typeof(IList<>), nameof(IList<int>.Contains), JsMethod = "includes")]
-[assembly: MapMethod(typeof(ICollection<>), nameof(ICollection<int>.Contains), JsMethod = "includes")]
+[assembly: MapMethod(
+    typeof(ICollection<>),
+    nameof(ICollection<int>.Contains),
+    JsMethod = "includes"
+)]
 
 // IndexOf is on IList<T> (and inherited by List<T>). IReadOnlyList<T> does NOT declare
 // IndexOf — calls through that type go through the LINQ Enumerable.IndexOf extension
@@ -69,8 +85,16 @@ using Metano.Annotations;
 // deleteCount argument and produced a buggy `list.splice(index, item)` call. The
 // template form here is correct.
 
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.Insert), JsTemplate = "$this.splice($0, 0, $1)")]
-[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.Insert), JsTemplate = "$this.splice($0, 0, $1)")]
+[assembly: MapMethod(
+    typeof(List<>),
+    nameof(List<int>.Insert),
+    JsTemplate = "$this.splice($0, 0, $1)"
+)]
+[assembly: MapMethod(
+    typeof(IList<>),
+    nameof(IList<int>.Insert),
+    JsTemplate = "$this.splice($0, 0, $1)"
+)]
 
 // ─── Clear ──────────────────────────────────────────────────
 // list.Clear() → list.length = 0
@@ -78,7 +102,11 @@ using Metano.Annotations;
 
 [assembly: MapMethod(typeof(List<>), nameof(List<int>.Clear), JsTemplate = "$this.length = 0")]
 [assembly: MapMethod(typeof(IList<>), nameof(IList<int>.Clear), JsTemplate = "$this.length = 0")]
-[assembly: MapMethod(typeof(ICollection<>), nameof(ICollection<int>.Clear), JsTemplate = "$this.length = 0")]
+[assembly: MapMethod(
+    typeof(ICollection<>),
+    nameof(ICollection<int>.Clear),
+    JsTemplate = "$this.length = 0"
+)]
 
 // ─── List<T>-only methods ───────────────────────────────────
 // Reverse, Sort, ToArray are concrete methods on List<T>; the interfaces don't declare
@@ -95,16 +123,27 @@ using Metano.Annotations;
 // JS code rather than as an inline IIFE template because the body is a multi-step
 // algorithm (indexOf + branch + splice) and reads better with a name attached.
 
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.Remove),
+[assembly: MapMethod(
+    typeof(List<>),
+    nameof(List<int>.Remove),
     JsTemplate = "listRemove($this, $0)",
-    RuntimeImports = "listRemove")]
+    RuntimeImports = "listRemove"
+)]
 
 // list.RemoveAt(index) → list.splice(index, 1)
 // JS array splice with deleteCount=1 removes one element at the position. The return
 // value is dropped (C# RemoveAt returns void).
 
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.RemoveAt), JsTemplate = "$this.splice($0, 1)")]
-[assembly: MapMethod(typeof(IList<>), nameof(IList<int>.RemoveAt), JsTemplate = "$this.splice($0, 1)")]
+[assembly: MapMethod(
+    typeof(List<>),
+    nameof(List<int>.RemoveAt),
+    JsTemplate = "$this.splice($0, 1)"
+)]
+[assembly: MapMethod(
+    typeof(IList<>),
+    nameof(IList<int>.RemoveAt),
+    JsTemplate = "$this.splice($0, 1)"
+)]
 
 // ─── FindIndex / Find ───────────────────────────────────────
 // list.FindIndex(predicate) → array.findIndex(predicate)
@@ -113,5 +152,8 @@ using Metano.Annotations;
 // the C# null-check semantics match.)
 
 [assembly: MapMethod(typeof(List<>), nameof(List<int>.FindIndex), JsMethod = "findIndex")]
-[assembly: MapMethod(typeof(List<>), nameof(List<int>.Find),
-    JsTemplate = "($this.find($0) ?? null)")]
+[assembly: MapMethod(
+    typeof(List<>),
+    nameof(List<int>.Find),
+    JsTemplate = "($this.find($0) ?? null)"
+)]

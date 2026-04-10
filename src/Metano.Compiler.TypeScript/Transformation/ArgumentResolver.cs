@@ -38,7 +38,9 @@ public sealed class ArgumentResolver(ExpressionTransformer parent)
         if (!hasNamedArgs)
         {
             // All positional — simple case
-            return argumentList.Arguments.Select(a => _parent.TransformExpression(a.Expression)).ToList();
+            return argumentList
+                .Arguments.Select(a => _parent.TransformExpression(a.Expression))
+                .ToList();
         }
 
         // Resolve the constructor/method symbol to get parameter order
@@ -46,7 +48,9 @@ public sealed class ArgumentResolver(ExpressionTransformer parent)
         if (symbolInfo.Symbol is not IMethodSymbol methodSymbol)
         {
             // Fallback: just transform as-is
-            return argumentList.Arguments.Select(a => _parent.TransformExpression(a.Expression)).ToList();
+            return argumentList
+                .Arguments.Select(a => _parent.TransformExpression(a.Expression))
+                .ToList();
         }
 
         var parameters = methodSymbol.Parameters;
@@ -63,7 +67,9 @@ public sealed class ArgumentResolver(ExpressionTransformer parent)
                     bool b => new TsLiteral(b ? "true" : "false"),
                     string s => new TsStringLiteral(s),
                     int n => new TsLiteral(n.ToString()),
-                    _ => new TsLiteral(parameters[i].ExplicitDefaultValue?.ToString() ?? "undefined")
+                    _ => new TsLiteral(
+                        parameters[i].ExplicitDefaultValue?.ToString() ?? "undefined"
+                    ),
                 };
             }
             else
@@ -101,9 +107,14 @@ public sealed class ArgumentResolver(ExpressionTransformer parent)
         var lastProvided = -1;
         for (var i = 0; i < parameters.Length; i++)
         {
-            if (argumentList.Arguments.Any(a =>
-                (a.NameColon is not null && a.NameColon.Name.Identifier.Text == parameters[i].Name)
-                || (a.NameColon is null && argumentList.Arguments.IndexOf(a) == i)))
+            if (
+                argumentList.Arguments.Any(a =>
+                    (
+                        a.NameColon is not null
+                        && a.NameColon.Name.Identifier.Text == parameters[i].Name
+                    ) || (a.NameColon is null && argumentList.Arguments.IndexOf(a) == i)
+                )
+            )
             {
                 lastProvided = i;
             }

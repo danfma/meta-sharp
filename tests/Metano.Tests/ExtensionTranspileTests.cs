@@ -141,6 +141,8 @@ public class ExtensionTranspileTests
 
         var output = result["string-extensions.ts"];
         await Assert.That(output).Contains("export function isBlank(text: string): boolean");
-        await Assert.That(output).Contains("export function repeat(text: string, times: number): string");
+        await Assert
+            .That(output)
+            .Contains("export function repeat(text: string, times: number): string");
     }
 }

@@ -110,7 +110,9 @@ public class ConstructorOverloadTests
 
         var output = result["config.ts"];
         // Three overload signatures
-        await Assert.That(output).Contains("constructor(public name: string, public value: number);");
+        await Assert
+            .That(output)
+            .Contains("constructor(public name: string, public value: number);");
         await Assert.That(output).Contains("constructor(public name: string);");
         await Assert.That(output).Contains("constructor();");
         await Assert.That(output).Contains("...args: unknown[]");

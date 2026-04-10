@@ -22,7 +22,8 @@ public class AutoInitDefaultTests
             {
                 public Status State { get; set; }
             }
-            """);
+            """
+        );
 
         await Assert.That(result["order.ts"]).Contains("state: Status = Status.Pending");
     }
@@ -42,7 +43,8 @@ public class AutoInitDefaultTests
             {
                 public Priority Level { get; set; }
             }
-            """);
+            """
+        );
 
         await Assert.That(result["ticket.ts"]).Contains("level: Priority = Priority.Low");
     }
@@ -58,7 +60,8 @@ public class AutoInitDefaultTests
                 public int Count { get; set; }
                 public long Total { get; set; }
             }
-            """);
+            """
+        );
 
         var output = result["counter.ts"];
         await Assert.That(output).Contains("count: number = 0");
@@ -75,7 +78,8 @@ public class AutoInitDefaultTests
             {
                 public bool IsActive { get; set; }
             }
-            """);
+            """
+        );
 
         await Assert.That(result["flag.ts"]).Contains("isActive: boolean = false");
     }
@@ -93,7 +97,8 @@ public class AutoInitDefaultTests
             {
                 public decimal Amount { get; set; }
             }
-            """);
+            """
+        );
 
         await Assert.That(result["money.ts"]).Contains("amount: Decimal = new Decimal(\"0\")");
     }
@@ -110,7 +115,8 @@ public class AutoInitDefaultTests
             {
                 public int Count { get; set; } = 42;
             }
-            """);
+            """
+        );
 
         await Assert.That(result["sample.ts"]).Contains("count: number = 42");
         await Assert.That(result["sample.ts"]).DoesNotContain("count: number = 0");
@@ -129,7 +135,8 @@ public class AutoInitDefaultTests
                 public string? Name { get; set; }
                 public int? Count { get; set; }
             }
-            """);
+            """
+        );
 
         var output = result["sample.ts"];
         await Assert.That(output).Contains("name: string | null = null");
@@ -150,7 +157,8 @@ public class AutoInitDefaultTests
             {
                 public string Name { get; set; } = "";
             }
-            """);
+            """
+        );
 
         // The user provided "", so it round-trips. The negative case (no init) is
         // covered by the absence of any auto-default.
@@ -169,7 +177,8 @@ public class AutoInitDefaultTests
                 public int Count;
                 public bool Open;
             }
-            """);
+            """
+        );
 
         var output = result["box.ts"];
         await Assert.That(output).Contains("count: number = 0");

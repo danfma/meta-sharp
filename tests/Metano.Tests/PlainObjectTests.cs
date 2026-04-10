@@ -15,7 +15,8 @@ public class PlainObjectTests
             """
             [Transpile, PlainObject]
             public record CreateTodoDto(string Title, int Count);
-            """);
+            """
+        );
 
         var output = result["create-todo-dto.ts"];
         await Assert.That(output).Contains("export interface CreateTodoDto");
@@ -40,7 +41,8 @@ public class PlainObjectTests
             {
                 public CreateTodoDto Make() => new CreateTodoDto("Buy milk", 5);
             }
-            """);
+            """
+        );
 
         var output = result["factory.ts"];
         // Object literal, not `new CreateTodoDto(...)`
@@ -61,7 +63,8 @@ public class PlainObjectTests
             {
                 public CreateTodoDto Make() => new CreateTodoDto(Count: 3, Title: "Eggs");
             }
-            """);
+            """
+        );
 
         var output = result["factory.ts"];
         // Even when the user supplies named args in non-declaration order, the keys
@@ -84,7 +87,8 @@ public class PlainObjectTests
             {
                 public TodoDto Toggle(TodoDto dto) => dto with { Completed = !dto.Completed };
             }
-            """);
+            """
+        );
 
         var output = result["toggler.ts"];
         // Spread instead of .with({...}). The printer may emit on a single line or
@@ -108,7 +112,8 @@ public class PlainObjectTests
             {
                 public TodoDto? Current { get; set; }
             }
-            """);
+            """
+        );
 
         var output = result["holder.ts"];
         // Should be `import type` since the value is never accessed at runtime
@@ -125,7 +130,8 @@ public class PlainObjectTests
             """
             [Transpile, PlainObject]
             public record Page(string Title, int PageNumber = 1, bool Draft = false);
-            """);
+            """
+        );
 
         var output = result["page.ts"];
         await Assert.That(output).Contains("readonly title: string");
@@ -149,7 +155,8 @@ public class PlainObjectTests
             {
                 public Page Make() => new Page("intro");
             }
-            """);
+            """
+        );
 
         var output = result["factory.ts"];
         // Only `title` in the literal — pageNumber omitted (the receiver gets
@@ -173,7 +180,8 @@ public class PlainObjectTests
             {
                 public Page Make() => new Page("intro", 5);
             }
-            """);
+            """
+        );
 
         await Assert.That(result["factory.ts"]).Contains("{ title: \"intro\", pageNumber: 5 }");
     }
@@ -190,7 +198,8 @@ public class PlainObjectTests
             {
                 public TodoItem ToggleCompleted() => this with { Completed = !Completed };
             }
-            """);
+            """
+        );
 
         var output = result["todo-item.ts"];
         // Interface stays plain.
@@ -218,7 +227,8 @@ public class PlainObjectTests
             {
                 public TodoItem Toggle(TodoItem item) => item.ToggleCompleted();
             }
-            """);
+            """
+        );
 
         var output = result["service.ts"];
         // Call site is rewritten to `toggleCompleted(item)` not `item.toggleCompleted()`
@@ -245,7 +255,8 @@ public class PlainObjectTests
             {
                 public Bin Empty(Bin b) => b.Delete();
             }
-            """);
+            """
+        );
 
         var binOutput = result["bin.ts"];
         var svcOutput = result["service.ts"];
@@ -271,9 +282,12 @@ public class PlainObjectTests
             {
                 public Counter Bump(Counter c, int n) => c.Add(n);
             }
-            """);
+            """
+        );
 
-        await Assert.That(result["counter.ts"]).Contains("export function add(self: Counter, amount: number)");
+        await Assert
+            .That(result["counter.ts"])
+            .Contains("export function add(self: Counter, amount: number)");
         await Assert.That(result["service.ts"]).Contains("add(c, n)");
     }
 
@@ -285,7 +299,8 @@ public class PlainObjectTests
             """
             [Transpile, PlainObject]
             public record Point(int X, int Y);
-            """);
+            """
+        );
 
         var output = result["point.ts"];
         await Assert.That(output).DoesNotContain("equals");

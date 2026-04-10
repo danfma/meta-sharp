@@ -43,12 +43,15 @@ public static class LiteralHandler
         // For decimal literals (1.5m), wrap the literal in `new Decimal("…")` so that
         // decimal.js preserves the exact value. We pass the value as a string because
         // converting through a JS number first would already lose precision.
-        if (model is not null
-            && model.GetTypeInfo(lit).Type?.SpecialType == SpecialType.System_Decimal)
+        if (
+            model is not null
+            && model.GetTypeInfo(lit).Type?.SpecialType == SpecialType.System_Decimal
+        )
         {
             return new TsNewExpression(
                 new TsIdentifier("Decimal"),
-                [new TsStringLiteral(lit.Token.ValueText)]);
+                [new TsStringLiteral(lit.Token.ValueText)]
+            );
         }
         return new TsLiteral(lit.Token.ValueText);
     }

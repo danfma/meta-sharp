@@ -40,51 +40,83 @@ public sealed class InlineWrapperTransformer(TypeScriptTransformContext context)
 
         // export type UserId = string & { readonly __brand: "UserId" };
         var brandType = new TsNamedType($"{{ readonly __brand: \"{tsTypeName}\" }}");
-        statements.Add(new TsTypeAlias(tsTypeName, new TsIntersectionType([primitiveType, brandType])));
+        statements.Add(
+            new TsTypeAlias(tsTypeName, new TsIntersectionType([primitiveType, brandType]))
+        );
 
         // Build companion namespace functions
         var functions = new List<TsFunction>();
 
         // create(value: T): TypeName
-        functions.Add(new TsFunction(
-            "create",
-            [new TsParameter("value", primitiveType)],
-            new TsNamedType(tsTypeName),
-            [new TsReturnStatement(new TsCastExpression(new TsIdentifier("value"), new TsNamedType(tsTypeName)))],
-            Exported: true
-        ));
+        functions.Add(
+            new TsFunction(
+                "create",
+                [new TsParameter("value", primitiveType)],
+                new TsNamedType(tsTypeName),
+                [
+                    new TsReturnStatement(
+                        new TsCastExpression(new TsIdentifier("value"), new TsNamedType(tsTypeName))
+                    ),
+                ],
+                Exported: true
+            )
+        );
 
         // toString(value: TypeName): string — only for non-string primitives
         if (primitiveType is not TsStringType)
         {
-            functions.Add(new TsFunction(
-                "toString",
-                [new TsParameter("value", new TsNamedType(tsTypeName))],
-                new TsStringType(),
-                [new TsReturnStatement(new TsCallExpression(new TsIdentifier("String"), [new TsIdentifier("value")]))],
-                Exported: true
-            ));
+            functions.Add(
+                new TsFunction(
+                    "toString",
+                    [new TsParameter("value", new TsNamedType(tsTypeName))],
+                    new TsStringType(),
+                    [
+                        new TsReturnStatement(
+                            new TsCallExpression(
+                                new TsIdentifier("String"),
+                                [new TsIdentifier("value")]
+                            )
+                        ),
+                    ],
+                    Exported: true
+                )
+            );
         }
 
         // Static methods from the struct
         foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
         {
-            if (method.MethodKind != MethodKind.Ordinary) continue;
-            if (!method.IsStatic) continue;
-            if (method.IsImplicitlyDeclared) continue;
-            if (method.DeclaredAccessibility != Accessibility.Public) continue;
-            if (SymbolHelper.HasIgnore(method)) continue;
-            if (TypeScriptNaming.HasEmit(method)) continue;
+            if (method.MethodKind != MethodKind.Ordinary)
+                continue;
+            if (!method.IsStatic)
+                continue;
+            if (method.IsImplicitlyDeclared)
+                continue;
+            if (method.DeclaredAccessibility != Accessibility.Public)
+                continue;
+            if (SymbolHelper.HasIgnore(method))
+                continue;
+            if (TypeScriptNaming.HasEmit(method))
+                continue;
 
-            var methodSyntax = method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax() as MethodDeclarationSyntax;
-            if (methodSyntax is null) continue;
+            var methodSyntax =
+                method.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
+                as MethodDeclarationSyntax;
+            if (methodSyntax is null)
+                continue;
 
             var semanticModel = _context.Compilation.GetSemanticModel(methodSyntax.SyntaxTree);
             var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
-            var body = exprTransformer.TransformBody(methodSyntax.Body, methodSyntax.ExpressionBody,
-                isVoid: method.ReturnsVoid);
-            var parameters = method.Parameters
-                .Select(p => new TsParameter(TypeScriptNaming.ToCamelCase(p.Name), TypeMapper.Map(p.Type)))
+            var body = exprTransformer.TransformBody(
+                methodSyntax.Body,
+                methodSyntax.ExpressionBody,
+                isVoid: method.ReturnsVoid
+            );
+            var parameters = method
+                .Parameters.Select(p => new TsParameter(
+                    TypeScriptNaming.ToCamelCase(p.Name),
+                    TypeMapper.Map(p.Type)
+                ))
                 .ToList();
 
             // Inline wrapper helpers lower to `export namespace TypeName { export
@@ -93,10 +125,19 @@ public sealed class InlineWrapperTransformer(TypeScriptTransformContext context)
             // `obj.new` is fine), so this stays on the escaping ToCamelCase variant.
             // The call-site MemberAccessHandler detects [InlineWrapper] receivers and
             // matches the escape so the two halves stay in sync.
-            var methodName = SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
+            var methodName =
+                SymbolHelper.GetNameOverride(method) ?? TypeScriptNaming.ToCamelCase(method.Name);
             var returnType = TypeMapper.Map(method.ReturnType);
-            functions.Add(new TsFunction(methodName, parameters, returnType, body,
-                Exported: true, Async: method.IsAsync));
+            functions.Add(
+                new TsFunction(
+                    methodName,
+                    parameters,
+                    returnType,
+                    body,
+                    Exported: true,
+                    Async: method.IsAsync
+                )
+            );
         }
 
         // export namespace TypeName { ... }

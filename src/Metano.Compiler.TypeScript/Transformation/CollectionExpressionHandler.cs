@@ -22,7 +22,8 @@ public sealed class CollectionExpressionHandler(ExpressionTransformer parent)
     {
         // Check target type to distinguish Set vs Array
         var convertedType = _parent.Model.GetTypeInfo(collExpr).ConvertedType;
-        var isSetType = convertedType is INamedTypeSymbol named
+        var isSetType =
+            convertedType is INamedTypeSymbol named
             && named.Name is "HashSet" or "ISet" or "SortedSet";
 
         if (collExpr.Elements.Count == 0)
@@ -30,8 +31,8 @@ public sealed class CollectionExpressionHandler(ExpressionTransformer parent)
                 ? new TsNewExpression(new TsIdentifier("HashSet"), [])
                 : new TsLiteral("[]");
 
-        var elements = collExpr.Elements
-            .OfType<ExpressionElementSyntax>()
+        var elements = collExpr
+            .Elements.OfType<ExpressionElementSyntax>()
             .Select(e => _parent.TransformExpression(e.Expression))
             .ToList();
 
@@ -40,6 +41,7 @@ public sealed class CollectionExpressionHandler(ExpressionTransformer parent)
 
         return new TsCallExpression(
             new TsPropertyAccess(new TsIdentifier("Array"), "of"),
-            elements);
+            elements
+        );
     }
 }

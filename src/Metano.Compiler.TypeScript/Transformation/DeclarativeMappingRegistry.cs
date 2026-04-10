@@ -26,7 +26,8 @@ public sealed record DeclarativeMappingEntry(
     string? JsTemplate,
     string? WhenArg0StringEquals = null,
     string? WrapReceiver = null,
-    string? RuntimeImports = null)
+    string? RuntimeImports = null
+)
 {
     public bool HasTemplate => JsTemplate is not null;
 
@@ -50,14 +51,21 @@ public sealed record DeclarativeMappingEntry(
 /// </summary>
 public sealed class DeclarativeMappingRegistry
 {
-    private readonly Dictionary<(INamedTypeSymbol Type, string Name), List<DeclarativeMappingEntry>> _methods;
-    private readonly Dictionary<(INamedTypeSymbol Type, string Name), DeclarativeMappingEntry> _properties;
+    private readonly Dictionary<
+        (INamedTypeSymbol Type, string Name),
+        List<DeclarativeMappingEntry>
+    > _methods;
+    private readonly Dictionary<
+        (INamedTypeSymbol Type, string Name),
+        DeclarativeMappingEntry
+    > _properties;
     private readonly Dictionary<string, HashSet<string>> _chainMethodsByWrapper;
 
     private DeclarativeMappingRegistry(
         Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>> methods,
         Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry> properties,
-        Dictionary<string, HashSet<string>> chainMethodsByWrapper)
+        Dictionary<string, HashSet<string>> chainMethodsByWrapper
+    )
     {
         _methods = methods;
         _properties = properties;
@@ -68,10 +76,16 @@ public sealed class DeclarativeMappingRegistry
     /// Empty registry — used when there are no declarative mappings to honor (e.g., the
     /// compilation does not reference any assembly that defines them).
     /// </summary>
-    public static DeclarativeMappingRegistry Empty { get; } = new(
-        new Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>>(SymbolNameKeyComparer.Instance),
-        new Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry>(SymbolNameKeyComparer.Instance),
-        []);
+    public static DeclarativeMappingRegistry Empty { get; } =
+        new(
+            new Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>>(
+                SymbolNameKeyComparer.Instance
+            ),
+            new Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry>(
+                SymbolNameKeyComparer.Instance
+            ),
+            []
+        );
 
     public int MethodCount => _methods.Values.Sum(list => list.Count);
     public int PropertyCount => _properties.Count;
@@ -102,7 +116,8 @@ public sealed class DeclarativeMappingRegistry
     public bool TryGetMethods(
         INamedTypeSymbol containingType,
         string methodName,
-        out IReadOnlyList<DeclarativeMappingEntry> entries)
+        out IReadOnlyList<DeclarativeMappingEntry> entries
+    )
     {
         if (_methods.TryGetValue((containingType.OriginalDefinition, methodName), out var list))
         {
@@ -117,8 +132,11 @@ public sealed class DeclarativeMappingRegistry
     /// <summary>
     /// Looks up a declarative property mapping by the containing type and the C# property name.
     /// </summary>
-    public bool TryGetProperty(INamedTypeSymbol containingType, string propertyName, out DeclarativeMappingEntry entry) =>
-        _properties.TryGetValue((containingType.OriginalDefinition, propertyName), out entry!);
+    public bool TryGetProperty(
+        INamedTypeSymbol containingType,
+        string propertyName,
+        out DeclarativeMappingEntry entry
+    ) => _properties.TryGetValue((containingType.OriginalDefinition, propertyName), out entry!);
 
     /// <summary>
     /// Builds a registry by walking the compilation's own assembly and every referenced
@@ -129,8 +147,12 @@ public sealed class DeclarativeMappingRegistry
     /// </summary>
     public static DeclarativeMappingRegistry BuildFromCompilation(Compilation compilation)
     {
-        var methods = new Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>>(SymbolNameKeyComparer.Instance);
-        var properties = new Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry>(SymbolNameKeyComparer.Instance);
+        var methods = new Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>>(
+            SymbolNameKeyComparer.Instance
+        );
+        var properties = new Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry>(
+            SymbolNameKeyComparer.Instance
+        );
 
         // Walk the current assembly + every referenced assembly's attributes
         var assemblies = new List<IAssemblySymbol> { compilation.Assembly };
@@ -160,8 +182,10 @@ public sealed class DeclarativeMappingRegistry
         {
             foreach (var entry in entries)
             {
-                if (entry.WrapReceiver is null) continue;
-                if (entry.JsName is null) continue;  // template entries can't be detected by name
+                if (entry.WrapReceiver is null)
+                    continue;
+                if (entry.JsName is null)
+                    continue; // template entries can't be detected by name
 
                 if (!chainMethodsByWrapper.TryGetValue(entry.WrapReceiver, out var set))
                 {
@@ -184,10 +208,12 @@ public sealed class DeclarativeMappingRegistry
     /// </summary>
     private static void TryRegisterMethod(
         AttributeData attr,
-        Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>> target)
+        Dictionary<(INamedTypeSymbol, string), List<DeclarativeMappingEntry>> target
+    )
     {
         var entry = ReadEntry(attr, "JsMethod");
-        if (entry is null) return;
+        if (entry is null)
+            return;
 
         var declaringType = (INamedTypeSymbol)attr.ConstructorArguments[0].Value!;
         var memberName = (string)attr.ConstructorArguments[1].Value!;
@@ -208,10 +234,12 @@ public sealed class DeclarativeMappingRegistry
     /// </summary>
     private static void TryRegisterProperty(
         AttributeData attr,
-        Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry> target)
+        Dictionary<(INamedTypeSymbol, string), DeclarativeMappingEntry> target
+    )
     {
         var entry = ReadEntry(attr, "JsProperty");
-        if (entry is null) return;
+        if (entry is null)
+            return;
 
         var declaringType = (INamedTypeSymbol)attr.ConstructorArguments[0].Value!;
         var memberName = (string)attr.ConstructorArguments[1].Value!;
@@ -228,9 +256,12 @@ public sealed class DeclarativeMappingRegistry
     /// </summary>
     private static DeclarativeMappingEntry? ReadEntry(AttributeData attr, string renameNamedArg)
     {
-        if (attr.ConstructorArguments.Length < 2) return null;
-        if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol) return null;
-        if (attr.ConstructorArguments[1].Value is not string) return null;
+        if (attr.ConstructorArguments.Length < 2)
+            return null;
+        if (attr.ConstructorArguments[0].Value is not INamedTypeSymbol)
+            return null;
+        if (attr.ConstructorArguments[1].Value is not string)
+            return null;
 
         string? jsName = null;
         string? jsTemplate = null;
@@ -259,9 +290,16 @@ public sealed class DeclarativeMappingRegistry
             }
         }
 
-        if (jsName is null && jsTemplate is null) return null;
+        if (jsName is null && jsTemplate is null)
+            return null;
 
-        return new DeclarativeMappingEntry(jsName, jsTemplate, whenArg0StringEquals, wrapReceiver, runtimeImports);
+        return new DeclarativeMappingEntry(
+            jsName,
+            jsTemplate,
+            whenArg0StringEquals,
+            wrapReceiver,
+            runtimeImports
+        );
     }
 
     /// <summary>
@@ -270,14 +308,19 @@ public sealed class DeclarativeMappingRegistry
     /// references to the same generic definition (e.g., from different syntax trees)
     /// hash and compare equal.
     /// </summary>
-    private sealed class SymbolNameKeyComparer : IEqualityComparer<(INamedTypeSymbol Type, string Name)>
+    private sealed class SymbolNameKeyComparer
+        : IEqualityComparer<(INamedTypeSymbol Type, string Name)>
     {
         public static readonly SymbolNameKeyComparer Instance = new();
 
-        public bool Equals((INamedTypeSymbol Type, string Name) x, (INamedTypeSymbol Type, string Name) y) =>
-            SymbolEqualityComparer.Default.Equals(x.Type, y.Type) && x.Name == y.Name;
+        public bool Equals(
+            (INamedTypeSymbol Type, string Name) x,
+            (INamedTypeSymbol Type, string Name) y
+        ) => SymbolEqualityComparer.Default.Equals(x.Type, y.Type) && x.Name == y.Name;
 
         public int GetHashCode((INamedTypeSymbol Type, string Name) obj) =>
-            unchecked(SymbolEqualityComparer.Default.GetHashCode(obj.Type) * 397 ^ obj.Name.GetHashCode());
+            unchecked(
+                SymbolEqualityComparer.Default.GetHashCode(obj.Type) * 397 ^ obj.Name.GetHashCode()
+            );
     }
 }

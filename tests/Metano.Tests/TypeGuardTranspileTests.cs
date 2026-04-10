@@ -13,7 +13,9 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["point.ts"];
-        await Assert.That(output).Contains("export function isPoint(value: unknown): value is Point");
+        await Assert
+            .That(output)
+            .Contains("export function isPoint(value: unknown): value is Point");
         await Assert.That(output).Contains("value instanceof Point");
         await Assert.That(output).Contains("typeof v.x === \"number\"");
         await Assert.That(output).Contains("typeof v.y === \"number\"");
@@ -35,7 +37,9 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["currency.ts"];
-        await Assert.That(output).Contains("export function isCurrency(value: unknown): value is Currency");
+        await Assert
+            .That(output)
+            .Contains("export function isCurrency(value: unknown): value is Currency");
         await Assert.That(output).Contains("value === \"BRL\"");
         await Assert.That(output).Contains("value === \"USD\"");
         await Assert.That(output).Contains("value === \"EUR\"");
@@ -52,7 +56,9 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["status.ts"];
-        await Assert.That(output).Contains("export function isStatus(value: unknown): value is Status");
+        await Assert
+            .That(output)
+            .Contains("export function isStatus(value: unknown): value is Status");
         await Assert.That(output).Contains("typeof value === \"number\"");
         await Assert.That(output).Contains("value === 0");
         await Assert.That(output).Contains("value === 1");
@@ -73,7 +79,9 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["i-entity.ts"];
-        await Assert.That(output).Contains("export function isIEntity(value: unknown): value is IEntity");
+        await Assert
+            .That(output)
+            .Contains("export function isIEntity(value: unknown): value is IEntity");
         await Assert.That(output).DoesNotContain("instanceof");
         await Assert.That(output).Contains("typeof v.id === \"string\"");
         await Assert.That(output).Contains("typeof v.name === \"string\"");
@@ -194,7 +202,9 @@ public class TypeGuardTranspileTests
         );
 
         var output = result["counter.ts"];
-        await Assert.That(output).Contains("export function isCounter(value: unknown): value is Counter");
+        await Assert
+            .That(output)
+            .Contains("export function isCounter(value: unknown): value is Counter");
         await Assert.That(output).Contains("typeof v.count === \"number\"");
     }
 

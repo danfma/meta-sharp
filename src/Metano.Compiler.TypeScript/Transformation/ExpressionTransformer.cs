@@ -29,7 +29,8 @@ public sealed class ExpressionTransformer(SemanticModel model)
     /// when the transformer is created outside of a full <see cref="TypeScriptTransformContext"/>
     /// (e.g., in unit tests that exercise it directly).
     /// </summary>
-    public DeclarativeMappingRegistry DeclarativeMappings { get; set; } = DeclarativeMappingRegistry.Empty;
+    public DeclarativeMappingRegistry DeclarativeMappings { get; set; } =
+        DeclarativeMappingRegistry.Empty;
 
     /// <summary>
     /// The Roslyn semantic model the expression transformer was created with.
@@ -48,7 +49,8 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private LambdaHandler Lambdas => _lambdas ??= new LambdaHandler(this);
 
     private ObjectCreationHandler? _objectCreation;
-    private ObjectCreationHandler ObjectCreation => _objectCreation ??= new ObjectCreationHandler(this);
+    private ObjectCreationHandler ObjectCreation =>
+        _objectCreation ??= new ObjectCreationHandler(this);
 
     private IdentifierHandler? _identifiers;
     private IdentifierHandler Identifiers => _identifiers ??= new IdentifierHandler(this);
@@ -63,13 +65,16 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private InvocationHandler Invocations => _invocations ??= new InvocationHandler(this);
 
     private InterpolatedStringHandler? _interpolatedStrings;
-    private InterpolatedStringHandler InterpolatedStrings => _interpolatedStrings ??= new InterpolatedStringHandler(this);
+    private InterpolatedStringHandler InterpolatedStrings =>
+        _interpolatedStrings ??= new InterpolatedStringHandler(this);
 
     private OptionalChainingHandler? _optionalChaining;
-    private OptionalChainingHandler OptionalChaining => _optionalChaining ??= new OptionalChainingHandler(this);
+    private OptionalChainingHandler OptionalChaining =>
+        _optionalChaining ??= new OptionalChainingHandler(this);
 
     private CollectionExpressionHandler? _collectionExpressions;
-    private CollectionExpressionHandler CollectionExpressions => _collectionExpressions ??= new CollectionExpressionHandler(this);
+    private CollectionExpressionHandler CollectionExpressions =>
+        _collectionExpressions ??= new CollectionExpressionHandler(this);
 
     private OperatorHandler? _operators;
     private OperatorHandler Operators => _operators ??= new OperatorHandler(this);
@@ -78,18 +83,22 @@ public sealed class ExpressionTransformer(SemanticModel model)
     private StatementHandler Statements => _statements ??= new StatementHandler(this);
 
     private ThrowExpressionHandler? _throwExpressions;
-    private ThrowExpressionHandler ThrowExpressions => _throwExpressions ??= new ThrowExpressionHandler(this);
+    private ThrowExpressionHandler ThrowExpressions =>
+        _throwExpressions ??= new ThrowExpressionHandler(this);
 
     private ArgumentResolver? _argumentResolver;
     internal ArgumentResolver ArgumentResolver => _argumentResolver ??= new ArgumentResolver(this);
 
     private TsExpression Unsupported(SyntaxNode node, string message)
     {
-        ReportDiagnostic?.Invoke(new MetanoDiagnostic(
-            MetanoDiagnosticSeverity.Warning,
-            DiagnosticCodes.UnsupportedFeature,
-            message,
-            node.GetLocation()));
+        ReportDiagnostic?.Invoke(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.UnsupportedFeature,
+                message,
+                node.GetLocation()
+            )
+        );
         return new TsIdentifier($"/* unsupported: {node.Kind()} */");
     }
 
@@ -101,8 +110,8 @@ public sealed class ExpressionTransformer(SemanticModel model)
     public IReadOnlyList<TsStatement> TransformBody(
         BlockSyntax? block,
         ArrowExpressionClauseSyntax? arrow,
-        bool isVoid = false) =>
-        Statements.TransformBody(block, arrow, isVoid);
+        bool isVoid = false
+    ) => Statements.TransformBody(block, arrow, isVoid);
 
     // ─── Expressions ────────────────────────────────────────
 
@@ -119,7 +128,9 @@ public sealed class ExpressionTransformer(SemanticModel model)
 
             InvocationExpressionSyntax invocation => Invocations.Transform(invocation),
 
-            ObjectCreationExpressionSyntax creation => ObjectCreation.TransformObjectCreation(creation),
+            ObjectCreationExpressionSyntax creation => ObjectCreation.TransformObjectCreation(
+                creation
+            ),
             ImplicitObjectCreationExpressionSyntax implicitCreation =>
                 ObjectCreation.TransformImplicitObjectCreation(implicitCreation),
 
@@ -152,16 +163,19 @@ public sealed class ExpressionTransformer(SemanticModel model)
             PostfixUnaryExpressionSyntax postfix => Operators.TransformPostfixUnary(postfix),
 
             // x?.Prop → x?.prop
-            ConditionalAccessExpressionSyntax condAccess =>
-                OptionalChaining.Transform(condAccess),
+            ConditionalAccessExpressionSyntax condAccess => OptionalChaining.Transform(condAccess),
 
             SwitchExpressionSyntax switchExpr => Switches.TransformSwitchExpression(switchExpr),
 
             IsPatternExpressionSyntax isPattern => Patterns.TransformIsPattern(isPattern),
 
             // Lambda expressions
-            SimpleLambdaExpressionSyntax simpleLambda => Lambdas.TransformSimpleLambda(simpleLambda),
-            ParenthesizedLambdaExpressionSyntax parenLambda => Lambdas.TransformParenthesizedLambda(parenLambda),
+            SimpleLambdaExpressionSyntax simpleLambda => Lambdas.TransformSimpleLambda(
+                simpleLambda
+            ),
+            ParenthesizedLambdaExpressionSyntax parenLambda => Lambdas.TransformParenthesizedLambda(
+                parenLambda
+            ),
 
             AssignmentExpressionSyntax assign => Operators.TransformAssignment(assign),
 
@@ -176,7 +190,10 @@ public sealed class ExpressionTransformer(SemanticModel model)
             // C# 12 collection expression: [] → []
             CollectionExpressionSyntax collExpr => CollectionExpressions.Transform(collExpr),
 
-            _ => Unsupported(expression, $"Expression '{expression.Kind()}' is not supported by the transpiler."),
+            _ => Unsupported(
+                expression,
+                $"Expression '{expression.Kind()}' is not supported by the transpiler."
+            ),
         };
     }
 
@@ -207,10 +224,12 @@ public sealed class ExpressionTransformer(SemanticModel model)
     /// </summary>
     internal static bool IsDictionaryLike(ITypeSymbol? type)
     {
-        if (type is not INamedTypeSymbol named) return false;
+        if (type is not INamedTypeSymbol named)
+            return false;
         var name = named.OriginalDefinition.ToDisplayString();
-        return name is "System.Collections.Generic.Dictionary<TKey, TValue>"
-            or "System.Collections.Generic.IDictionary<TKey, TValue>"
-            or "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>";
+        return name
+            is "System.Collections.Generic.Dictionary<TKey, TValue>"
+                or "System.Collections.Generic.IDictionary<TKey, TValue>"
+                or "System.Collections.Generic.IReadOnlyDictionary<TKey, TValue>";
     }
 }

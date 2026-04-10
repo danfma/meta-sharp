@@ -20,7 +20,8 @@ public class DictionaryIndexerTests
                 private readonly Dictionary<string, int> _items = new();
                 public int Read(string key) => _items[key];
             }
-            """);
+            """
+        );
 
         var output = result["cache.ts"];
         await Assert.That(output).Contains("this._items.get(key)");
@@ -40,7 +41,8 @@ public class DictionaryIndexerTests
                 private readonly Dictionary<string, int> _items = new();
                 public void Write(string key, int value) => _items[key] = value;
             }
-            """);
+            """
+        );
 
         var output = result["cache.ts"];
         await Assert.That(output).Contains("this._items.set(key, value)");
@@ -62,7 +64,8 @@ public class DictionaryIndexerTests
                 private readonly List<int> _items = [];
                 public int Read(int idx) => _items[idx];
             }
-            """);
+            """
+        );
 
         var output = result["bag.ts"];
         await Assert.That(output).Contains("this._items[idx]");
@@ -81,7 +84,8 @@ public class DictionaryIndexerTests
             {
                 public int Read(IDictionary<string, int> map, string key) => map[key];
             }
-            """);
+            """
+        );
 
         await Assert.That(result["cache.ts"]).Contains("map.get(key)");
     }
@@ -110,7 +114,8 @@ public class DictionaryIndexerTests
                     return null;
                 }
             }
-            """);
+            """
+        );
 
         var output = result["cache.ts"];
         // const value = this._items.get(key);
@@ -141,7 +146,8 @@ public class DictionaryIndexerTests
                         return "default";
                 }
             }
-            """);
+            """
+        );
 
         var output = result["cache.ts"];
         await Assert.That(output).Contains("const found = this._items.get(key)");
@@ -167,7 +173,8 @@ public class DictionaryIndexerTests
                 private readonly Dictionary<string, int> _items = new();
                 public bool Missing(string key) => !_items.ContainsKey(key);
             }
-            """);
+            """
+        );
 
         // Sanity check: ContainsKey → has
         await Assert.That(result["cache.ts"]).Contains("!this._items.has(key)");
@@ -185,7 +192,8 @@ public class DictionaryIndexerTests
             {
                 public int Read(IReadOnlyDictionary<string, int> map, string key) => map[key];
             }
-            """);
+            """
+        );
 
         await Assert.That(result["cache.ts"]).Contains("map.get(key)");
     }

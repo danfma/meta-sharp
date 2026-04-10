@@ -43,7 +43,9 @@ public sealed class SwitchHandler(ExpressionTransformer parent, PatternMatchingH
                 switch (label)
                 {
                     case CaseSwitchLabelSyntax caseLabel:
-                        cases.Add(new TsSwitchCase(_parent.TransformExpression(caseLabel.Value), body));
+                        cases.Add(
+                            new TsSwitchCase(_parent.TransformExpression(caseLabel.Value), body)
+                        );
                         break;
                     case DefaultSwitchLabelSyntax:
                         cases.Add(new TsSwitchCase(null, body));
@@ -69,7 +71,11 @@ public sealed class SwitchHandler(ExpressionTransformer parent, PatternMatchingH
         return BuildTernaryChain(governing, arms, 0);
     }
 
-    private TsExpression BuildTernaryChain(TsExpression governing, List<SwitchExpressionArmSyntax> arms, int index)
+    private TsExpression BuildTernaryChain(
+        TsExpression governing,
+        List<SwitchExpressionArmSyntax> arms,
+        int index
+    )
     {
         if (index >= arms.Count)
             return new TsIdentifier("undefined");

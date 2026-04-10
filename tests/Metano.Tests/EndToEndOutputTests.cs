@@ -65,15 +65,15 @@ public class EndToEndOutputTests
         //    TS would leave the field as `undefined` at runtime, breaking equality
         //    checks. The compiler picks the first enum member (value 0) automatically.
         var expected =
-            "import { type Issue, IssueStatus } from \"@acme/issues\";\n" +
-            "\n" +
-            "export class Tracker {\n" +
-            "  current: Issue | null = null;\n" +
-            "\n" +
-            "  status: IssueStatus = IssueStatus.Open;\n" +
-            "\n" +
-            "  constructor() { }\n" +
-            "}\n";
+            "import { type Issue, IssueStatus } from \"@acme/issues\";\n"
+            + "\n"
+            + "export class Tracker {\n"
+            + "  current: Issue | null = null;\n"
+            + "\n"
+            + "  status: IssueStatus = IssueStatus.Open;\n"
+            + "\n"
+            + "  constructor() { }\n"
+            + "}\n";
 
         await Assert.That(actual).IsEqualTo(expected);
     }
@@ -96,7 +96,8 @@ public class EndToEndOutputTests
                 [Transpile, EmitInFile("issue")]
                 public enum IssueStatus { Open, Closed }
             }
-            """);
+            """
+        );
 
         var keys = string.Join(", ", result.Keys.OrderBy(k => k));
         var actual = result.TryGetValue("issue.ts", out var content)
@@ -107,33 +108,33 @@ public class EndToEndOutputTests
         // regression in the multi-type emission, decimal mapping, or self-import
         // elision shows up as a clear diff.
         var expected =
-            "import { HashCode } from \"metano-runtime\";\n" +
-            "import { Decimal } from \"decimal.js\";\n" +
-            "\n" +
-            "export class Issue {\n" +
-            "  constructor(readonly title: string, readonly status: IssueStatus, readonly estimatedCost: Decimal) { }\n" +
-            "\n" +
-            "  equals(other: any): boolean {\n" +
-            "    return other instanceof Issue && this.title === other.title && this.status === other.status && this.estimatedCost === other.estimatedCost;\n" +
-            "  }\n" +
-            "\n" +
-            "  hashCode(): number {\n" +
-            "    const hc = new HashCode();\n" +
-            "    hc.add(this.title);\n" +
-            "    hc.add(this.status);\n" +
-            "    hc.add(this.estimatedCost);\n" +
-            "    return hc.toHashCode();\n" +
-            "  }\n" +
-            "\n" +
-            "  with(overrides?: Partial<Issue>): Issue {\n" +
-            "    return new Issue(overrides?.title ?? this.title, overrides?.status ?? this.status, overrides?.estimatedCost ?? this.estimatedCost);\n" +
-            "  }\n" +
-            "}\n" +
-            "\n" +
-            "export enum IssueStatus {\n" +
-            "  Open = 0,\n" +
-            "  Closed = 1,\n" +
-            "}\n";
+            "import { HashCode } from \"metano-runtime\";\n"
+            + "import { Decimal } from \"decimal.js\";\n"
+            + "\n"
+            + "export class Issue {\n"
+            + "  constructor(readonly title: string, readonly status: IssueStatus, readonly estimatedCost: Decimal) { }\n"
+            + "\n"
+            + "  equals(other: any): boolean {\n"
+            + "    return other instanceof Issue && this.title === other.title && this.status === other.status && this.estimatedCost === other.estimatedCost;\n"
+            + "  }\n"
+            + "\n"
+            + "  hashCode(): number {\n"
+            + "    const hc = new HashCode();\n"
+            + "    hc.add(this.title);\n"
+            + "    hc.add(this.status);\n"
+            + "    hc.add(this.estimatedCost);\n"
+            + "    return hc.toHashCode();\n"
+            + "  }\n"
+            + "\n"
+            + "  with(overrides?: Partial<Issue>): Issue {\n"
+            + "    return new Issue(overrides?.title ?? this.title, overrides?.status ?? this.status, overrides?.estimatedCost ?? this.estimatedCost);\n"
+            + "  }\n"
+            + "}\n"
+            + "\n"
+            + "export enum IssueStatus {\n"
+            + "  Open = 0,\n"
+            + "  Closed = 1,\n"
+            + "}\n";
 
         await Assert.That(actual).IsEqualTo(expected);
     }

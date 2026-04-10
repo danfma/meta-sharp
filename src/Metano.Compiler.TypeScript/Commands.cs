@@ -85,7 +85,8 @@ public class Commands
             if (File.Exists(Path.Combine(current, "package.json")))
                 return current;
             var parent = Path.GetDirectoryName(current);
-            if (parent == current) break; // filesystem root
+            if (parent == current)
+                break; // filesystem root
             current = parent;
         }
         // Fallback: parent of the output dir (legacy convention)

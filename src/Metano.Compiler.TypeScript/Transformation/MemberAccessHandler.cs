@@ -36,7 +36,12 @@ public sealed class MemberAccessHandler(ExpressionTransformer parent)
         // the value. <c>.Value</c> on a Nullable lowers to the receiver as-is;
         // <c>.HasValue</c> becomes a null comparison so the meaning is preserved.
         var receiverType = _parent.Model.GetTypeInfo(member.Expression).Type;
-        if (receiverType is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
+        if (
+            receiverType is INamedTypeSymbol
+            {
+                OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+            }
+        )
         {
             var memberText = member.Name.Identifier.Text;
             if (memberText == "Value")
@@ -45,7 +50,8 @@ public sealed class MemberAccessHandler(ExpressionTransformer parent)
                 return new TsBinaryExpression(
                     _parent.TransformExpression(member.Expression),
                     "!==",
-                    new TsLiteral("null"));
+                    new TsLiteral("null")
+                );
         }
 
         var obj = _parent.TransformExpression(member.Expression);
@@ -70,7 +76,8 @@ public sealed class MemberAccessHandler(ExpressionTransformer parent)
         // declarations DO require reserved-word escapes — so the call site has to
         // match by also escaping. Detect this via the resolved symbol's containing
         // type carrying `[InlineWrapper]`.
-        var useEscape = symbol is IMethodSymbol m
+        var useEscape =
+            symbol is IMethodSymbol m
             && m.ContainingType is { } container
             && SymbolHelper.HasInlineWrapper(container);
         var memberName = useEscape

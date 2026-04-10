@@ -48,14 +48,17 @@ public static class PackageJsonWriter
         IReadOnlyList<TsSourceFile> files,
         string distDirRelativeToPackageRoot = "./dist",
         string? authoritativePackageName = null,
-        IReadOnlyDictionary<string, string>? crossPackageDependencies = null)
+        IReadOnlyDictionary<string, string>? crossPackageDependencies = null
+    )
     {
         var diagnostics = new List<MetanoDiagnostic>();
         var packageJsonPath = Path.Combine(packageRoot, "package.json");
         var srcRelative = NormalizePath(Path.GetRelativePath(packageRoot, outputDirAbsolute));
 
         // Build the imports/exports objects
-        var hasRootIndex = files.Any(f => NormalizePath(f.FileName).Equals("index.ts", StringComparison.Ordinal));
+        var hasRootIndex = files.Any(f =>
+            NormalizePath(f.FileName).Equals("index.ts", StringComparison.Ordinal)
+        );
         var imports = BuildImports(srcRelative, distDirRelativeToPackageRoot, hasRootIndex);
         var exports = BuildExports(files, distDirRelativeToPackageRoot);
 
@@ -69,8 +72,8 @@ public static class PackageJsonWriter
         {
             root = new JsonObject
             {
-                ["name"] = authoritativePackageName
-                    ?? Path.GetFileName(packageRoot.TrimEnd('/', '\\')),
+                ["name"] =
+                    authoritativePackageName ?? Path.GetFileName(packageRoot.TrimEnd('/', '\\')),
                 ["private"] = true,
             };
         }
@@ -84,13 +87,16 @@ public static class PackageJsonWriter
             var existingName = root["name"]?.GetValue<string>();
             if (existingName is not null && existingName != authoritativePackageName)
             {
-                diagnostics.Add(new MetanoDiagnostic(
-                    MetanoDiagnosticSeverity.Warning,
-                    DiagnosticCodes.CrossPackageResolution,
-                    $"package.json#name '{existingName}' diverges from " +
-                    $"[assembly: EmitPackage(\"{authoritativePackageName}\")]. " +
-                    $"Overwriting with the attribute value — consumers will import via " +
-                    $"'{authoritativePackageName}'."));
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Warning,
+                        DiagnosticCodes.CrossPackageResolution,
+                        $"package.json#name '{existingName}' diverges from "
+                            + $"[assembly: EmitPackage(\"{authoritativePackageName}\")]. "
+                            + $"Overwriting with the attribute value — consumers will import via "
+                            + $"'{authoritativePackageName}'."
+                    )
+                );
             }
             root["name"] = authoritativePackageName;
         }
@@ -122,7 +128,11 @@ public static class PackageJsonWriter
     /// Builds the `imports` object with conditional exports for the `#/*` alias.
     /// Format: dist (.js + .d.ts) is preferred, source .ts is the fallback for dev.
     /// </summary>
-    private static JsonObject BuildImports(string srcRelative, string distRelative, bool hasRootIndex)
+    private static JsonObject BuildImports(
+        string srcRelative,
+        string distRelative,
+        bool hasRootIndex
+    )
     {
         var src = NormalizePath(srcRelative).TrimEnd('/');
         var dist = NormalizePath(distRelative).TrimEnd('/');
@@ -134,7 +144,7 @@ public static class PackageJsonWriter
                 ["types"] = $"./{dist}/*.d.ts",
                 ["import"] = $"./{dist}/*.js",
                 ["default"] = $"./{src}/*.ts",
-            }
+            },
         };
 
         if (hasRootIndex)

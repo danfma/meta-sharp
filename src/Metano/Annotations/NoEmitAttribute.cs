@@ -32,5 +32,10 @@ namespace Metano.Annotations;
 /// <c>[NoEmit]</c> keeps the type discoverable so other transpiled code can reference it
 /// — only the emission step is skipped.
 /// </summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Enum | AttributeTargets.Interface)]
+[AttributeUsage(
+    AttributeTargets.Class
+        | AttributeTargets.Struct
+        | AttributeTargets.Enum
+        | AttributeTargets.Interface
+)]
 public sealed class NoEmitAttribute : Attribute;

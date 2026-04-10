@@ -21,7 +21,11 @@ public class EmitPackageTests
         Directory.CreateDirectory(srcDir);
 
         var diags = PackageJsonWriter.UpdateOrCreate(
-            tempDir, srcDir, files: [], authoritativePackageName: "@scope/cool-pkg");
+            tempDir,
+            srcDir,
+            files: [],
+            authoritativePackageName: "@scope/cool-pkg"
+        );
 
         var pkg = ReadJson(tempDir);
         await Assert.That(pkg["name"]?.GetValue<string>()).IsEqualTo("@scope/cool-pkg");
@@ -45,14 +49,20 @@ public class EmitPackageTests
         };
 
         PackageJsonWriter.UpdateOrCreate(
-            tempDir, srcDir, files, authoritativePackageName: "sample-todo");
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "sample-todo"
+        );
 
         var pkg = ReadJson(tempDir);
         var imports = pkg["imports"] as JsonObject;
         await Assert.That(imports).IsNotNull();
-        await Assert.That((imports!["#"] as JsonObject)!["default"]?.GetValue<string>())
+        await Assert
+            .That((imports!["#"] as JsonObject)!["default"]?.GetValue<string>())
             .IsEqualTo("./src/index.ts");
-        await Assert.That((imports["#/*"] as JsonObject)!["default"]?.GetValue<string>())
+        await Assert
+            .That((imports["#/*"] as JsonObject)!["default"]?.GetValue<string>())
             .IsEqualTo("./src/*.ts");
 
         Directory.Delete(tempDir, recursive: true);
@@ -66,10 +76,15 @@ public class EmitPackageTests
         Directory.CreateDirectory(srcDir);
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
-            """{ "name": "sample-todo", "private": true }""");
+            """{ "name": "sample-todo", "private": true }"""
+        );
 
         var diags = PackageJsonWriter.UpdateOrCreate(
-            tempDir, srcDir, files: [], authoritativePackageName: "sample-todo");
+            tempDir,
+            srcDir,
+            files: [],
+            authoritativePackageName: "sample-todo"
+        );
 
         var pkg = ReadJson(tempDir);
         await Assert.That(pkg["name"]?.GetValue<string>()).IsEqualTo("sample-todo");
@@ -86,16 +101,23 @@ public class EmitPackageTests
         Directory.CreateDirectory(srcDir);
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
-            """{ "name": "old-name", "private": true }""");
+            """{ "name": "old-name", "private": true }"""
+        );
 
         var diags = PackageJsonWriter.UpdateOrCreate(
-            tempDir, srcDir, files: [], authoritativePackageName: "new-name");
+            tempDir,
+            srcDir,
+            files: [],
+            authoritativePackageName: "new-name"
+        );
 
         var pkg = ReadJson(tempDir);
         // Authoritative wins.
         await Assert.That(pkg["name"]?.GetValue<string>()).IsEqualTo("new-name");
         // And the writer reported MS0007.
-        await Assert.That(diags.Any(d => d.Code == DiagnosticCodes.CrossPackageResolution)).IsTrue();
+        await Assert
+            .That(diags.Any(d => d.Code == DiagnosticCodes.CrossPackageResolution))
+            .IsTrue();
         await Assert.That(diags.Any(d => d.Severity == MetanoDiagnosticSeverity.Warning)).IsTrue();
 
         Directory.Delete(tempDir, recursive: true);
@@ -113,7 +135,8 @@ public class EmitPackageTests
             Path.Combine(tempDir, "package.json"),
             """
             { "name": "consumer", "private": true, "dependencies": { "react": "^18.0.0" } }
-            """);
+            """
+        );
 
         var deps = new Dictionary<string, string>
         {
@@ -121,8 +144,11 @@ public class EmitPackageTests
             ["@scope/lib"] = "^1.2.3",
         };
         PackageJsonWriter.UpdateOrCreate(
-            tempDir, srcDir, files: [],
-            crossPackageDependencies: deps);
+            tempDir,
+            srcDir,
+            files: [],
+            crossPackageDependencies: deps
+        );
 
         var pkg = ReadJson(tempDir);
         var depsObj = pkg["dependencies"] as JsonObject;
@@ -149,14 +175,20 @@ public class EmitPackageTests
             Path.Combine(tempDir, "package.json"),
             """
             { "name": "consumer", "dependencies": { "sample-todo": "^0.0.1" } }
-            """);
+            """
+        );
 
         var deps = new Dictionary<string, string> { ["sample-todo"] = "^1.5.0" };
         PackageJsonWriter.UpdateOrCreate(
-            tempDir, srcDir, files: [], crossPackageDependencies: deps);
+            tempDir,
+            srcDir,
+            files: [],
+            crossPackageDependencies: deps
+        );
 
         var pkg = ReadJson(tempDir);
-        await Assert.That((pkg["dependencies"] as JsonObject)!["sample-todo"]?.GetValue<string>())
+        await Assert
+            .That((pkg["dependencies"] as JsonObject)!["sample-todo"]?.GetValue<string>())
             .IsEqualTo("^1.5.0");
 
         Directory.Delete(tempDir, recursive: true);
@@ -170,10 +202,15 @@ public class EmitPackageTests
         Directory.CreateDirectory(srcDir);
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
-            """{ "name": "hand-written", "private": true }""");
+            """{ "name": "hand-written", "private": true }"""
+        );
 
         var diags = PackageJsonWriter.UpdateOrCreate(
-            tempDir, srcDir, files: [], authoritativePackageName: null);
+            tempDir,
+            srcDir,
+            files: [],
+            authoritativePackageName: null
+        );
 
         var pkg = ReadJson(tempDir);
         await Assert.That(pkg["name"]?.GetValue<string>()).IsEqualTo("hand-written");

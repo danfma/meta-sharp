@@ -29,25 +29,26 @@ public sealed class OptionalChainingHandler(ExpressionTransformer parent)
         return condAccess.WhenNotNull switch
         {
             // x?.Prop → x?.prop
-            MemberBindingExpressionSyntax memberBinding =>
-                new TsPropertyAccess(
-                    new TsIdentifier(GetExpressionText(obj) + "?"),
-                    TypeScriptNaming.ToCamelCase(memberBinding.Name.Identifier.Text)
-                ),
+            MemberBindingExpressionSyntax memberBinding => new TsPropertyAccess(
+                new TsIdentifier(GetExpressionText(obj) + "?"),
+                TypeScriptNaming.ToCamelCase(memberBinding.Name.Identifier.Text)
+            ),
 
             // x?.Method() → x?.method()
-            InvocationExpressionSyntax { Expression: MemberBindingExpressionSyntax binding } invocation =>
-                new TsCallExpression(
-                    new TsPropertyAccess(
-                        new TsIdentifier(GetExpressionText(obj) + "?"),
-                        TypeScriptNaming.ToCamelCase(binding.Name.Identifier.Text)
-                    ),
-                    invocation.ArgumentList.Arguments
-                        .Select(a => _parent.TransformExpression(a.Expression))
-                        .ToList()
+            InvocationExpressionSyntax
+            {
+                Expression: MemberBindingExpressionSyntax binding
+            } invocation => new TsCallExpression(
+                new TsPropertyAccess(
+                    new TsIdentifier(GetExpressionText(obj) + "?"),
+                    TypeScriptNaming.ToCamelCase(binding.Name.Identifier.Text)
                 ),
+                invocation
+                    .ArgumentList.Arguments.Select(a => _parent.TransformExpression(a.Expression))
+                    .ToList()
+            ),
 
-            _ => obj // fallback
+            _ => obj, // fallback
         };
     }
 
@@ -56,10 +57,11 @@ public sealed class OptionalChainingHandler(ExpressionTransformer parent)
     /// composition. Recurses through dotted property accesses and bottoms out at
     /// identifiers; anything else collapses to the literal string <c>"unknown"</c>.
     /// </summary>
-    private static string GetExpressionText(TsExpression expr) => expr switch
-    {
-        TsIdentifier id => id.Name,
-        TsPropertyAccess access => GetExpressionText(access.Object) + "." + access.Property,
-        _ => "unknown"
-    };
+    private static string GetExpressionText(TsExpression expr) =>
+        expr switch
+        {
+            TsIdentifier id => id.Name,
+            TsPropertyAccess access => GetExpressionText(access.Object) + "." + access.Property,
+            _ => "unknown",
+        };
 }
