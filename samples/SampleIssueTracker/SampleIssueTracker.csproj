@@ -2,10 +2,15 @@
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
+        <MetaSharpOutputDir>../../js/sample-issue-tracker/src</MetaSharpOutputDir>
+        <MetaSharpClean>true</MetaSharpClean>
+        <MetaSharpCompilerProject>../../src/MetaSharp.Compiler.TypeScript/MetaSharp.Compiler.TypeScript.csproj</MetaSharpCompilerProject>
     </PropertyGroup>
 
     <ItemGroup>
         <ProjectReference Include="../../src/MetaSharp/MetaSharp.csproj" />
     </ItemGroup>
+
+    <Import Project="../../src/MetaSharp.Build/build/MetaSharp.Build.targets" />
 
 </Project>

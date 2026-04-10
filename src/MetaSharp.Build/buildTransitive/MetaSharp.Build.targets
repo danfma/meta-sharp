@@ -23,6 +23,13 @@
           Condition="'$(MetaSharpOutputDir)' != ''">
 
     <PropertyGroup>
+      <!-- Two modes:
+           1. Installed tool (default): `dotnet metasharp-typescript`
+           2. Local project (for development): `dotnet run - -project <path> - -`
+              Set MetaSharpCompilerProject to the compiler .csproj path to use this mode. -->
+      <_MetaSharpCmd Condition="'$(MetaSharpCompilerProject)' == ''">dotnet metasharp-typescript</_MetaSharpCmd>
+      <_MetaSharpCmd Condition="'$(MetaSharpCompilerProject)' != ''">dotnet run --no-build --project "$(MetaSharpCompilerProject)" --</_MetaSharpCmd>
+
       <_MetaSharpArgs>-p "$(MSBuildProjectFullPath)" -o "$(MetaSharpOutputDir)"</_MetaSharpArgs>
       <_MetaSharpArgs Condition="'$(MetaSharpClean)' == 'true'">$(_MetaSharpArgs) --clean</_MetaSharpArgs>
       <_MetaSharpArgs Condition="'$(MetaSharpShowTimings)' == 'true'">$(_MetaSharpArgs) --time</_MetaSharpArgs>
@@ -33,7 +40,7 @@
     </PropertyGroup>
 
     <Message Importance="high" Text="MetaSharp: Transpiling $(MSBuildProjectName) → $(MetaSharpOutputDir)" />
-    <Exec Command="dotnet metasharp-typescript $(_MetaSharpArgs)" />
+    <Exec Command="$(_MetaSharpCmd) $(_MetaSharpArgs)" />
 
   </Target>
 </Project>
