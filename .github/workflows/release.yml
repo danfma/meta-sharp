@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build, Publish & Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      # .NET: build, test, pack, publish NuGet, create GitHub Release + changelog
+      - name: dotnet-releaser
+        run: |
+          dotnet-releaser run \
+            --nuget-token "${{ secrets.NUGET_TOKEN }}" \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            dotnet-releaser.toml
+
+      # npm: sync version from tag and publish metano-runtime
+      - name: Publish npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          cd js && bun install
+          cd metano-runtime && bun run build && bun test
+          bash ../../scripts/sync-npm-version.sh

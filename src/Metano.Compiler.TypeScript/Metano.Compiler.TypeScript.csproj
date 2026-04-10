@@ -5,6 +5,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>metano-typescript</ToolCommandName>
     <RootNamespace>Metano</RootNamespace>
+    <Description>TypeScript target for the Metano transpiler — CLI tool that converts annotated C# types to TypeScript</Description>
   </PropertyGroup>
 
   <ItemGroup>

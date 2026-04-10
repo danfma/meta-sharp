@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  dotnet:
+    name: .NET Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      - name: Restore tools
+        run: dotnet tool restore
+
+      - name: Build
+        run: dotnet build
+
+      - name: Test
+        run: dotnet run --project tests/Metano.Tests/
+
+      - name: Format check
+        run: dotnet csharpier --check .
+
+  js:
+    name: JS Build & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: js
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: metano-runtime
+        run: cd metano-runtime && bun run build && bun test
+
+      - name: sample-todo
+        run: cd sample-todo && bun run build && bun test
+
+      - name: sample-todo-service
+        run: cd sample-todo-service && bun run build && bun test
+
+      - name: sample-issue-tracker
+        run: cd sample-issue-tracker && bun run build && bun test

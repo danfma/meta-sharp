@@ -1,0 +1,12 @@
+[msbuild]
+project = "Metano.slnx"
+
+[github]
+user = "danfma"
+repo = "metano"
+
+[nuget]
+source = "https://api.nuget.org/v3/index.json"
+
+[coverage]
+enable = true
