@@ -16,25 +16,25 @@ const Prime5 = 0x165667b1;
 const Seed = 0;
 
 function rotateLeft(value: number, count: number): number {
-  return ((value << count) | (value >>> (32 - count))) | 0;
+  return (value << count) | (value >>> (32 - count)) | 0;
 }
 
 function round(hash: number, input: number): number {
-  hash = ((hash + Math.imul(input, Prime2)) | 0);
+  hash = (hash + Math.imul(input, Prime2)) | 0;
   hash = rotateLeft(hash, 13);
   hash = Math.imul(hash, Prime1);
   return hash;
 }
 
 function queueRound(hash: number, queuedValue: number): number {
-  hash = ((hash + Math.imul(queuedValue, Prime3)) | 0);
+  hash = (hash + Math.imul(queuedValue, Prime3)) | 0;
   hash = rotateLeft(hash, 17);
   hash = Math.imul(hash, Prime4);
   return hash;
 }
 
 function mixState(v1: number, v2: number, v3: number, v4: number): number {
-  let hash = rotateLeft(v1, 1) + rotateLeft(v2, 7) + rotateLeft(v3, 12) + rotateLeft(v4, 18);
+  const hash = rotateLeft(v1, 1) + rotateLeft(v2, 7) + rotateLeft(v3, 12) + rotateLeft(v4, 18);
   return hash | 0;
 }
 
@@ -81,7 +81,12 @@ function hashValue(value: unknown): number {
   if (typeof value === "bigint") return Number(value & 0xffffffffn) | 0;
 
   // Objects with hashCode method (other Metano records)
-  if (typeof value === "object" && value !== null && "hashCode" in value && typeof value.hashCode === "function") {
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "hashCode" in value &&
+    typeof value.hashCode === "function"
+  ) {
     return (value as { hashCode(): number }).hashCode();
   }
 
@@ -150,7 +155,7 @@ export class HashCode {
       hash = mixEmptyState();
     }
 
-    hash = (hash + (length * 4)) | 0;
+    hash = (hash + length * 4) | 0;
 
     const remaining = length % 4;
     if (remaining >= 1) hash = queueRound(hash, this._queue1);

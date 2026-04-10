@@ -111,10 +111,7 @@ const decimalConverter = {
 
 // ─── Map ─────────────────────────────────────────────────────────────────────
 
-function mapConverter(
-  descriptor: MapDescriptor,
-  customConverters?: readonly JsonConverter[],
-) {
+function mapConverter(descriptor: MapDescriptor, customConverters?: readonly JsonConverter[]) {
   const keyConv = resolveConverter(descriptor.key, customConverters);
   const valueConv = resolveConverter(descriptor.value, customConverters);
 
@@ -143,10 +140,7 @@ function mapConverter(
 
 // ─── Array ───────────────────────────────────────────────────────────────────
 
-function arrayConverter(
-  descriptor: ArrayDescriptor,
-  customConverters?: readonly JsonConverter[],
-) {
+function arrayConverter(descriptor: ArrayDescriptor, customConverters?: readonly JsonConverter[]) {
   const elemConv = resolveConverter(descriptor.element, customConverters);
 
   return {
@@ -250,10 +244,7 @@ function nullableConverter(
 
 // ─── Ref ─────────────────────────────────────────────────────────────────────
 
-function refConverter(
-  descriptor: RefDescriptor,
-  customConverters?: readonly JsonConverter[],
-) {
+function refConverter(descriptor: RefDescriptor, customConverters?: readonly JsonConverter[]) {
   return {
     serialize: (value: unknown) => {
       if (value == null) return null;
@@ -337,4 +328,3 @@ export function deserializeWithSpec<T>(
 
   return spec.factory(deserialized);
 }
-

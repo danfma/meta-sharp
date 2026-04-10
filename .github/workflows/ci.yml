@@ -57,3 +57,6 @@ jobs:
 
       - name: sample-issue-tracker
         run: cd sample-issue-tracker && bun run build && bun test
+
+      - name: Biome check
+        run: bunx biome check .

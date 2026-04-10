@@ -16,19 +16,12 @@ export namespace ImmutableCollection {
   }
 
   /** Returns a new array with all items from `other` appended. */
-  export function addRange<T>(
-    array: readonly T[],
-    other: readonly T[]
-  ): T[] {
+  export function addRange<T>(array: readonly T[], other: readonly T[]): T[] {
     return [...array, ...other];
   }
 
   /** Returns a new array with `item` inserted at `index`. */
-  export function insert<T>(
-    array: readonly T[],
-    index: number,
-    item: T
-  ): T[] {
+  export function insert<T>(array: readonly T[], index: number, item: T): T[] {
     return [...array.slice(0, index), item, ...array.slice(index)];
   }
 
@@ -54,11 +47,7 @@ export namespace ImmutableCollection {
   }
 
   /** Returns a new array with the element at `index` replaced by `item`. */
-  export function set<T>(
-    array: readonly T[],
-    index: number,
-    item: T
-  ): T[] {
+  export function set<T>(array: readonly T[], index: number, item: T): T[] {
     const copy = [...array];
     copy[index] = item;
     return copy;

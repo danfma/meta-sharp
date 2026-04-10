@@ -40,7 +40,12 @@ export function isUInt16(value: unknown): value is number {
 
 /** C# `int` / `Int32` (-2147483648..2147483647) */
 export function isInt32(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= -2147483648 && value <= 2147483647;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= -2147483648 &&
+    value <= 2147483647
+  );
 }
 
 /** C# `uint` / `UInt32` (0..4294967295) */
@@ -50,12 +55,22 @@ export function isUInt32(value: unknown): value is number {
 
 /** C# `long` / `Int64` (safe integer range) */
 export function isInt64(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= Number.MIN_SAFE_INTEGER && value <= Number.MAX_SAFE_INTEGER;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= Number.MIN_SAFE_INTEGER &&
+    value <= Number.MAX_SAFE_INTEGER
+  );
 }
 
 /** C# `ulong` / `UInt64` (0..safe integer range) */
 export function isUInt64(value: unknown): value is number {
-  return typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= Number.MAX_SAFE_INTEGER;
+  return (
+    typeof value === "number" &&
+    Number.isInteger(value) &&
+    value >= 0 &&
+    value <= Number.MAX_SAFE_INTEGER
+  );
 }
 
 // ─── Floating-point types ───────────────────────────────

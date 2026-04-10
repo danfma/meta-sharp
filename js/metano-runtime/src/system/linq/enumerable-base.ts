@@ -300,21 +300,54 @@ export interface Grouping<K, T> extends Iterable<T> {
 
 // ─── Factory function references (set by linq/index.ts to avoid circular imports) ─
 
-export let createWhere: <T>(source: EnumerableBase<T>, predicate: (item: T, index: number) => boolean) => EnumerableBase<T>;
-export let createSelect: <T, R>(source: EnumerableBase<T>, selector: (item: T, index: number) => R) => EnumerableBase<R>;
-export let createSelectMany: <T, R>(source: EnumerableBase<T>, selector: (item: T, index: number) => Iterable<R>) => EnumerableBase<R>;
-export let createOrderBy: <T, K>(source: EnumerableBase<T>, keySelector: (item: T) => K, descending: boolean) => EnumerableBase<T>;
+export let createWhere: <T>(
+  source: EnumerableBase<T>,
+  predicate: (item: T, index: number) => boolean,
+) => EnumerableBase<T>;
+export let createSelect: <T, R>(
+  source: EnumerableBase<T>,
+  selector: (item: T, index: number) => R,
+) => EnumerableBase<R>;
+export let createSelectMany: <T, R>(
+  source: EnumerableBase<T>,
+  selector: (item: T, index: number) => Iterable<R>,
+) => EnumerableBase<R>;
+export let createOrderBy: <T, K>(
+  source: EnumerableBase<T>,
+  keySelector: (item: T) => K,
+  descending: boolean,
+) => EnumerableBase<T>;
 export let createTake: <T>(source: EnumerableBase<T>, count: number) => EnumerableBase<T>;
 export let createSkip: <T>(source: EnumerableBase<T>, count: number) => EnumerableBase<T>;
 export let createDistinct: <T>(source: EnumerableBase<T>) => EnumerableBase<T>;
-export let createGroupBy: <T, K>(source: EnumerableBase<T>, keySelector: (item: T) => K) => EnumerableBase<Grouping<K, T>>;
+export let createGroupBy: <T, K>(
+  source: EnumerableBase<T>,
+  keySelector: (item: T) => K,
+) => EnumerableBase<Grouping<K, T>>;
 export let createConcat: <T>(first: EnumerableBase<T>, second: Iterable<T>) => EnumerableBase<T>;
-export let createThenBy: <T, K>(source: EnumerableBase<T>, keySelector: (item: T) => K, descending: boolean) => EnumerableBase<T>;
-export let createTakeWhile: <T>(source: EnumerableBase<T>, predicate: (item: T, index: number) => boolean) => EnumerableBase<T>;
-export let createSkipWhile: <T>(source: EnumerableBase<T>, predicate: (item: T, index: number) => boolean) => EnumerableBase<T>;
-export let createDistinctBy: <T, K>(source: EnumerableBase<T>, keySelector: (item: T) => K) => EnumerableBase<T>;
+export let createThenBy: <T, K>(
+  source: EnumerableBase<T>,
+  keySelector: (item: T) => K,
+  descending: boolean,
+) => EnumerableBase<T>;
+export let createTakeWhile: <T>(
+  source: EnumerableBase<T>,
+  predicate: (item: T, index: number) => boolean,
+) => EnumerableBase<T>;
+export let createSkipWhile: <T>(
+  source: EnumerableBase<T>,
+  predicate: (item: T, index: number) => boolean,
+) => EnumerableBase<T>;
+export let createDistinctBy: <T, K>(
+  source: EnumerableBase<T>,
+  keySelector: (item: T) => K,
+) => EnumerableBase<T>;
 export let createReverse: <T>(source: EnumerableBase<T>) => EnumerableBase<T>;
-export let createZip: <T, U, R>(first: EnumerableBase<T>, second: Iterable<U>, resultSelector: (first: T, second: U) => R) => EnumerableBase<R>;
+export let createZip: <T, U, R>(
+  first: EnumerableBase<T>,
+  second: Iterable<U>,
+  resultSelector: (first: T, second: U) => R,
+) => EnumerableBase<R>;
 export let createAppend: <T>(source: EnumerableBase<T>, element: T) => EnumerableBase<T>;
 export let createPrepend: <T>(source: EnumerableBase<T>, element: T) => EnumerableBase<T>;
 export let createUnion: <T>(first: EnumerableBase<T>, second: Iterable<T>) => EnumerableBase<T>;

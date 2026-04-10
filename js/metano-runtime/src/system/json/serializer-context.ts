@@ -8,10 +8,7 @@ import type { TypeSpec, SerializerContextOptions, JsonConverter } from "./types.
  */
 export abstract class SerializerContext {
   readonly options: SerializerContextOptions;
-  private readonly _registry = new Map<
-    abstract new (...args: any[]) => unknown,
-    TypeSpec
-  >();
+  private readonly _registry = new Map<abstract new (...args: any[]) => unknown, TypeSpec>();
 
   constructor(options?: SerializerContextOptions) {
     this.options = options ?? {};

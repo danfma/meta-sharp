@@ -1,4 +1,4 @@
-import {Temporal} from "@js-temporal/polyfill";
+import { Temporal } from "@js-temporal/polyfill";
 
 const referenceDate = Temporal.PlainDate.from("0001-01-01");
 
@@ -9,7 +9,9 @@ const referenceDate = Temporal.PlainDate.from("0001-01-01");
  * Accepts any object with a toString() returning an ISO date string (e.g., Temporal.PlainDate).
  */
 export function dayNumber(date: Temporal.PlainDate | { toString(): string }): number {
-  const current = Temporal.PlainDate.from(date instanceof Temporal.PlainDate ? date : date.toString());
+  const current = Temporal.PlainDate.from(
+    date instanceof Temporal.PlainDate ? date : date.toString(),
+  );
 
   return referenceDate.until(current, { largestUnit: "days" }).days;
 }

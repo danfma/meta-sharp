@@ -66,14 +66,26 @@ describe("equals", () => {
     });
 
     test("same content, same insertion order", () => {
-      const a = new Map([["x", 1], ["y", 2]]);
-      const b = new Map([["x", 1], ["y", 2]]);
+      const a = new Map([
+        ["x", 1],
+        ["y", 2],
+      ]);
+      const b = new Map([
+        ["x", 1],
+        ["y", 2],
+      ]);
       expect(equals(a, b)).toBe(true);
     });
 
     test("same content, different insertion order", () => {
-      const a = new Map([["x", 1], ["y", 2]]);
-      const b = new Map([["y", 2], ["x", 1]]);
+      const a = new Map([
+        ["x", 1],
+        ["y", 2],
+      ]);
+      const b = new Map([
+        ["y", 2],
+        ["x", 1],
+      ]);
       expect(equals(a, b)).toBe(true);
     });
 
@@ -149,11 +161,16 @@ describe("equals", () => {
   describe("custom equals method", () => {
     test("delegates to instance equals", () => {
       class Money {
-        constructor(public amount: number, public currency: string) {}
+        constructor(
+          public amount: number,
+          public currency: string,
+        ) {}
         equals(other: unknown): boolean {
-          return other instanceof Money
-            && other.amount === this.amount
-            && other.currency === this.currency;
+          return (
+            other instanceof Money &&
+            other.amount === this.amount &&
+            other.currency === this.currency
+          );
         }
       }
       expect(equals(new Money(10, "USD"), new Money(10, "USD"))).toBe(true);
@@ -190,8 +207,14 @@ describe("hashCode", () => {
   });
 
   test("equal Maps hash equal regardless of insertion order", () => {
-    const a = new Map([["x", 1], ["y", 2]]);
-    const b = new Map([["y", 2], ["x", 1]]);
+    const a = new Map([
+      ["x", 1],
+      ["y", 2],
+    ]);
+    const b = new Map([
+      ["y", 2],
+      ["x", 1],
+    ]);
     expect(hashCode(a)).toBe(hashCode(b));
   });
 
@@ -212,10 +235,16 @@ describe("hashCode", () => {
 
   test("equals/hashCode contract: equal values must hash equal", () => {
     const cases: Array<[unknown, unknown]> = [
-      [{ a: 1, b: [2, 3] }, { b: [2, 3], a: 1 }],
+      [
+        { a: 1, b: [2, 3] },
+        { b: [2, 3], a: 1 },
+      ],
       [new Map([["k", "v"]]), new Map([["k", "v"]])],
       [new Set(["a", "b"]), new Set(["b", "a"])],
-      [[1, "two", true], [1, "two", true]],
+      [
+        [1, "two", true],
+        [1, "two", true],
+      ],
     ];
     for (const [a, b] of cases) {
       expect(equals(a, b)).toBe(true);

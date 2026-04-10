@@ -27,13 +27,15 @@ _registerFactories({
   where: (source, predicate) => new WhereEnumerable(source, predicate),
   select: (source, selector) => new SelectEnumerable(source, selector),
   selectMany: (source, selector) => new SelectManyEnumerable(source, selector),
-  orderBy: (source, keySelector, descending) => new OrderByEnumerable(source, keySelector, descending),
+  orderBy: (source, keySelector, descending) =>
+    new OrderByEnumerable(source, keySelector, descending),
   take: (source, count) => new TakeEnumerable(source, count),
   skip: (source, count) => new SkipEnumerable(source, count),
   distinct: (source) => new DistinctEnumerable(source),
   groupBy: (source, keySelector) => new GroupByEnumerable(source, keySelector),
   concat: (first, second) => new ConcatEnumerable(first, second),
-  thenBy: (source, keySelector, descending) => new ThenByEnumerable(source, keySelector, descending),
+  thenBy: (source, keySelector, descending) =>
+    new ThenByEnumerable(source, keySelector, descending),
   takeWhile: (source, predicate) => new TakeWhileEnumerable(source, predicate),
   skipWhile: (source, predicate) => new SkipWhileEnumerable(source, predicate),
   distinctBy: (source, keySelector) => new DistinctByEnumerable(source, keySelector),

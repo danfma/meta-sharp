@@ -94,7 +94,7 @@ export function equals(a: unknown, b: unknown): boolean {
   const bKeys = Object.keys(bObj);
   if (aKeys.length !== bKeys.length) return false;
   for (const key of aKeys) {
-    if (!Object.prototype.hasOwnProperty.call(bObj, key)) return false;
+    if (!Object.hasOwn(bObj, key)) return false;
     if (!equals(aObj[key], bObj[key])) return false;
   }
   return true;
@@ -122,10 +122,7 @@ export function hashCode(value: unknown): number {
 
   if (typeof value === "object") {
     // Custom hashCode contract from record/value classes.
-    if (
-      "hashCode" in value
-      && typeof (value as { hashCode?: unknown }).hashCode === "function"
-    ) {
+    if ("hashCode" in value && typeof (value as { hashCode?: unknown }).hashCode === "function") {
       return (value as { hashCode(): number }).hashCode();
     }
 

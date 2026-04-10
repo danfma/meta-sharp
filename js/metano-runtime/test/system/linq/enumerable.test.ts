@@ -25,21 +25,21 @@ describe("Enumerable", () => {
 
   test("where filters elements", () => {
     const result = Enumerable.from([1, 2, 3, 4, 5])
-      .where(x => x % 2 === 0)
+      .where((x) => x % 2 === 0)
       .toArray();
     expect(result).toEqual([2, 4]);
   });
 
   test("select projects elements", () => {
     const result = Enumerable.from([1, 2, 3])
-      .select(x => x * 10)
+      .select((x) => x * 10)
       .toArray();
     expect(result).toEqual([10, 20, 30]);
   });
 
   test("selectMany flattens", () => {
     const result = Enumerable.from(["hello", "world"])
-      .selectMany(s => s.split(""))
+      .selectMany((s) => s.split(""))
       .toArray();
     expect(result).toEqual(["h", "e", "l", "l", "o", "w", "o", "r", "l", "d"]);
   });
@@ -47,8 +47,11 @@ describe("Enumerable", () => {
   test("where + select chain is lazy", () => {
     let sideEffects = 0;
     const query = Enumerable.from([1, 2, 3, 4, 5])
-      .where(x => { sideEffects++; return x > 2; })
-      .select(x => x * 10);
+      .where((x) => {
+        sideEffects++;
+        return x > 2;
+      })
+      .select((x) => x * 10);
 
     // No iteration yet — should have zero side effects
     expect(sideEffects).toBe(0);
@@ -60,14 +63,14 @@ describe("Enumerable", () => {
 
   test("orderBy sorts ascending", () => {
     const result = Enumerable.from([3, 1, 4, 1, 5])
-      .orderBy(x => x)
+      .orderBy((x) => x)
       .toArray();
     expect(result).toEqual([1, 1, 3, 4, 5]);
   });
 
   test("orderByDescending sorts descending", () => {
     const result = Enumerable.from([3, 1, 4])
-      .orderByDescending(x => x)
+      .orderByDescending((x) => x)
       .toArray();
     expect(result).toEqual([4, 3, 1]);
   });
@@ -79,9 +82,9 @@ describe("Enumerable", () => {
       { name: "Bob", age: 25 },
     ];
     const result = Enumerable.from(data)
-      .orderBy(p => p.age)
-      .thenBy(p => p.name)
-      .select(p => p.name)
+      .orderBy((p) => p.age)
+      .thenBy((p) => p.name)
+      .select((p) => p.name)
       .toArray();
     expect(result).toEqual(["Bob", "Alice", "Charlie"]);
   });
@@ -93,45 +96,37 @@ describe("Enumerable", () => {
       { name: "Bob", age: 25 },
     ];
     const result = Enumerable.from(data)
-      .orderBy(p => p.age)
-      .thenByDescending(p => p.name)
-      .select(p => p.name)
+      .orderBy((p) => p.age)
+      .thenByDescending((p) => p.name)
+      .select((p) => p.name)
       .toArray();
     expect(result).toEqual(["Bob", "Charlie", "Alice"]);
   });
 
   test("take returns first N elements", () => {
-    const result = Enumerable.from([1, 2, 3, 4, 5])
-      .take(3)
-      .toArray();
+    const result = Enumerable.from([1, 2, 3, 4, 5]).take(3).toArray();
     expect(result).toEqual([1, 2, 3]);
   });
 
   test("skip skips first N elements", () => {
-    const result = Enumerable.from([1, 2, 3, 4, 5])
-      .skip(2)
-      .toArray();
+    const result = Enumerable.from([1, 2, 3, 4, 5]).skip(2).toArray();
     expect(result).toEqual([3, 4, 5]);
   });
 
   test("distinct removes duplicates", () => {
-    const result = Enumerable.from([1, 2, 2, 3, 1, 3])
-      .distinct()
-      .toArray();
+    const result = Enumerable.from([1, 2, 2, 3, 1, 3]).distinct().toArray();
     expect(result).toEqual([1, 2, 3]);
   });
 
   test("concat joins two sequences", () => {
-    const result = Enumerable.from([1, 2])
-      .concat([3, 4])
-      .toArray();
+    const result = Enumerable.from([1, 2]).concat([3, 4]).toArray();
     expect(result).toEqual([1, 2, 3, 4]);
   });
 
   test("groupBy groups elements", () => {
     const result = Enumerable.from(["apple", "avocado", "banana", "blueberry"])
-      .groupBy(s => s[0]!)
-      .select(g => ({ key: g.key, items: [...g] }))
+      .groupBy((s) => s[0]!)
+      .select((g) => ({ key: g.key, items: [...g] }))
       .toArray();
 
     expect(result).toEqual([
@@ -142,14 +137,14 @@ describe("Enumerable", () => {
 
   test("takeWhile yields while predicate is true", () => {
     const result = Enumerable.from([1, 2, 3, 4, 5])
-      .takeWhile(x => x < 4)
+      .takeWhile((x) => x < 4)
       .toArray();
     expect(result).toEqual([1, 2, 3]);
   });
 
   test("skipWhile skips while predicate is true", () => {
     const result = Enumerable.from([1, 2, 3, 4, 5])
-      .skipWhile(x => x < 3)
+      .skipWhile((x) => x < 3)
       .toArray();
     expect(result).toEqual([3, 4, 5]);
   });
@@ -160,16 +155,14 @@ describe("Enumerable", () => {
       { name: "Bob", dept: "eng" },
       { name: "Charlie", dept: "sales" },
     ])
-      .distinctBy(p => p.dept)
-      .select(p => p.name)
+      .distinctBy((p) => p.dept)
+      .select((p) => p.name)
       .toArray();
     expect(result).toEqual(["Alice", "Charlie"]);
   });
 
   test("reverse reverses order", () => {
-    const result = Enumerable.from([1, 2, 3])
-      .reverse()
-      .toArray();
+    const result = Enumerable.from([1, 2, 3]).reverse().toArray();
     expect(result).toEqual([3, 2, 1]);
   });
 
@@ -188,37 +181,27 @@ describe("Enumerable", () => {
   });
 
   test("append adds element at end", () => {
-    const result = Enumerable.from([1, 2])
-      .append(3)
-      .toArray();
+    const result = Enumerable.from([1, 2]).append(3).toArray();
     expect(result).toEqual([1, 2, 3]);
   });
 
   test("prepend adds element at start", () => {
-    const result = Enumerable.from([2, 3])
-      .prepend(1)
-      .toArray();
+    const result = Enumerable.from([2, 3]).prepend(1).toArray();
     expect(result).toEqual([1, 2, 3]);
   });
 
   test("union produces set union", () => {
-    const result = Enumerable.from([1, 2, 3])
-      .union([2, 3, 4, 5])
-      .toArray();
+    const result = Enumerable.from([1, 2, 3]).union([2, 3, 4, 5]).toArray();
     expect(result).toEqual([1, 2, 3, 4, 5]);
   });
 
   test("intersect produces set intersection", () => {
-    const result = Enumerable.from([1, 2, 3, 4])
-      .intersect([2, 4, 6])
-      .toArray();
+    const result = Enumerable.from([1, 2, 3, 4]).intersect([2, 4, 6]).toArray();
     expect(result).toEqual([2, 4]);
   });
 
   test("except produces set difference", () => {
-    const result = Enumerable.from([1, 2, 3, 4])
-      .except([2, 4])
-      .toArray();
+    const result = Enumerable.from([1, 2, 3, 4]).except([2, 4]).toArray();
     expect(result).toEqual([1, 3]);
   });
 
@@ -226,7 +209,7 @@ describe("Enumerable", () => {
 
   test("first returns first matching element", () => {
     expect(Enumerable.from([1, 2, 3]).first()).toBe(1);
-    expect(Enumerable.from([1, 2, 3]).first(x => x > 1)).toBe(2);
+    expect(Enumerable.from([1, 2, 3]).first((x) => x > 1)).toBe(2);
   });
 
   test("first throws on empty", () => {
@@ -235,12 +218,12 @@ describe("Enumerable", () => {
 
   test("firstOrDefault returns null on empty", () => {
     expect(Enumerable.empty<number>().firstOrDefault()).toBeNull();
-    expect(Enumerable.from([1, 2]).firstOrDefault(x => x > 5)).toBeNull();
+    expect(Enumerable.from([1, 2]).firstOrDefault((x) => x > 5)).toBeNull();
   });
 
   test("last returns last matching", () => {
     expect(Enumerable.from([1, 2, 3]).last()).toBe(3);
-    expect(Enumerable.from([1, 2, 3]).last(x => x < 3)).toBe(2);
+    expect(Enumerable.from([1, 2, 3]).last((x) => x < 3)).toBe(2);
   });
 
   test("single returns the only element", () => {
@@ -265,7 +248,7 @@ describe("Enumerable", () => {
 
   test("average computes average", () => {
     expect(Enumerable.from([2, 4, 6]).average()).toBe(4);
-    expect(Enumerable.from(["ab", "cdef"]).average(s => s.length)).toBe(3);
+    expect(Enumerable.from(["ab", "cdef"]).average((s) => s.length)).toBe(3);
   });
 
   test("average throws on empty", () => {
@@ -278,7 +261,7 @@ describe("Enumerable", () => {
       { name: "Bob", age: 25 },
       { name: "Charlie", age: 35 },
     ];
-    expect(Enumerable.from(people).minBy(p => p.age)).toEqual({ name: "Bob", age: 25 });
+    expect(Enumerable.from(people).minBy((p) => p.age)).toEqual({ name: "Bob", age: 25 });
   });
 
   test("maxBy returns element with max key", () => {
@@ -287,29 +270,29 @@ describe("Enumerable", () => {
       { name: "Bob", age: 25 },
       { name: "Charlie", age: 35 },
     ];
-    expect(Enumerable.from(people).maxBy(p => p.age)).toEqual({ name: "Charlie", age: 35 });
+    expect(Enumerable.from(people).maxBy((p) => p.age)).toEqual({ name: "Charlie", age: 35 });
   });
 
   test("any checks existence", () => {
     expect(Enumerable.from([1, 2, 3]).any()).toBe(true);
     expect(Enumerable.empty<number>().any()).toBe(false);
-    expect(Enumerable.from([1, 2, 3]).any(x => x > 2)).toBe(true);
-    expect(Enumerable.from([1, 2, 3]).any(x => x > 5)).toBe(false);
+    expect(Enumerable.from([1, 2, 3]).any((x) => x > 2)).toBe(true);
+    expect(Enumerable.from([1, 2, 3]).any((x) => x > 5)).toBe(false);
   });
 
   test("all checks all elements", () => {
-    expect(Enumerable.from([2, 4, 6]).all(x => x % 2 === 0)).toBe(true);
-    expect(Enumerable.from([2, 3, 6]).all(x => x % 2 === 0)).toBe(false);
+    expect(Enumerable.from([2, 4, 6]).all((x) => x % 2 === 0)).toBe(true);
+    expect(Enumerable.from([2, 3, 6]).all((x) => x % 2 === 0)).toBe(false);
   });
 
   test("count counts elements", () => {
     expect(Enumerable.from([1, 2, 3]).count()).toBe(3);
-    expect(Enumerable.from([1, 2, 3]).count(x => x > 1)).toBe(2);
+    expect(Enumerable.from([1, 2, 3]).count((x) => x > 1)).toBe(2);
   });
 
   test("sum sums elements", () => {
     expect(Enumerable.from([1, 2, 3]).sum()).toBe(6);
-    expect(Enumerable.from(["a", "bb", "ccc"]).sum(s => s.length)).toBe(6);
+    expect(Enumerable.from(["a", "bb", "ccc"]).sum((s) => s.length)).toBe(6);
   });
 
   test("min/max", () => {
@@ -323,14 +306,15 @@ describe("Enumerable", () => {
   });
 
   test("aggregate folds elements", () => {
-    const result = Enumerable.from([1, 2, 3, 4])
-      .aggregate(0, (acc, x) => acc + x);
+    const result = Enumerable.from([1, 2, 3, 4]).aggregate(0, (acc, x) => acc + x);
     expect(result).toBe(10);
   });
 
   test("toMap creates a Map", () => {
-    const map = Enumerable.from(["a", "bb", "ccc"])
-      .toMap(s => s, s => s.length);
+    const map = Enumerable.from(["a", "bb", "ccc"]).toMap(
+      (s) => s,
+      (s) => s.length,
+    );
     expect(map.get("a")).toBe(1);
     expect(map.get("ccc")).toBe(3);
   });
@@ -351,9 +335,9 @@ describe("Enumerable", () => {
     ];
 
     const result = Enumerable.from(people)
-      .where(p => p.age >= 28)
-      .orderBy(p => p.age)
-      .select(p => p.name)
+      .where((p) => p.age >= 28)
+      .orderBy((p) => p.age)
+      .select((p) => p.name)
       .take(2)
       .toArray();
 
@@ -361,7 +345,7 @@ describe("Enumerable", () => {
   });
 
   test("multiple iterations of same query", () => {
-    const query = Enumerable.from([1, 2, 3]).where(x => x > 1);
+    const query = Enumerable.from([1, 2, 3]).where((x) => x > 1);
 
     // Can iterate multiple times
     expect(query.toArray()).toEqual([2, 3]);

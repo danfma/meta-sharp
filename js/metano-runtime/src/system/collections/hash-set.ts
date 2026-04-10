@@ -34,7 +34,7 @@ export class HashSet<T> implements Iterable<T> {
       this._size++;
       return this;
     }
-    if (!bucket.some(existing => this._areEqual(existing, item))) {
+    if (!bucket.some((existing) => this._areEqual(existing, item))) {
       bucket.push(item);
       this._size++;
     }
@@ -47,7 +47,7 @@ export class HashSet<T> implements Iterable<T> {
     }
     const hash = this._getHash(item);
     const bucket = this._buckets.get(hash);
-    return bucket?.some(existing => this._areEqual(existing, item)) ?? false;
+    return bucket?.some((existing) => this._areEqual(existing, item)) ?? false;
   }
 
   delete(item: T): boolean {
@@ -57,7 +57,7 @@ export class HashSet<T> implements Iterable<T> {
     const hash = this._getHash(item);
     const bucket = this._buckets.get(hash);
     if (!bucket) return false;
-    const index = bucket.findIndex(existing => this._areEqual(existing, item));
+    const index = bucket.findIndex((existing) => this._areEqual(existing, item));
     if (index === -1) return false;
     bucket.splice(index, 1);
     if (bucket.length === 0) this._buckets.delete(hash);
@@ -101,7 +101,9 @@ export class HashSet<T> implements Iterable<T> {
 
   private _isPrimitive(item: T): boolean {
     const t = typeof item;
-    return t === "string" || t === "number" || t === "boolean" || item === null || item === undefined;
+    return (
+      t === "string" || t === "number" || t === "boolean" || item === null || item === undefined
+    );
   }
 
   private _getPrimitiveSet(): Set<T> {
@@ -131,8 +133,10 @@ export class HashSet<T> implements Iterable<T> {
 
   private _getHash(item: T): number {
     if (
-      typeof item === "object" && item !== null &&
-      "hashCode" in item && typeof (item as any).hashCode === "function"
+      typeof item === "object" &&
+      item !== null &&
+      "hashCode" in item &&
+      typeof (item as any).hashCode === "function"
     ) {
       return (item as any).hashCode();
     }
@@ -142,8 +146,10 @@ export class HashSet<T> implements Iterable<T> {
   private _areEqual(a: T, b: T): boolean {
     if (a === b) return true;
     if (
-      typeof a === "object" && a !== null &&
-      "equals" in a && typeof (a as any).equals === "function"
+      typeof a === "object" &&
+      a !== null &&
+      "equals" in a &&
+      typeof (a as any).equals === "function"
     ) {
       return (a as any).equals(b);
     }

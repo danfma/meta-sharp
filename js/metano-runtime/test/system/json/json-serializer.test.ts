@@ -542,10 +542,7 @@ describe("JsonSerializer — inheritance", () => {
   });
 
   test("deserialize derived type", () => {
-    const dog = JsonSerializer.deserialize(
-      { name: "Rex", legs: 4, breed: "Labrador" },
-      dogSpec,
-    );
+    const dog = JsonSerializer.deserialize({ name: "Rex", legs: 4, breed: "Labrador" }, dogSpec);
     expect(dog).toBeInstanceOf(Dog);
     expect(dog.name).toBe("Rex");
     expect(dog.breed).toBe("Labrador");

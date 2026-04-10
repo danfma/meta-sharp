@@ -88,7 +88,7 @@ describe("HashSet", () => {
     const set = new HashSet<UserId>();
     set.add(new UserId("a"));
     set.add(new UserId("b"));
-    const values = [...set].map(u => u.value).sort();
+    const values = [...set].map((u) => u.value).sort();
     expect(values).toEqual(["a", "b"]);
   });
 
@@ -97,7 +97,7 @@ describe("HashSet", () => {
     set.add(10);
     set.add(20);
     const result: number[] = [];
-    set.forEach(n => result.push(n));
+    set.forEach((n) => result.push(n));
     expect(result.sort()).toEqual([10, 20]);
   });
 

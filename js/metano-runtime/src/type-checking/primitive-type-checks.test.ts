@@ -1,9 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import {isBigInt,
+import {
+  isBigInt,
   isBool,
   isByte,
   isChar,
-  isFloat32, isFloat64,isInt16, isInt32, isInt64, isSByte, isString,isUInt16, isUInt32, isUInt64,
+  isFloat32,
+  isFloat64,
+  isInt16,
+  isInt32,
+  isInt64,
+  isSByte,
+  isString,
+  isUInt16,
+  isUInt32,
+  isUInt64,
 } from "./primitive-type-checks";
 
 describe("String type checks", () => {
