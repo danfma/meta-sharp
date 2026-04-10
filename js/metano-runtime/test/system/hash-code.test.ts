@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { HashCode } from "./hash-code";
+import { HashCode } from "#/system/hash-code.ts";
 
 describe("HashCode", () => {
   test("same values produce same hash", () => {

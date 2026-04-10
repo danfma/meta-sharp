@@ -9,6 +9,12 @@
     ".": "./dist/index.js",
     "./*": "./dist/*"
   },
+  "imports": {
+    "#/*": [
+      "./dist/*",
+      "./src/*"
+    ]
+  },
   "scripts": {
     "build": "tsgo -b .",
     "test": "bun test"

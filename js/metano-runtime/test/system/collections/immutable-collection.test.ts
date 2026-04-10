@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { ImmutableCollection } from "./immutable-collection.ts";
+import { ImmutableCollection } from "#/system/collections/immutable-collection.ts";
 
 describe("ImmutableCollection", () => {
   describe("add", () => {

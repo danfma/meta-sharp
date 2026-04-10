@@ -4,7 +4,7 @@ import {
   immutableRemove,
   immutableRemoveAt,
   listRemove,
-} from "./list-helpers";
+} from "#/system/collections/list-helpers.ts";
 
 describe("listRemove (mutating)", () => {
   test("returns true and removes the first occurrence", () => {

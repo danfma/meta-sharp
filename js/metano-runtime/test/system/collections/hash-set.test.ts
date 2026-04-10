@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { HashCode } from "../hash-code.ts";
-import { HashSet } from "./hash-set.ts";
+import { HashCode } from "#/system/hash-code.ts";
+import { HashSet } from "#/system/collections/hash-set.ts";
 
 // Mock value object with equals/hashCode
 class UserId {

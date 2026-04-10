@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { Temporal } from "@js-temporal/polyfill";
-import { dayNumber } from "./temporal-helpers.ts";
+import { dayNumber } from "#/system/temporal-helpers.ts";
 
 describe("dayNumber", () => {
   // Reference values from C# DateOnly.DayNumber:

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { Enumerable } from "./index.ts";
+import { Enumerable } from "#/system/linq/index.ts";
 
 describe("Enumerable", () => {
   // ─── Factories ──────────────────────────────────────────

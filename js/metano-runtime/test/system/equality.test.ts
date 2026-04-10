@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { equals, hashCode } from "./equality";
+import { equals, hashCode } from "#/system/equality.ts";
 
 describe("equals", () => {
   describe("primitives", () => {

@@ -23,7 +23,13 @@
 
     "outDir": "./dist",
     "rootDir": "./src",
-    "types": ["bun", "bun-types"]
+    "types": ["bun", "bun-types"],
+
+    "paths": {
+      "#/*": [
+        "./src/*"
+      ]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist", "src/**/*.test.ts"]
