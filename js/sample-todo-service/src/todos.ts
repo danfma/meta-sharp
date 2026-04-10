@@ -1,5 +1,5 @@
-import { Enumerable } from "@meta-sharp/runtime";
-import { listRemove } from "@meta-sharp/runtime";
+import { Enumerable } from "metano-runtime";
+import { listRemove } from "metano-runtime";
 import type { Priority } from "sample-todo/priority";
 import { TodoItem } from "sample-todo/todo-item";
 

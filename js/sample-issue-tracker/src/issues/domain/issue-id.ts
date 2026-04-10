@@ -1,4 +1,4 @@
-import { HashCode } from "@meta-sharp/runtime";
+import { HashCode } from "metano-runtime";
 
 export type IssueId = string & { readonly __brand: "IssueId" };
 

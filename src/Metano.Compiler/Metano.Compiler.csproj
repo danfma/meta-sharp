@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Metano.Compiler</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" />
+    <!-- MSBuild.Locator loads these at runtime; exclude from build output to avoid conflicts -->
+    <PackageReference
+      Include="Microsoft.Build.Framework"
+      ExcludeAssets="runtime"
+      PrivateAssets="all"
+    />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Metano/Metano.csproj" />
+  </ItemGroup>
+</Project>

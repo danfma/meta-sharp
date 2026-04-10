@@ -1,4 +1,4 @@
-import { Enumerable } from "@meta-sharp/runtime";
+import { Enumerable } from "metano-runtime";
 import type { IIssueRepository } from "#/issues/application/i-issue-repository";
 import type { Issue } from "#/issues/domain/issue";
 import type { IssueId } from "#/issues/domain/issue-id";

@@ -2,15 +2,15 @@
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <MetaSharpOutputDir>../../js/sample-todo/src</MetaSharpOutputDir>
-        <MetaSharpClean>true</MetaSharpClean>
-        <MetaSharpCompilerProject>../../src/MetaSharp.Compiler.TypeScript/MetaSharp.Compiler.TypeScript.csproj</MetaSharpCompilerProject>
+        <MetanoOutputDir>../../js/sample-todo/src</MetanoOutputDir>
+        <MetanoClean>true</MetanoClean>
+        <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
     </PropertyGroup>
 
     <ItemGroup>
-        <ProjectReference Include="../../src/MetaSharp/MetaSharp.csproj" />
+        <ProjectReference Include="../../src/Metano/Metano.csproj" />
     </ItemGroup>
 
-    <Import Project="../../src/MetaSharp.Build/build/MetaSharp.Build.targets" />
+    <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />
 
 </Project>

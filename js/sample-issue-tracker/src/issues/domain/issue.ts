@@ -1,5 +1,5 @@
 import { Temporal } from "@js-temporal/polyfill";
-import { isString } from "@meta-sharp/runtime";
+import { isString } from "metano-runtime";
 import { Comment } from "#/issues/domain/comment";
 import type { IssueId } from "#/issues/domain/issue-id";
 import { IssuePriority } from "#/issues/domain/issue-priority";

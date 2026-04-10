@@ -1,4 +1,4 @@
-import { HashCode } from "@meta-sharp/runtime";
+import { HashCode } from "metano-runtime";
 import type { PageRequest } from "#/shared-kernel/page-request";
 
 export class PageResult<T> {

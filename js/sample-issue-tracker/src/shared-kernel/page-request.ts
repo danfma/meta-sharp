@@ -1,4 +1,4 @@
-import { HashCode } from "@meta-sharp/runtime";
+import { HashCode } from "metano-runtime";
 
 export class PageRequest {
   constructor(readonly number: number = 1, readonly size: number = 20) { }

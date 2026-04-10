@@ -1,3 +1,3 @@
-using MetaSharp.Annotations;
+using Metano.Annotations;
 
 [assembly: TranspileAssembly]
