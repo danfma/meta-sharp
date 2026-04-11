@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: write
+  id-token: write # Required for npm Trusted Publishing (OIDC)
 
 jobs:
   release:
@@ -21,11 +22,11 @@ jobs:
           dotnet-version: "10.0.x"
           dotnet-quality: "preview"
 
-      # setup-node writes ~/.npmrc with the registry + auth token template.
-      # The actual token is supplied via NODE_AUTH_TOKEN at publish time.
+      # Trusted Publishing requires npm >= 11.5.1, which ships with Node 24.
+      # No token is needed — the npm CLI detects the OIDC environment.
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           registry-url: "https://registry.npmjs.org"
 
       - uses: oven-sh/setup-bun@v2
@@ -49,8 +50,7 @@ jobs:
           bun install
           cd metano-runtime && bun run build
 
-      # Sync version from the tag and publish to npm
+      # Sync version from the tag and publish to npm via Trusted Publishing.
+      # No NPM_TOKEN — the npm CLI uses the OIDC token from id-token: write.
       - name: Publish metano-runtime to npm
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: bash scripts/sync-npm-version.sh

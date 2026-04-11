@@ -48,12 +48,9 @@ if [ ! -d "dist" ]; then
   exit 1
 fi
 
-# Publish to npm. NODE_AUTH_TOKEN must be set; the .npmrc is configured
-# by actions/setup-node in the workflow.
-if [ -z "${NODE_AUTH_TOKEN:-}" ]; then
-  echo "ERROR: NODE_AUTH_TOKEN is not set" >&2
-  exit 1
-fi
-
+# Publish to npm. Authentication is handled by npm Trusted Publishing
+# via OIDC — no token is needed, but `permissions: id-token: write` must
+# be set in the workflow. The npm CLI automatically detects and uses the
+# OIDC environment.
 npm publish --access public
 echo "Published metano-runtime@$VERSION to npm"
