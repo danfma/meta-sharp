@@ -112,6 +112,17 @@ public sealed class Printer(string indent = "  ")
         stmt is TsIfStatement or TsSwitchStatement;
 
     /// <summary>
+    /// An expression is "complex" when it shouldn't be inlined as a property
+    /// value or array element because doing so produces an unreadably long line.
+    /// Used by <see cref="PrintObjectLiteral"/> and the array-literal branch to
+    /// decide inline vs. multi-line layout.
+    /// </summary>
+    private static bool IsComplexPropertyValue(TsExpression expr) =>
+        expr is TsArrowFunction
+            or TsArrayLiteral { Elements.Count: > 0 }
+            or TsObjectLiteral { Properties.Count: > 0 };
+
+    /// <summary>
     /// A variable declaration is "multi-line" when its initializer is an object
     /// literal that <see cref="PrintObjectLiteral"/> would emit in block form:
     /// more than three properties, or any spread property. Everything else
@@ -870,9 +881,29 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsArrayLiteral arrayLit:
-                _sb.Write("[");
-                _sb.WriteList(arrayLit.Elements, PrintExpression);
-                _sb.Write("]");
+                if (
+                    arrayLit.Elements.Count > 0
+                    && arrayLit.Elements.Any(IsComplexPropertyValue)
+                )
+                {
+                    _sb.Write("[");
+                    _sb.WriteLn();
+                    _sb.Indent();
+                    foreach (var elem in arrayLit.Elements)
+                    {
+                        PrintExpression(elem);
+                        _sb.Write(",");
+                        _sb.WriteLn();
+                    }
+                    _sb.Dedent();
+                    _sb.Write("]");
+                }
+                else
+                {
+                    _sb.Write("[");
+                    _sb.WriteList(arrayLit.Elements, PrintExpression);
+                    _sb.Write("]");
+                }
                 break;
 
             case TsNewExpression newExpr:
@@ -1036,7 +1067,8 @@ public sealed class Printer(string indent = "  ")
         }
 
         var hasSpread = obj.Properties.Any(p => p.Value is TsSpreadExpression);
-        if (obj.Properties.Count <= 3 && !hasSpread)
+        var hasComplexValue = obj.Properties.Any(p => IsComplexPropertyValue(p.Value));
+        if (obj.Properties.Count <= 3 && !hasSpread && !hasComplexValue)
         {
             _sb.Write("{ ");
             _sb.WriteList(obj.Properties, PrintObjectProperty);
