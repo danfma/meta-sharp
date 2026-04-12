@@ -118,9 +118,10 @@ public sealed class Printer(string indent = "  ")
     /// decide inline vs. multi-line layout.
     /// </summary>
     private static bool IsComplexPropertyValue(TsExpression expr) =>
-        expr is TsArrowFunction
-            or TsArrayLiteral { Elements.Count: > 0 }
-            or TsObjectLiteral { Properties.Count: > 0 };
+        expr
+            is TsArrowFunction
+                or TsArrayLiteral { Elements.Count: > 0 }
+                or TsObjectLiteral { Properties.Count: > 0 };
 
     /// <summary>
     /// A variable declaration is "multi-line" when its initializer is an object
@@ -881,10 +882,7 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsArrayLiteral arrayLit:
-                if (
-                    arrayLit.Elements.Count > 0
-                    && arrayLit.Elements.Any(IsComplexPropertyValue)
-                )
+                if (arrayLit.Elements.Count > 0 && arrayLit.Elements.Any(IsComplexPropertyValue))
                 {
                     _sb.Write("[");
                     _sb.WriteLn();
