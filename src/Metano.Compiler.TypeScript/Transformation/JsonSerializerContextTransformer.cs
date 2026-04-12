@@ -198,10 +198,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
 
         var isPlainObject = SymbolHelper.HasPlainObject(targetType);
 
-        // type: TodoItem — only for class-backed types. [PlainObject] types
-        // lower to TS interfaces with no runtime constructor, so there's no
-        // value to reference. Their specs are accessed via the context getter
-        // (e.g., ctx.storedTodo), not via resolve(Class).
+        // Omit `type:` for [PlainObject] — see TypeSpec.type doc in types.ts.
         TsObjectProperty? typeProperty = isPlainObject
             ? null
             : new TsObjectProperty("type", new TsIdentifier(tsTypeName));

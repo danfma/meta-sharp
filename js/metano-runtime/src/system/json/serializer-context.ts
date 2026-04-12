@@ -30,9 +30,7 @@ export abstract class SerializerContext {
    * ```
    */
   protected createSpec<T>(spec: TypeSpec<T>): TypeSpec<T> {
-    // Only register class-backed types (those with a constructor reference).
-    // [PlainObject] specs have no `type` field — they're accessed via their
-    // getter on the context, not via constructor-keyed resolve().
+    // See TypeSpec.type doc for why this is conditional.
     if (spec.type) {
       this._registry.set(spec.type, spec as TypeSpec);
     }
