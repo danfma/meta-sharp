@@ -37,10 +37,25 @@ export type HashSetDescriptor = {
   readonly element: TypeDescriptor;
 };
 
-/** Branded type ([InlineWrapper]) — passthrough on serialize, create() on deserialize */
+/**
+ * Branded type ([InlineWrapper]) — passthrough on serialize, create() on
+ * deserialize.
+ *
+ * The `create` parameter is typed `any` by design: the descriptor is a
+ * serializer-internal lookup table, and the runtime calls `create()` with
+ * whatever JSON-parsed primitive matched the wire format (a string for most
+ * branded IDs, a number for numeric wrappers, etc.). Narrowing to `unknown`
+ * would refuse to accept the generated `UserId.create: (value: string) => UserId`
+ * under TypeScript's contravariant parameter check, and the fix would be to
+ * widen every `[InlineWrapper]`'s generated `.create()` to accept `unknown`
+ * and re-validate — which pollutes the branded type's user-facing surface
+ * for no real benefit, since consumers always call `UserId.create("abc")`
+ * with a typed string, never with raw parsed JSON.
+ */
 export type BrandedDescriptor = {
   readonly kind: "branded";
-  readonly create: (value: unknown) => unknown;
+  // biome-ignore lint/suspicious/noExplicitAny: see doc comment above
+  readonly create: (value: any) => unknown;
 };
 
 /** String enum — passthrough on serialize, validate on deserialize */
