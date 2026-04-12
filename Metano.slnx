@@ -9,6 +9,7 @@
     <Project Path="tests/Metano.Tests/Metano.Tests.csproj" />
   </Folder>
   <Folder Name="/samples/">
+    <Project Path="samples/SampleCounter/SampleCounter.csproj" />
     <Project Path="samples/SampleIssueTracker/SampleIssueTracker.csproj" />
     <Project Path="samples/SampleTodo.Service/SampleTodo.Service.csproj" />
     <Project Path="samples/SampleTodo/SampleTodo.csproj" />
