@@ -42,6 +42,13 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     public IReadOnlyDictionary<string, string> LastCrossPackageDependencies { get; private set; } =
         new Dictionary<string, string>();
 
+    /// <summary>
+    /// Whether the source project is an executable (ConsoleApplication). Executables
+    /// don't need <c>package.json#exports</c> because they're not consumed by other
+    /// packages — only <c>imports</c> (for internal barrel references and tests).
+    /// </summary>
+    public bool LastIsExecutable { get; private set; }
+
     public TargetOutput Transform(Compilation compilation)
     {
         var transformer = new TypeTransformer(compilation);
@@ -50,6 +57,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         // Read [EmitPackage] for the JavaScript target (enum value 0).
         LastEmitPackageName = SymbolHelper.GetEmitPackage(compilation.Assembly, targetEnumValue: 0);
         LastCrossPackageDependencies = transformer.CrossPackageDependencies;
+        LastIsExecutable = compilation.Options.OutputKind == OutputKind.ConsoleApplication;
 
         var printer = new Printer();
         var generated = new List<GeneratedFile>(sourceFiles.Count);

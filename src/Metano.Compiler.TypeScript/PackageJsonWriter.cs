@@ -48,7 +48,8 @@ public static class PackageJsonWriter
         IReadOnlyList<TsSourceFile> files,
         string distDirRelativeToPackageRoot = "./dist",
         string? authoritativePackageName = null,
-        IReadOnlyDictionary<string, string>? crossPackageDependencies = null
+        IReadOnlyDictionary<string, string>? crossPackageDependencies = null,
+        bool isExecutable = false
     )
     {
         var diagnostics = new List<MetanoDiagnostic>();
@@ -101,11 +102,19 @@ public static class PackageJsonWriter
             root["name"] = authoritativePackageName;
         }
 
-        // Apply controlled fields (overwrite)
+        // Apply controlled fields
         root["type"] = "module";
         root["sideEffects"] = false;
-        root["imports"] = imports;
-        root["exports"] = exports;
+
+        // Only populate imports/exports when the user hasn't customized them.
+        // If the key already exists, the user's version prevails.
+        if (root["imports"] is null)
+            root["imports"] = imports;
+        // Executables (ConsoleApplication) don't need exports — they're not
+        // consumed by other packages. Libraries always get exports so
+        // cross-package resolution works.
+        if (!isExecutable && root["exports"] is null)
+            root["exports"] = exports;
 
         // Merge auto-generated cross-package dependencies into the existing
         // `dependencies` object, leaving any user-hand-written entries for OTHER
