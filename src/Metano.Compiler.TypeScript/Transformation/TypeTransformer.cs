@@ -462,22 +462,29 @@ public sealed class TypeTransformer(Compilation compilation)
             }
         }
 
-        // Detect C# 9+ top-level statements. The compiler synthesizes a Program
-        // class whose entry point method's body IS the user's top-level code.
-        // We treat it as an implicit [ExportedAsModule] + [ModuleEntryPoint] so
-        // the code lowers to module-level TS without an explicit class wrapper.
+        // Detect C# 9+ top-level statements. Only fires when the syntax tree
+        // actually contains GlobalStatementSyntax — an explicit `static void Main()`
+        // in a Program class (traditional entry point) must NOT be routed through
+        // TransformTopLevelStatements, because there are no global statements to walk.
         if (_assemblyWideTranspile && compilation is CSharpCompilation csharpComp)
         {
-            var entryPoint = csharpComp.GetEntryPoint(System.Threading.CancellationToken.None);
-            if (
-                entryPoint is not null
-                && entryPoint.ContainingType is { } programType
-                && !SymbolHelper.HasExportedAsModule(programType)
-                && seen.Add(programType)
-            )
+            var hasGlobalStatements = compilation.SyntaxTrees.Any(t =>
+                t.GetRoot().DescendantNodes().OfType<GlobalStatementSyntax>().Any()
+            );
+
+            if (hasGlobalStatements)
             {
-                types.Add(programType);
-                _syntheticEntryPoint = entryPoint;
+                var entryPoint = csharpComp.GetEntryPoint(System.Threading.CancellationToken.None);
+                if (
+                    entryPoint is not null
+                    && entryPoint.ContainingType is { } programType
+                    && !SymbolHelper.HasExportedAsModule(programType)
+                    && seen.Add(programType)
+                )
+                {
+                    types.Add(programType);
+                    _syntheticEntryPoint = entryPoint;
+                }
             }
         }
 
