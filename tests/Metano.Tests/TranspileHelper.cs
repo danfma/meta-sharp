@@ -19,7 +19,10 @@ public static class TranspileHelper
     /// Compiles C# source code and transpiles all [Transpile]-annotated types.
     /// Returns a dictionary of filename → TypeScript content.
     /// </summary>
-    public static Dictionary<string, string> Transpile(string csharpSource)
+    public static Dictionary<string, string> Transpile(
+        string csharpSource,
+        OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary
+    )
     {
         var source = $"""
             using System;
@@ -65,7 +68,7 @@ public static class TranspileHelper
             "TestAssembly",
             [syntaxTree],
             references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+            new CSharpCompilationOptions(outputKind)
         );
 
         // Check for errors
@@ -92,6 +95,13 @@ public static class TranspileHelper
 
         return result;
     }
+
+    /// <summary>
+    /// Like <see cref="Transpile"/> but uses <c>OutputKind.ConsoleApplication</c> so C# 9+
+    /// top-level statements are permitted.
+    /// </summary>
+    public static Dictionary<string, string> TranspileConsoleApp(string csharpSource) =>
+        Transpile(csharpSource, OutputKind.ConsoleApplication);
 
     /// <summary>
     /// Compiles C# source code, transpiles it, and returns both the generated files and

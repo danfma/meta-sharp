@@ -256,6 +256,13 @@ public sealed class TypeTransformer(Compilation compilation)
 
     private bool _assemblyWideTranspile;
     private IAssemblySymbol? _currentAssembly;
+
+    /// <summary>
+    /// The compiler-synthesized entry point method from C# 9+ top-level statements.
+    /// When set, the containing type is routed through <see cref="ModuleTransformer"/>
+    /// as an implicit <c>[ExportedAsModule]</c> + <c>[ModuleEntryPoint]</c>.
+    /// </summary>
+    private IMethodSymbol? _syntheticEntryPoint;
     private Dictionary<string, INamedTypeSymbol> _transpilableTypeMap = [];
     private Dictionary<
         string,
@@ -455,6 +462,25 @@ public sealed class TypeTransformer(Compilation compilation)
             }
         }
 
+        // Detect C# 9+ top-level statements. The compiler synthesizes a Program
+        // class whose entry point method's body IS the user's top-level code.
+        // We treat it as an implicit [ExportedAsModule] + [ModuleEntryPoint] so
+        // the code lowers to module-level TS without an explicit class wrapper.
+        if (_assemblyWideTranspile && compilation is CSharpCompilation csharpComp)
+        {
+            var entryPoint = csharpComp.GetEntryPoint(System.Threading.CancellationToken.None);
+            if (
+                entryPoint is not null
+                && entryPoint.ContainingType is { } programType
+                && !SymbolHelper.HasExportedAsModule(programType)
+                && seen.Add(programType)
+            )
+            {
+                types.Add(programType);
+                _syntheticEntryPoint = entryPoint;
+            }
+        }
+
         return types;
     }
 
@@ -558,6 +584,17 @@ public sealed class TypeTransformer(Compilation compilation)
         else if (IsJsonSerializerContextType(type))
         {
             new JsonSerializerContextTransformer(_context!).Transform(type, sink);
+        }
+        else if (
+            _syntheticEntryPoint is not null
+            && SymbolEqualityComparer.Default.Equals(type, _syntheticEntryPoint.ContainingType)
+        )
+        {
+            // C# 9+ top-level statements → unwrap as module-level code
+            new ModuleTransformer(_context!).TransformTopLevelStatements(
+                _syntheticEntryPoint,
+                sink
+            );
         }
         else if (
             (SymbolHelper.HasExportedAsModule(type) || HasExtensionMembers(type)) && type.IsStatic

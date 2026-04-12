@@ -147,4 +147,45 @@ public class ModuleEntryPointTests
 
         await Assert.That(diagnostics.Any(d => d.Code == "MS0006")).IsTrue();
     }
+
+    // ─── C# 9+ top-level statements ────────────────────────────────────────
+
+    [Test]
+    public async Task TopLevelStatements_LowerToModuleLevelCode()
+    {
+        var result = TranspileHelper.TranspileConsoleApp(
+            """
+            [assembly: TranspileAssembly]
+
+            Console.WriteLine("Hello from top-level!");
+            var x = 42;
+            Console.WriteLine(x);
+            """
+        );
+
+        await Assert.That(result).ContainsKey("program.ts");
+        var output = result["program.ts"];
+        await Assert.That(output).Contains("console.log(\"Hello from top-level!\")");
+        await Assert.That(output).Contains("const x = 42");
+    }
+
+    [Test]
+    public async Task TopLevelStatements_CoexistWithExplicitTypes()
+    {
+        var result = TranspileHelper.TranspileConsoleApp(
+            """
+            [assembly: TranspileAssembly]
+
+            Console.WriteLine("Startup");
+
+            namespace App
+            {
+                public record Greeting(string Message);
+            }
+            """
+        );
+
+        await Assert.That(result).ContainsKey("program.ts");
+        await Assert.That(result).ContainsKey("greeting.ts");
+    }
 }

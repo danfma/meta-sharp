@@ -86,24 +86,45 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                 extendsType
             );
         }
-        else
+        // Non-record class with an explicit constructor whose params don't match
+        // any property (e.g., DI-injected services assigned to private fields in
+        // the body). The record-style and captured-param paths miss this because
+        // "view" ≠ "_view" and the assignment is in the body, not a field initializer.
+        else if (HasUnmatchedExplicitConstructor(type, ctorParamsForSignature, explicitCtors))
         {
-            // Single constructor (original behavior)
+            var ctor = explicitCtors[0];
+            // Accessibility None → plain parameter, no TS shorthand property
+            // promotion. The param is assigned to a private field in the body,
+            // so it must NOT become `public view: ICounterView` on the class.
+            var ctorParams = ctor
+                .Parameters.Select(p => new TsConstructorParam(
+                    TypeScriptNaming.ToCamelCase(p.Name),
+                    TypeMapper.Map(p.Type),
+                    Accessibility: TsAccessibility.None
+                ))
+                .ToList();
+
             var ctorBody = new List<TsStatement>();
-            if (extendsType is not null)
+            EmitSuperCallIfNeeded(type, extendsType, baseParams, ctorBody);
+
+            var ctorSyntax = ctor.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax();
+            if (ctorSyntax is ConstructorDeclarationSyntax ctorDecl && ctorDecl.Body is not null)
             {
-                var superArgs = ResolveSuperArguments(type, baseParams);
-                if (superArgs.Count > 0)
-                {
-                    ctorBody.Add(
-                        new TsExpressionStatement(
-                            new TsCallExpression(new TsIdentifier("super"), superArgs)
-                        )
-                    );
-                }
+                var semanticModel = _context.Compilation.GetSemanticModel(ctorSyntax.SyntaxTree);
+                var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
+                exprTransformer.SelfParameterName = "this";
+                ctorBody.AddRange(
+                    exprTransformer.TransformBody(ctorDecl.Body, ctorDecl.ExpressionBody)
+                );
             }
 
-            // Add captured param assignments: this._field = param
+            constructor = new TsConstructor(ctorParams, ctorBody);
+        }
+        else
+        {
+            var ctorBody = new List<TsStatement>();
+            EmitSuperCallIfNeeded(type, extendsType, baseParams, ctorBody);
+
             foreach (var captured in capturedParams)
             {
                 var fieldName = GetCapturedFieldName(type, captured.Name);
@@ -565,7 +586,7 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                 );
             }
 
-            results.Add(new TsGetterMember(name, tsType, getterBody));
+            results.Add(new TsGetterMember(name, tsType, getterBody, Static: prop.IsStatic));
         }
 
         if (hasSetterBody)
@@ -835,6 +856,47 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             }
         }
         return null;
+    }
+
+    // ─── Constructor helpers ────────────────────────────────────
+
+    /// <summary>
+    /// Detects a non-record class with a single explicit constructor whose parameters
+    /// weren't captured by the record-style or captured-param discovery paths.
+    /// </summary>
+    private static bool HasUnmatchedExplicitConstructor(
+        INamedTypeSymbol type,
+        IReadOnlyList<TsConstructorParam> resolvedParams,
+        IReadOnlyList<IMethodSymbol> explicitCtors
+    ) =>
+        !type.IsRecord
+        && resolvedParams.Count == 0
+        && explicitCtors.Count == 1
+        && explicitCtors[0].Parameters.Length > 0
+        && !explicitCtors[0].IsImplicitlyDeclared;
+
+    /// <summary>
+    /// Emits a <c>super(...)</c> call into the constructor body when the type
+    /// has a transpilable base class with constructor parameters.
+    /// </summary>
+    private void EmitSuperCallIfNeeded(
+        INamedTypeSymbol type,
+        TsType? extendsType,
+        IReadOnlyList<TsConstructorParam> baseParams,
+        List<TsStatement> ctorBody
+    )
+    {
+        if (extendsType is null)
+            return;
+        var superArgs = ResolveSuperArguments(type, baseParams);
+        if (superArgs.Count > 0)
+        {
+            ctorBody.Add(
+                new TsExpressionStatement(
+                    new TsCallExpression(new TsIdentifier("super"), superArgs)
+                )
+            );
+        }
     }
 
     // ─── Implemented interfaces + base ctor resolution ────────

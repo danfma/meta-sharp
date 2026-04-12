@@ -105,6 +105,42 @@ public sealed class ModuleTransformer(TypeScriptTransformContext context)
     }
 
     /// <summary>
+    /// Entry point for C# 9+ top-level statements. The compiler synthesizes a
+    /// Program class whose entry point method body IS the user's top-level code,
+    /// but the method's declaring syntax is a <see cref="CompilationUnitSyntax"/>
+    /// (not a <see cref="MethodDeclarationSyntax"/>), so
+    /// <see cref="UnwrapEntryPoint"/> can't find the body. This method walks
+    /// <see cref="GlobalStatementSyntax"/> nodes directly from the syntax tree
+    /// and transforms each inner statement into a <see cref="TsTopLevelStatement"/>.
+    /// </summary>
+    public void TransformTopLevelStatements(
+        IMethodSymbol syntheticEntryPoint,
+        List<TsTopLevel> statements
+    )
+    {
+        // The synthetic entry point's declaring syntax is the CompilationUnit
+        // containing the global statements. Walk that tree directly.
+        var syntaxRef = syntheticEntryPoint.DeclaringSyntaxReferences.FirstOrDefault();
+        if (syntaxRef is null)
+            return;
+
+        var tree = syntaxRef.SyntaxTree;
+        var semanticModel = _context.Compilation.GetSemanticModel(tree);
+        var exprTransformer = _context.CreateExpressionTransformer(semanticModel);
+
+        var globalStatements = tree.GetRoot()
+            .DescendantNodes()
+            .OfType<GlobalStatementSyntax>()
+            .ToList();
+
+        foreach (var globalStmt in globalStatements)
+        {
+            var ts = exprTransformer.TransformStatement(globalStmt.Statement);
+            statements.Add(new TsTopLevelStatement(ts));
+        }
+    }
+
+    /// <summary>
     /// Validates a <c>[ModuleEntryPoint]</c> method and, if it passes, transforms its
     /// body's statements into <see cref="TsTopLevelStatement"/>s appended to
     /// <paramref name="statements"/>. Validation: must have no parameters, and the
