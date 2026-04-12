@@ -59,7 +59,8 @@ public class Commands
                 target.LastSourceFiles,
                 dist,
                 authoritativePackageName: target.LastEmitPackageName,
-                crossPackageDependencies: target.LastCrossPackageDependencies
+                crossPackageDependencies: target.LastCrossPackageDependencies,
+                isExecutable: target.LastIsExecutable
             );
 
             foreach (var d in pkgDiagnostics)
