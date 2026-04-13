@@ -715,25 +715,29 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
     /// </summary>
     private IReadOnlyList<TsClassMember> TransformEvent(IEventSymbol evt)
     {
-        var name = TypeScriptNaming.ToCamelCase(evt.Name);
+        var name = TypeScriptNaming.ToCamelCaseMember(evt.Name);
         var delegateType = TypeMapper.Map(evt.Type);
         var nullableDelegateType = new TsUnionType([delegateType, new TsNamedType("null")]);
 
         var result = new List<TsClassMember>();
 
-        // Field: eventName: ((args) => void) | null = null
+        var eventAccessibility = TypeTransformer.MapAccessibility(evt.DeclaredAccessibility);
+
+        // Backing field is always private — C# events restrict direct
+        // invocation/assignment to the declaring class. Only the $add/$remove
+        // methods are exposed with the event's declared accessibility.
         result.Add(
             new TsFieldMember(
                 name,
                 nullableDelegateType,
                 Initializer: new TsLiteral("null"),
-                Accessibility: TypeTransformer.MapAccessibility(evt.DeclaredAccessibility)
+                Accessibility: TsAccessibility.Private
             )
         );
 
         var handlerParam = new TsParameter("handler", delegateType);
-        result.Add(BuildDelegateAccessor(name, handlerParam, "delegateAdd"));
-        result.Add(BuildDelegateAccessor(name, handlerParam, "delegateRemove"));
+        result.Add(BuildDelegateAccessor(name, handlerParam, "delegateAdd", eventAccessibility));
+        result.Add(BuildDelegateAccessor(name, handlerParam, "delegateRemove", eventAccessibility));
 
         return result;
     }
@@ -745,7 +749,8 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
     private static TsMethodMember BuildDelegateAccessor(
         string eventName,
         TsParameter handlerParam,
-        string runtimeHelper
+        string runtimeHelper,
+        TsAccessibility accessibility
     )
     {
         var suffix = runtimeHelper == "delegateAdd" ? "$add" : "$remove";
@@ -753,6 +758,7 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             $"{eventName}{suffix}",
             [handlerParam],
             new TsVoidType(),
+            Body:
             [
                 new TsExpressionStatement(
                     new TsBinaryExpression(
@@ -767,7 +773,8 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                         )
                     )
                 ),
-            ]
+            ],
+            Accessibility: accessibility
         );
     }
 
