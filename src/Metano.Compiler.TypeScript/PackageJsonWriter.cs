@@ -153,13 +153,20 @@ public static class PackageJsonWriter
         ReplacePreservingUserEntries(root, "imports", imports, managedImportKeys);
 
         // Exports are fully transpiler-controlled — replace entirely.
-        // Unlike imports (where users may add custom aliases like "#custom/*"),
-        // export subpaths are derived from namespace barrels and cannot be
-        // distinguished from user entries.
         if (exports is not null)
         {
-            root.Remove("exports");
-            root["exports"] = exports;
+            if (root["exports"] is JsonObject existingExports)
+            {
+                // Replace in-place to preserve key ordering.
+                foreach (var k in existingExports.Select(e => e.Key).ToList())
+                    existingExports.Remove(k);
+                foreach (var (ek, ev) in exports)
+                    existingExports[ek] = ev?.DeepClone();
+            }
+            else
+            {
+                root["exports"] = exports;
+            }
         }
         else
         {
@@ -207,9 +214,17 @@ public static class PackageJsonWriter
                     continue; // Stale transpiler key — drop it.
                 generated[entryKey] = entryValue?.DeepClone();
             }
+
+            // Replace in-place to preserve key ordering in the JSON output.
+            // Clear the existing object and copy generated entries into it.
+            foreach (var k in existing.Select(e => e.Key).ToList())
+                existing.Remove(k);
+            foreach (var (entryKey, entryValue) in generated)
+                existing[entryKey] = entryValue?.DeepClone();
+            // existing is already parented to root at the correct position.
+            return;
         }
 
-        root.Remove(key);
         root[key] = generated;
     }
 
