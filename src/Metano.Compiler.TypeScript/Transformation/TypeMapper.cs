@@ -267,6 +267,10 @@ public static class TypeMapper
             if (IsCollectionLike(named) && named.TypeArguments.Length > 0)
                 return new TsArrayType(Map(named.TypeArguments[0]));
 
+            // Delegate types → function type: (args) => ReturnType
+            if (named.TypeKind == TypeKind.Delegate)
+                return MapDelegateType(named);
+
             // Generic type with type arguments → preserve them
             if (named.TypeArguments.Length > 0)
             {
@@ -287,6 +291,30 @@ public static class TypeMapper
             return new TsArrayType(Map(array.ElementType));
 
         return new TsAnyType();
+    }
+
+    /// <summary>
+    /// Maps a C# delegate type to a TS function type by reading its <c>Invoke</c>
+    /// method signature. Handles <c>Action&lt;T&gt;</c>, <c>Func&lt;T,R&gt;</c>,
+    /// <c>EventHandler&lt;T&gt;</c>, and any custom delegate type.
+    /// </summary>
+    private static TsFunctionType MapDelegateType(INamedTypeSymbol delegateType)
+    {
+        var invoke = delegateType.GetMembers("Invoke").OfType<IMethodSymbol>().FirstOrDefault();
+
+        if (invoke is null)
+            return new TsFunctionType([], new TsVoidType());
+
+        var parameters = invoke
+            .Parameters.Select(p => new TsParameter(
+                TypeScriptNaming.ToCamelCase(p.Name),
+                Map(p.Type)
+            ))
+            .ToList();
+
+        var returnType = invoke.ReturnsVoid ? new TsVoidType() : Map(invoke.ReturnType);
+
+        return new TsFunctionType(parameters, returnType);
     }
 
     /// <summary>

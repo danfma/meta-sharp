@@ -91,6 +91,23 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
             return new TsCallExpression(new TsPropertyAccess(receiver, "set"), [key, value]);
         }
 
+        if (assign.OperatorToken.Text is "+=" or "-=")
+        {
+            var leftSymbol = _parent.Model.GetSymbolInfo(assign.Left).Symbol;
+            if (leftSymbol is IEventSymbol evt)
+            {
+                var eventName = TypeScriptNaming.ToCamelCase(evt.Name);
+                var suffix = assign.OperatorToken.Text == "+=" ? "$add" : "$remove";
+                var receiver = assign.Left is MemberAccessExpressionSyntax memberAccess
+                    ? _parent.TransformExpression(memberAccess.Expression)
+                    : new TsIdentifier("this");
+                return new TsCallExpression(
+                    new TsPropertyAccess(receiver, $"{eventName}{suffix}"),
+                    [_parent.TransformExpression(assign.Right)]
+                );
+            }
+        }
+
         return new TsBinaryExpression(
             _parent.TransformExpression(assign.Left),
             MapAssignmentOperator(assign.OperatorToken.Text),
