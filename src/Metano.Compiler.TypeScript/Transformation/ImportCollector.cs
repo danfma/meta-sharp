@@ -134,6 +134,16 @@ public sealed class ImportCollector(
             imports.Add(new TsImport(["Grouping"], "metano-runtime", TypeOnly: true));
         }
 
+        // Delegate helper imports (delegateAdd, delegateRemove from metano-runtime)
+        var delegateHelpers = referencedTypes
+            .Where(n => n is "delegateAdd" or "delegateRemove")
+            .OrderBy(n => n)
+            .ToArray();
+        if (delegateHelpers.Length > 0)
+        {
+            imports.Add(new TsImport(delegateHelpers, "metano-runtime"));
+        }
+
         // Track what we've already imported to avoid duplicates
         var importedNames = new HashSet<string>(runtimeTypeChecks)
         {
@@ -141,6 +151,8 @@ public sealed class ImportCollector(
             "Grouping",
             "HashSet",
             "UUID",
+            "delegateAdd",
+            "delegateRemove",
         };
         foreach (var helper in runtimeHelpers)
             importedNames.Add(helper);
@@ -262,6 +274,8 @@ public sealed class ImportCollector(
                         or "Object"
                         or "typeof"
                         or "unknown[]"
+                        or "delegateAdd"
+                        or "delegateRemove"
             )
                 continue;
 

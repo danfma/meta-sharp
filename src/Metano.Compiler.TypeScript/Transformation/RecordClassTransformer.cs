@@ -181,6 +181,10 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
                 case IMethodSymbol method when method.MethodKind == MethodKind.UserDefinedOperator:
                     classMembers.AddRange(TransformClassOperator(type, method));
                     break;
+
+                case IEventSymbol evt:
+                    classMembers.AddRange(TransformEvent(evt));
+                    break;
             }
         }
 
@@ -701,6 +705,69 @@ public sealed class RecordClassTransformer(TypeScriptTransformContext context)
             Generator: hasYield,
             Accessibility: TypeTransformer.MapAccessibility(method.DeclaredAccessibility),
             TypeParameters: TypeTransformer.ExtractMethodTypeParameters(method)
+        );
+    }
+
+    /// <summary>
+    /// Transforms a C# <c>event</c> member into a delegate field plus
+    /// <c>$add</c> / <c>$remove</c> methods that call the runtime's
+    /// <c>delegateAdd</c> / <c>delegateRemove</c> helpers.
+    /// </summary>
+    private IReadOnlyList<TsClassMember> TransformEvent(IEventSymbol evt)
+    {
+        var name = TypeScriptNaming.ToCamelCase(evt.Name);
+        var delegateType = TypeMapper.Map(evt.Type);
+        var nullableDelegateType = new TsUnionType([delegateType, new TsNamedType("null")]);
+
+        var result = new List<TsClassMember>();
+
+        // Field: eventName: ((args) => void) | null = null
+        result.Add(
+            new TsFieldMember(
+                name,
+                nullableDelegateType,
+                Initializer: new TsLiteral("null"),
+                Accessibility: TypeTransformer.MapAccessibility(evt.DeclaredAccessibility)
+            )
+        );
+
+        var handlerParam = new TsParameter("handler", delegateType);
+        result.Add(BuildDelegateAccessor(name, handlerParam, "delegateAdd"));
+        result.Add(BuildDelegateAccessor(name, handlerParam, "delegateRemove"));
+
+        return result;
+    }
+
+    /// <summary>
+    /// Builds a <c>eventName$add</c> or <c>eventName$remove</c> method that
+    /// delegates to the corresponding runtime helper.
+    /// </summary>
+    private static TsMethodMember BuildDelegateAccessor(
+        string eventName,
+        TsParameter handlerParam,
+        string runtimeHelper
+    )
+    {
+        var suffix = runtimeHelper == "delegateAdd" ? "$add" : "$remove";
+        return new TsMethodMember(
+            $"{eventName}{suffix}",
+            [handlerParam],
+            new TsVoidType(),
+            [
+                new TsExpressionStatement(
+                    new TsBinaryExpression(
+                        new TsPropertyAccess(new TsIdentifier("this"), eventName),
+                        "=",
+                        new TsCallExpression(
+                            new TsIdentifier(runtimeHelper),
+                            [
+                                new TsPropertyAccess(new TsIdentifier("this"), eventName),
+                                new TsIdentifier("handler"),
+                            ]
+                        )
+                    )
+                ),
+            ]
         );
     }
 

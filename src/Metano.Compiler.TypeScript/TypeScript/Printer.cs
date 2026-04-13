@@ -735,6 +735,13 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(" is ");
                 PrintType(predicate.Type);
                 break;
+
+            case TsFunctionType funcType:
+                _sb.Write("(");
+                PrintParameters(funcType.Parameters);
+                _sb.Write(") => ");
+                PrintType(funcType.ReturnType);
+                break;
         }
     }
 

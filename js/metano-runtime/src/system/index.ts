@@ -5,3 +5,4 @@ export * from "./collections/index.ts";
 export * from "./linq/index.ts";
 export * from "./json/index.ts";
 export * from "./uuid.ts";
+export * from "./delegates.ts";
