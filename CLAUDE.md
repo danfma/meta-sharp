@@ -69,7 +69,6 @@ Metano.slnx
 │   ├── sample-todo/                     # Generated TS from SampleTodo + bun tests (18)
 │   ├── sample-todo-service/             # Generated TS from SampleTodo.Service + bun tests (9)
 │   └── sample-issue-tracker/            # Generated TS from SampleIssueTracker + bun tests (51)
-└── specs/                               # Feature backlog and roadmap
 ```
 
 ### Pipeline
@@ -143,6 +142,24 @@ Tests use `TranspileHelper.Transpile(csharpSource)` which compiles C# inline, ru
 - [`docs/adr/`](docs/adr/) — Architecture Decision Records (MADR-style, short format)
 
 ## Conventions
+
+### Spec as source of truth
+
+The product specification under `spec/` is the **single source of truth** for what
+Metano should do. Every functional requirement (FR-NNN) and non-functional requirement
+(NFR-NNN) in the spec is normative. The relationship between artifacts:
+
+- `spec/` defines **what** the product must do (requirements, feature matrix, attributes, diagnostics).
+- `docs/adr/` explains **why** specific architectural choices were made.
+- GitHub issues track **concrete work** — each issue must reference a spec requirement or be a request to change the spec.
+
+Rules:
+
+- **New features** must have a corresponding FR in the spec before implementation begins. If the FR doesn't exist, create a spec PR first.
+- **Bug fixes** reference the FR they correct (e.g., "Fix FR-007 static getter emission").
+- **Exploratory work** (features not yet in the spec) is tracked as a spec change request — the issue proposes the new FR, and the spec is updated when the design is agreed.
+- **The spec doesn't change without an issue/PR** — all spec edits are traceable.
+- **Implemented features not in the spec** are documentation debt — the spec must be updated retroactively.
 
 ### Workflow
 
