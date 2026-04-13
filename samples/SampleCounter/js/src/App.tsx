@@ -9,7 +9,7 @@ function createAppState() {
     displayCounter(counter) {
       setCount(counter.count)
     }
-  })
+  });
 
   const increment = () => counter.increment();
   const decrement = () => counter.decrement();
