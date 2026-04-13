@@ -717,11 +717,11 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsUnionType union:
-                _sb.WriteList(union.Types, PrintType, " | ");
+                _sb.WriteList(union.Types, PrintTypeInUnion, " | ");
                 break;
 
             case TsIntersectionType intersection:
-                _sb.WriteList(intersection.Types, PrintType, " & ");
+                _sb.WriteList(intersection.Types, PrintTypeInUnion, " & ");
                 break;
 
             case TsTupleType tuple:
@@ -742,6 +742,26 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(") => ");
                 PrintType(funcType.ReturnType);
                 break;
+        }
+    }
+
+    /// <summary>
+    /// Wraps low-precedence types (function types) in parentheses when they
+    /// appear as operands of a union or intersection. Without this,
+    /// <c>(args) =&gt; R | null</c> parses as a function returning <c>R | null</c>
+    /// instead of a nullable function <c>((args) =&gt; R) | null</c>.
+    /// </summary>
+    private void PrintTypeInUnion(TsType type)
+    {
+        if (type is TsFunctionType)
+        {
+            _sb.Write("(");
+            PrintType(type);
+            _sb.Write(")");
+        }
+        else
+        {
+            PrintType(type);
         }
     }
 

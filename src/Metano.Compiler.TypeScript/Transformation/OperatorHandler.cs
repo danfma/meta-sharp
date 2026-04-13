@@ -96,7 +96,7 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
             var leftSymbol = _parent.Model.GetSymbolInfo(assign.Left).Symbol;
             if (leftSymbol is IEventSymbol evt)
             {
-                var eventName = TypeScriptNaming.ToCamelCase(evt.Name);
+                var eventName = TypeScriptNaming.ToCamelCaseMember(evt.Name);
                 var suffix = assign.OperatorToken.Text == "+=" ? "$add" : "$remove";
                 var receiver = assign.Left is MemberAccessExpressionSyntax memberAccess
                     ? _parent.TransformExpression(memberAccess.Expression)
