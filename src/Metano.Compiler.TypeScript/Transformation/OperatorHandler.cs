@@ -108,6 +108,11 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
             }
         }
 
+        // User-defined compound assignment: x += y → x = x.$add(y) when the compound
+        // operator resolves to a user-defined operator method.
+        if (TryLowerCompoundOperatorAssignment(assign) is { } lowered)
+            return lowered;
+
         return new TsBinaryExpression(
             _parent.TransformExpression(assign.Left),
             MapAssignmentOperator(assign.OperatorToken.Text),
@@ -182,6 +187,52 @@ public sealed class OperatorHandler(ExpressionTransformer parent)
             "==" => "===",
             "!=" => "!==",
             _ => op,
+        };
+
+    /// <summary>
+    /// Lowers a compound assignment (<c>x += y</c>, <c>x -= y</c>, <c>x *= y</c>, etc.)
+    /// when the underlying operator is a user-defined operator method. The C# semantic
+    /// model resolves compound assignments to their operator method — if it's user-defined,
+    /// we rewrite to <c>x = x.$add(y)</c>.
+    /// </summary>
+    private TsExpression? TryLowerCompoundOperatorAssignment(AssignmentExpressionSyntax assign)
+    {
+        // The semantic model exposes the operator method for compound assignments
+        // via GetSymbolInfo on the assignment expression itself.
+        var symbolInfo = _parent.Model.GetSymbolInfo(assign);
+        if (
+            symbolInfo.Symbol is not IMethodSymbol { MethodKind: MethodKind.UserDefinedOperator } op
+        )
+            return null;
+
+        var opToken = assign.OperatorToken.Text.TrimEnd('='); // "+=" → "+"
+        var opName = MapCompoundOperatorToken(opToken);
+        if (opName is null)
+            return null;
+
+        var left = _parent.TransformExpression(assign.Left);
+        var right = _parent.TransformExpression(assign.Right);
+
+        // x = x.$add(y)
+        return new TsBinaryExpression(
+            left,
+            "=",
+            new TsCallExpression(
+                new TsPropertyAccess(_parent.TransformExpression(assign.Left), $"${opName}"),
+                [right]
+            )
+        );
+    }
+
+    private static string? MapCompoundOperatorToken(string token) =>
+        token switch
+        {
+            "+" => "add",
+            "-" => "subtract",
+            "*" => "multiply",
+            "/" => "divide",
+            "%" => "modulo",
+            _ => null,
         };
 
     private static string MapAssignmentOperator(string op) =>

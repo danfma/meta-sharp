@@ -40,19 +40,28 @@ public static class LiteralHandler
 
     private static TsExpression TransformNumeric(LiteralExpressionSyntax lit, SemanticModel? model)
     {
-        // For decimal literals (1.5m), wrap the literal in `new Decimal("…")` so that
-        // decimal.js preserves the exact value. We pass the value as a string because
-        // converting through a JS number first would already lose precision.
-        if (
-            model is not null
-            && model.GetTypeInfo(lit).Type?.SpecialType == SpecialType.System_Decimal
-        )
+        if (model is not null)
         {
-            return new TsNewExpression(
-                new TsIdentifier("Decimal"),
-                [new TsStringLiteral(lit.Token.ValueText)]
-            );
+            var info = model.GetTypeInfo(lit);
+            // ConvertedType captures implicit conversions (e.g., int → BigInteger).
+            var effectiveType = info.ConvertedType ?? info.Type;
+
+            // decimal literals (1.5m) → new Decimal("…") for decimal.js
+            if (effectiveType?.SpecialType == SpecialType.System_Decimal)
+            {
+                return new TsNewExpression(
+                    new TsIdentifier("Decimal"),
+                    [new TsStringLiteral(lit.Token.ValueText)]
+                );
+            }
+
+            // BigInteger targets → bigint literal with n suffix (150 → 150n)
+            if (effectiveType?.ToDisplayString() == "System.Numerics.BigInteger")
+            {
+                return new TsLiteral($"{lit.Token.ValueText}n");
+            }
         }
+
         return new TsLiteral(lit.Token.ValueText);
     }
 }
