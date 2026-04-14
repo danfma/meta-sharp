@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { TodoStore } from "#";
+import { TodoStore } from "./todos";
 
 const app = new Hono();
 const store = new TodoStore();
