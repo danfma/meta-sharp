@@ -166,18 +166,31 @@ public static class IrToTsStatementBridge
         return inner.TrimEnd(';');
     }
 
-    private static TsSwitchCase MapSwitchCase(
+    private static IEnumerable<TsSwitchCase> MapSwitchCase(
         IrSwitchCase c,
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        // C# switch case labels are expression values; TS case tests accept
-        // either a specific value or null for the default arm. An empty
-        // Labels list means the default case.
-        var test =
-            c.Labels.Count == 0 ? null : IrToTsExpressionBridge.Map(c.Labels[0], bclRegistry);
         var body = MapBody(c.Body, bclRegistry).ToList();
-        return new TsSwitchCase(test, body);
+
+        // Default (no labels).
+        if (c.Labels.Count == 0)
+        {
+            yield return new TsSwitchCase(null, body);
+            yield break;
+        }
+
+        // C# allows multiple labels to share one body (`case 1: case 2: …`).
+        // TS expresses this as consecutive empty-body cases with the body
+        // attached to the last label so execution falls through to it.
+        for (var i = 0; i < c.Labels.Count; i++)
+        {
+            var test = IrToTsExpressionBridge.Map(c.Labels[i], bclRegistry);
+            yield return new TsSwitchCase(
+                test,
+                i == c.Labels.Count - 1 ? body : Array.Empty<TsStatement>()
+            );
+        }
     }
 
     public static TsStatement Map(
@@ -214,15 +227,27 @@ public static class IrToTsStatementBridge
             IrThrowStatement th => new TsThrowStatement(
                 IrToTsExpressionBridge.Map(th.Expression, bclRegistry)
             ),
-            IrBlockStatement block when block.Statements.Count > 0 =>
-            // Nested block appearing as a single statement: surface the first element.
-            // MapBody is usually invoked by callers, which flattens blocks inline.
+            IrBlockStatement block when block.Statements.Count == 1 =>
+            // Trivial block: a single statement wrapped for scope. Safe to
+            // unwrap in scalar position.
             Map(block.Statements[0], bclRegistry),
+            IrBlockStatement block => new TsExpressionStatement(
+                // Callers that need to flatten a multi-statement block
+                // should route through MapBody. Reaching this arm means an
+                // IR producer handed us a block in scalar position we can't
+                // safely collapse — emit a visible TODO so the regression
+                // surfaces at build time instead of silently dropping
+                // statements.
+                new TsIdentifier(
+                    $"/* TODO: IrBlockStatement with {block.Statements.Count} statements "
+                        + "reached Map in scalar position; expected MapBody */"
+                )
+            ),
             IrBreakStatement => new TsExpressionStatement(new TsIdentifier("break")),
             IrContinueStatement => new TsExpressionStatement(new TsIdentifier("continue")),
             IrSwitchStatement sw => new TsSwitchStatement(
                 IrToTsExpressionBridge.Map(sw.Expression, bclRegistry),
-                sw.Cases.Select(c => MapSwitchCase(c, bclRegistry)).ToList()
+                sw.Cases.SelectMany(c => MapSwitchCase(c, bclRegistry)).ToList()
             ),
             IrYieldBreakStatement => new TsYieldBreakStatement(),
             IrForEachStatement fe => MapForEach(fe, bclRegistry),

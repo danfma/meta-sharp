@@ -20,9 +20,14 @@ public static class IrToDartEnumBridge
                 // Plain numeric enums have no per-member constructor args.
                 if (ir.Style == IrEnumStyle.Numeric)
                     return new DartEnumValue(memberName);
-                // String enums preserve the source value verbatim.
-                var stringValue = m.Value is string s ? $"'{EscapeDartString(s)}'" : "''";
-                return new DartEnumValue(memberName, stringValue);
+                // String enums prefer a Dart-specific [Name(Dart, "…")] override
+                // first, then the positional [Name("…")] (which the extractor
+                // already baked into m.Value), and finally the source name.
+                // m.Value alone would silently drop per-target overrides.
+                var rawValue =
+                    IrToDartNamingPolicy.FindNameOverride(m.Attributes)
+                    ?? (m.Value is string s ? s : m.Name);
+                return new DartEnumValue(memberName, $"'{EscapeDartString(rawValue)}'");
             })
             .ToList();
 

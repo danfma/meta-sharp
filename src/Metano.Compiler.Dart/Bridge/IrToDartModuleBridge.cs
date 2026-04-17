@@ -23,7 +23,7 @@ public static class IrToDartModuleBridge
 
     private static DartFunction ConvertFunction(IrModuleFunction fn) =>
         new(
-            Name: IrToDartNamingPolicy.ToParameterName(fn.Name),
+            Name: IrToDartNamingPolicy.ToMemberName(fn.Name, fn.Attributes),
             Parameters: fn.Parameters.Select(p => new DartParameter(
                     IrToDartNamingPolicy.ToParameterName(p.Name),
                     IrToDartTypeMapper.Map(p.Type),

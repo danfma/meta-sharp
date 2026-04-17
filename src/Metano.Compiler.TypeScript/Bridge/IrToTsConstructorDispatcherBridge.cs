@@ -96,25 +96,34 @@ public static class IrToTsConstructorDispatcherBridge
 
         var branch = new List<TsStatement>();
 
-        // When the constructor has a `: base(...)` initializer, emit the
-        // matching super(...) call at the top of the branch. Arguments may
-        // reference parameter names the dispatcher no longer sees (the public
-        // dispatcher takes `...args`), so we rewrite each identifier match to
-        // the corresponding `args[i] as T` cast.
-        if (ctor.BaseArguments is { Count: > 0 } baseArgs)
+        // Bring the original parameter names back into scope as
+        // `const <name> = args[i] as <Type>`. The dispatcher signature is
+        // `(...args)`, so the lowered super(...) and body — which still
+        // reference the source parameter names — would otherwise target
+        // undefined identifiers. A single up-front rebind per branch keeps
+        // the downstream lowering untouched and matches the legacy output
+        // semantically.
+        for (var i = 0; i < ctor.Parameters.Count; i++)
         {
-            var paramIndex = ctor
-                .Parameters.Select((p, i) => (p.Parameter.Name, i))
-                .ToDictionary(t => t.Name, t => t.i);
-            var superArgs = baseArgs
-                .Select(a =>
-                    RewriteArgumentForDispatcher(
-                        IrToTsExpressionBridge.Map(a.Value, bclRegistry),
-                        a.Value,
-                        ctor,
-                        paramIndex
+            var param = ctor.Parameters[i].Parameter;
+            branch.Add(
+                new TsVariableDeclaration(
+                    TypeScriptNaming.ToCamelCase(param.Name),
+                    new TsCastExpression(
+                        new TsElementAccess(new TsIdentifier("args"), new TsLiteral(i.ToString())),
+                        IrToTsTypeMapper.Map(param.Type)
                     )
                 )
+            );
+        }
+
+        // When the constructor has a `: base(...)` initializer, emit the
+        // matching super(...) call right after the parameter rebinds so the
+        // arguments resolve to the just-declared locals.
+        if (ctor.BaseArguments is { Count: > 0 } baseArgs)
+        {
+            var superArgs = baseArgs
+                .Select(a => IrToTsExpressionBridge.Map(a.Value, bclRegistry))
                 .ToList();
             branch.Add(
                 new TsExpressionStatement(
@@ -123,46 +132,17 @@ public static class IrToTsConstructorDispatcherBridge
             );
         }
 
-        // Inline the constructor body. The legacy dispatcher relies on the
-        // parameters being in scope; the IR body uses their names too, so the
-        // `args[i] as T` rewrite happens by walking every IrIdentifier whose
-        // name matches a parameter.
+        // Inline the constructor body. The body references the original
+        // parameter names which are now in scope as the locals declared
+        // above.
         if (ctor.Body is { Count: > 0 } body)
         {
-            var paramIndex = ctor
-                .Parameters.Select((p, i) => (p.Parameter.Name, i))
-                .ToDictionary(t => t.Name, t => t.i);
             foreach (var stmt in body)
-            {
-                var lowered = IrToTsStatementBridge.Map(stmt, bclRegistry);
-                branch.Add(RewriteStatementForDispatcher(lowered, ctor, paramIndex));
-            }
+                branch.Add(IrToTsStatementBridge.Map(stmt, bclRegistry));
         }
 
         // Return so subsequent branches don't re-execute on the same call.
         branch.Add(new TsReturnStatement());
         return new TsIfStatement(condition, branch);
     }
-
-    // ── argument + identifier rewriting ─────────────────────────────────────
-
-    /// <summary>
-    /// Placeholder hook for the future rewriting pass. The dispatcher body
-    /// currently assumes callers consumed the parameter names directly (same
-    /// shape as the legacy output because the legacy also preserves
-    /// parameter names inside each branch). If the IR statement bridge starts
-    /// emitting something different we'll revisit here.
-    /// </summary>
-    private static TsExpression RewriteArgumentForDispatcher(
-        TsExpression lowered,
-        IrExpression original,
-        IrConstructorDeclaration ctor,
-        IReadOnlyDictionary<string, int> paramIndex
-    ) => lowered;
-
-    private static TsStatement RewriteStatementForDispatcher(
-        TsStatement lowered,
-        IrConstructorDeclaration ctor,
-        IReadOnlyDictionary<string, int> paramIndex
-    ) => lowered;
 }

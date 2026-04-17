@@ -12,6 +12,25 @@ namespace Metano.Compiler;
 /// </summary>
 public static class SymbolHelper
 {
+    /// <summary>
+    /// Stable display format used when the same type symbol must produce the
+    /// same string in two unrelated places — for instance, both
+    /// <c>DeclarativeMappingRegistry</c> and <c>IrExpressionExtractor</c> key
+    /// off the type's "full name" to join a BCL mapping with the call site
+    /// that needs it. Pinning the format here keeps the round-trip
+    /// deterministic across Roslyn versions and display-option defaults.
+    /// </summary>
+    public static readonly SymbolDisplayFormat StableTypeFullNameFormat =
+        SymbolDisplayFormat.CSharpErrorMessageFormat;
+
+    /// <summary>
+    /// Returns the type's open-generic full name in a format stable enough
+    /// to use as a dictionary key across the IR pipeline (registry build /
+    /// IR origin extraction).
+    /// </summary>
+    public static string GetStableFullName(this ITypeSymbol type) =>
+        type.OriginalDefinition.ToDisplayString(StableTypeFullNameFormat);
+
     public static bool HasAttribute(this ISymbol symbol, string attributeName)
     {
         return symbol

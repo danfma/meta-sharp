@@ -914,7 +914,7 @@ public sealed class IrExpressionExtractor(
     {
         if (symbol?.ContainingType is null)
             return null;
-        var declaringTypeName = symbol.ContainingType.OriginalDefinition.ToDisplayString();
+        var declaringTypeName = symbol.ContainingType.GetStableFullName();
         // Flag enum members so backends can preserve the source-casing —
         // TypeScript enums (numeric or string-backed) expose members with
         // their original PascalCase, while ordinary static members get the
