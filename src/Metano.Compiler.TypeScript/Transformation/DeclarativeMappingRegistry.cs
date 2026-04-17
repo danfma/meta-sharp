@@ -1,3 +1,4 @@
+using Metano.Compiler;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Transformation;
@@ -306,16 +307,16 @@ public sealed class DeclarativeMappingRegistry
         }
 
         // Mirror the symbol-keyed indices into full-name-keyed ones so IR-driven
-        // lookups don't need to hold onto INamedTypeSymbol references. Using the
-        // OriginalDefinition display string keeps closed generics (List<int>) and
-        // open generics (List<T>) sharing a single registry entry, matching the
-        // existing symbol-based behavior.
+        // lookups don't need to hold onto INamedTypeSymbol references. Use the
+        // shared `GetStableFullName` helper so the join key matches the format
+        // `IrExpressionExtractor` produces for `IrMemberOrigin.DeclaringTypeFullName`
+        // — keying off the same `ToDisplayString` overload across the pipeline.
         var methodsByFullName = new Dictionary<(string, string), List<DeclarativeMappingEntry>>();
         foreach (var ((type, name), list) in methods)
-            methodsByFullName[(type.ToDisplayString(), name)] = list;
+            methodsByFullName[(type.GetStableFullName(), name)] = list;
         var propertiesByFullName = new Dictionary<(string, string), DeclarativeMappingEntry>();
         foreach (var ((type, name), entry) in properties)
-            propertiesByFullName[(type.ToDisplayString(), name)] = entry;
+            propertiesByFullName[(type.GetStableFullName(), name)] = entry;
 
         return new DeclarativeMappingRegistry(
             methods,

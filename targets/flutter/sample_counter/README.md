@@ -26,13 +26,14 @@ flutter run
 ## Status
 
 This is a **prototype** for the Dart/Flutter target — the first second-target
-exercise of the Metano IR architecture. Declarations flow through the IR, so
-the generated files already have the right shape (fields, methods, interfaces,
-constructors, null-safety). Bodies still route through the legacy path, which
-hasn't been ported to Dart yet, so the generated methods throw
-`UnimplementedError()` by default.
+exercise of the Metano IR architecture. Declarations and the covered body
+subset now flow end-to-end through the IR: the generated `Counter` ships
+with a working `copyWith`, `==`/`hashCode` derived from the record shape,
+and no `UnimplementedError` stubs. `lib/main.dart` is a plain Flutter
+consumer — no extension-based workarounds — wiring the generated
+`CounterPresenter` up to a `MaterialApp`.
 
-While Phase 5 (body extraction) is in progress, `lib/main.dart` supplies manual
-implementations for `Counter` members via an extension. Once bodies flow
-end-to-end, those workarounds go away and the Flutter app will consume fully
-functional generated code just like the TypeScript samples do today.
+Follow-ups tracked in `docs/compiler-refactor-plan.md`: classic extension
+methods, the `[ModuleEntryPoint]` body path, and a BCL mapping for
+`Console.WriteLine` → `print` so the counter's `Program.cs` entry point
+can emit on Dart too (today it's opted out via `[NoEmit(Dart)]`).

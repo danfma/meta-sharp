@@ -802,7 +802,21 @@ public sealed class Printer(string indent = "  ")
                 break;
 
             case TsRawStatement raw:
-                _sb.Write(raw.Text);
+                // Multi-line raw text needs explicit re-indent on every line:
+                // the underlying builder only applies the indent prefix at the
+                // start of a line, and a `\n` inside `raw.Text` would emit the
+                // following content at column 0 otherwise. Split on `\n`,
+                // then emit each line with `Write` (which re-indents) and a
+                // `WriteLn` between lines. The trailing newline still comes
+                // from `PrintStatementList`, so we don't emit one ourselves
+                // after the last line.
+                var rawLines = raw.Text.Split('\n');
+                for (var i = 0; i < rawLines.Length; i++)
+                {
+                    if (i > 0)
+                        _sb.WriteLn();
+                    _sb.Write(rawLines[i]);
+                }
                 break;
 
             case TsVariableDeclaration varDecl:

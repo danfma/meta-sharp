@@ -71,7 +71,7 @@ public static class IrToDartNamingPolicy
     /// target overrides avoids having consumers annotate the same symbol
     /// repeatedly for each target.
     /// </summary>
-    private static string? FindNameOverride(IReadOnlyList<IrAttribute>? attributes)
+    public static string? FindNameOverride(IReadOnlyList<IrAttribute>? attributes)
     {
         if (attributes is null)
             return null;

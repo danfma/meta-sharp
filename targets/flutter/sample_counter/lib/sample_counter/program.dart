@@ -1,1 +1,0 @@
-void main() => Console.writeLine('Hello, World!');
