@@ -8,6 +8,21 @@ Statuses are intentionally high-level:
   coverage.
 - **Planned/Out of scope**: not a current product guarantee.
 
+## Target Support
+
+Metano's compilation pipeline is target-agnostic. The shared intermediate
+representation (see [`docs/architecture.md`](../docs/architecture.md)) is
+consumed by two production backends today:
+
+| Target | Status | Notes |
+| --- | --- | --- |
+| TypeScript (`Metano.Compiler.TypeScript`) | Implemented | Primary reference target; drives the `metano-typescript` CLI and every sample under `targets/js/*`. |
+| Dart / Flutter (`Metano.Compiler.Dart`) | Partial | Types, members, constructors, and the covered expression/statement subset lower through the IR. Flutter consumer lives under `targets/flutter/*`. Gaps: classic extension methods, `[ModuleEntryPoint]` body, JSON serializer context. |
+| Additional backends (Kotlin, Swift, …) | Planned | Landing a new target means a new project implementing `ITranspilerTarget` on top of the shared IR — no changes to existing targets or the core. |
+
+Unless a row explicitly calls out a target, **Status** below describes the
+TypeScript backend — the normative surface of the product today.
+
 ## Language and Semantic Features
 
 | Area | Feature | Status | Notes |

@@ -33,7 +33,7 @@ and no `UnimplementedError` stubs. `lib/main.dart` is a plain Flutter
 consumer — no extension-based workarounds — wiring the generated
 `CounterPresenter` up to a `MaterialApp`.
 
-Follow-ups tracked in `docs/compiler-refactor-plan.md`: classic extension
+Known gaps (tracked as GitHub issues / follow-ups): classic extension
 methods, the `[ModuleEntryPoint]` body path, and a BCL mapping for
 `Console.WriteLine` → `print` so the counter's `Program.cs` entry point
 can emit on Dart too (today it's opted out via `[NoEmit(Dart)]`).
