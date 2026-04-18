@@ -2,7 +2,6 @@ using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
 
 namespace Metano.Compiler;
@@ -108,8 +107,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     compilation.Assembly,
                     targetEnumValue: (int)EmitTarget.JavaScript
                 ),
-            AssemblyWideTranspile: compilation is not null
-                && DetectAssemblyWideTranspile(compilation),
+            AssemblyWideTranspile: compilation is not null && compilation.HasTranspileAssembly(),
             Modules: Array.Empty<IrModule>(),
             ReferencedModules: Array.Empty<IrModule>(),
             CrossAssemblyOrigins: crossAssemblyOrigins,
@@ -120,52 +118,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             AssembliesNeedingEmitPackage: assembliesNeedingEmitPackage,
             Diagnostics: diagnostics
         );
-    }
-
-    /// <summary>
-    /// Returns <c>true</c> when the current assembly opted into wholesale
-    /// transpilation via <c>[assembly: TranspileAssembly]</c>. Mirrors the
-    /// legacy detection in <c>TypeTransformer.TransformAll</c>: the
-    /// semantic-model check covers real MSBuild projects, and the syntax
-    /// fallback covers inline test compilations that may not have rebuilt
-    /// their assembly attributes yet.
-    /// </summary>
-    private static bool DetectAssemblyWideTranspile(Compilation compilation)
-    {
-        var hasSemanticAttr = compilation
-            .Assembly.GetAttributes()
-            .Any(a =>
-                a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
-            );
-        if (hasSemanticAttr)
-            return true;
-
-        foreach (var tree in compilation.SyntaxTrees)
-        {
-            var root = tree.GetRoot();
-            foreach (var attrList in root.DescendantNodes().OfType<AttributeListSyntax>())
-            {
-                if (attrList.Target?.Identifier.Text != "assembly")
-                    continue;
-
-                foreach (var attr in attrList.Attributes)
-                {
-                    var name = attr.Name.ToString();
-                    if (
-                        name
-                        is "TranspileAssembly"
-                            or "TranspileAssemblyAttribute"
-                            or "Metano.TranspileAssembly"
-                            or "Metano.TranspileAssemblyAttribute"
-                    )
-                    {
-                        return true;
-                    }
-                }
-            }
-        }
-
-        return false;
     }
 
     /// <summary>

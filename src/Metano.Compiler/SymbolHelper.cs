@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace Metano.Compiler;
 
@@ -293,6 +294,53 @@ public static class SymbolHelper
         GetEmitPackageInfo(assembly, targetEnumValue)?.Name;
 
     public sealed record EmitPackageInfo(string Name, string? Version);
+
+    /// <summary>
+    /// Returns <c>true</c> when the compilation declares
+    /// <c>[assembly: TranspileAssembly]</c>. Checks the semantic model
+    /// first (covers MSBuild-driven projects) and falls back to walking
+    /// the syntax trees for inline test compilations whose attribute may
+    /// not yet appear on <see cref="IAssemblySymbol.GetAttributes"/>.
+    /// Single source of truth for both the legacy
+    /// <c>TypeTransformer</c> and the IR <c>CSharpSourceFrontend</c>.
+    /// </summary>
+    public static bool HasTranspileAssembly(this Compilation compilation)
+    {
+        var hasSemanticAttr = compilation
+            .Assembly.GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
+            );
+        if (hasSemanticAttr)
+            return true;
+
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            var root = tree.GetRoot();
+            foreach (var attrList in root.DescendantNodes().OfType<AttributeListSyntax>())
+            {
+                if (attrList.Target?.Identifier.Text != "assembly")
+                    continue;
+
+                foreach (var attr in attrList.Attributes)
+                {
+                    var name = attr.Name.ToString();
+                    if (
+                        name
+                        is "TranspileAssembly"
+                            or "TranspileAssemblyAttribute"
+                            or "Metano.TranspileAssembly"
+                            or "Metano.TranspileAssemblyAttribute"
+                    )
+                    {
+                        return true;
+                    }
+                }
+            }
+        }
+
+        return false;
+    }
 
     public static bool HasInlineWrapper(this ISymbol symbol) =>
         HasAttribute(symbol, "InlineWrapper");
