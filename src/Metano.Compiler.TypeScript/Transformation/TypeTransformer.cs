@@ -104,31 +104,11 @@ public sealed class TypeTransformer(Compilation compilation)
         // Read [ExportFromBcl] assembly-level attributes
         LoadBclExportMappings();
 
-        // Detect [assembly: TranspileAssembly] — MUST happen before DiscoverTranspilableTypes
-        // Check both semantic model (for real projects) and syntax tree (for inline compilation)
-        _assemblyWideTranspile =
-            compilation
-                .Assembly.GetAttributes()
-                .Any(a =>
-                    a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
-                )
-            || compilation.SyntaxTrees.Any(tree =>
-                tree.GetRoot()
-                    .DescendantNodes()
-                    .OfType<AttributeListSyntax>()
-                    .Any(al =>
-                        al.Target?.Identifier.Text == "assembly"
-                        && al.Attributes.Any(a =>
-                        {
-                            var name = a.Name.ToString();
-                            return name
-                                is "TranspileAssembly"
-                                    or "TranspileAssemblyAttribute"
-                                    or "Metano.TranspileAssembly"
-                                    or "Metano.TranspileAssemblyAttribute";
-                        })
-                    )
-            );
+        // Detect [assembly: TranspileAssembly] — MUST happen before DiscoverTranspilableTypes.
+        // SymbolHelper.HasTranspileAssembly handles both the semantic-model (real projects)
+        // and syntax-tree (inline test compilations) checks; shared with the IR producer
+        // so the two paths can't drift.
+        _assemblyWideTranspile = compilation.HasTranspileAssembly();
 
         var transpilableTypes = DiscoverTranspilableTypes();
         // Map by both C# name and TS name (when [Name] override differs)
