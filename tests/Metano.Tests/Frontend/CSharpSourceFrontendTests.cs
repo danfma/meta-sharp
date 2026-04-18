@@ -326,6 +326,69 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
+    public async Task PackageName_ReadsEmitPackageFromCurrentAssembly()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: EmitPackage("my-pkg")]
+
+            [Transpile]
+            public class Marker {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.PackageName).IsEqualTo("my-pkg");
+    }
+
+    [Test]
+    public async Task PackageName_NullWhenAttributeAbsent()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [Transpile]
+            public class Marker {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.PackageName).IsNull();
+    }
+
+    [Test]
+    public async Task AssemblyWideTranspile_TrueWhenAttributeDeclared()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: TranspileAssembly]
+
+            public class PublicNoAttribute {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.AssemblyWideTranspile).IsTrue();
+    }
+
+    [Test]
+    public async Task AssemblyWideTranspile_FalseWhenAttributeAbsent()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            [Transpile]
+            public class Marker {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.AssemblyWideTranspile).IsFalse();
+    }
+
+    [Test]
     public async Task ExternalImports_NameCollisionKeepsFirstAndWarns()
     {
         // Two top-level types share the simple name `Widget` across distinct
