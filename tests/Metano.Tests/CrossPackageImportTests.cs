@@ -167,7 +167,7 @@ public class CrossPackageImportTests
         var libCompilation = TranspileHelper.CompileLibrary(library);
         var consumerCompilation = TranspileHelper.CompileConsumer(consumer, libCompilation);
 
-        var transformer = new Metano.Transformation.TypeTransformer(consumerCompilation);
+        var transformer = TranspileHelper.NewTransformer(consumerCompilation);
         transformer.TransformAll();
 
         await Assert.That(transformer.CrossPackageDependencies.ContainsKey("@acme/lib")).IsTrue();
@@ -202,7 +202,7 @@ public class CrossPackageImportTests
         var libCompilation = TranspileHelper.CompileLibrary(library);
         var consumerCompilation = TranspileHelper.CompileConsumer(consumer, libCompilation);
 
-        var transformer = new Metano.Transformation.TypeTransformer(consumerCompilation);
+        var transformer = TranspileHelper.NewTransformer(consumerCompilation);
         transformer.TransformAll();
 
         await Assert
@@ -254,7 +254,7 @@ public class CrossPackageImportTests
             """
         );
 
-        var transformer = new Metano.Transformation.TypeTransformer(compilation);
+        var transformer = TranspileHelper.NewTransformer(compilation);
         transformer.TransformAll();
 
         await Assert.That(transformer.CrossPackageDependencies.ContainsKey("hono")).IsTrue();
@@ -280,7 +280,7 @@ public class CrossPackageImportTests
             """
         );
 
-        var transformer = new Metano.Transformation.TypeTransformer(compilation);
+        var transformer = TranspileHelper.NewTransformer(compilation);
         transformer.TransformAll();
 
         await Assert.That(transformer.CrossPackageDependencies.ContainsKey("hono")).IsFalse();
@@ -314,7 +314,7 @@ public class CrossPackageImportTests
         var libCompilation = TranspileHelper.CompileLibrary(library);
         var consumerCompilation = TranspileHelper.CompileConsumer(consumer, libCompilation);
 
-        var transformer = new Metano.Transformation.TypeTransformer(consumerCompilation);
+        var transformer = TranspileHelper.NewTransformer(consumerCompilation);
         var files = transformer.TransformAll();
         var printer = new Printer();
         var output = printer.Print(files.Single(f => f.FileName == "app.ts"));
@@ -373,7 +373,7 @@ public class CrossPackageImportTests
             libBCompilation
         );
 
-        var transformer = new Metano.Transformation.TypeTransformer(consumerCompilation);
+        var transformer = TranspileHelper.NewTransformer(consumerCompilation);
         transformer.TransformAll();
 
         await Assert
@@ -567,7 +567,7 @@ public class CrossPackageImportTests
             """
         );
 
-        var transformer = new Metano.Transformation.TypeTransformer(compilation);
+        var transformer = TranspileHelper.NewTransformer(compilation);
         transformer.TransformAll();
 
         await Assert.That(transformer.CrossPackageDependencies.ContainsKey("decimal.js")).IsTrue();
@@ -603,7 +603,7 @@ public class CrossPackageImportTests
         var libCompilation = TranspileHelper.CompileLibrary(library);
         var consumerCompilation = TranspileHelper.CompileConsumer(consumer, libCompilation);
 
-        var transformer = new Metano.Transformation.TypeTransformer(consumerCompilation);
+        var transformer = TranspileHelper.NewTransformer(consumerCompilation);
         transformer.TransformAll();
 
         await Assert
