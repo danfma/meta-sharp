@@ -1,4 +1,5 @@
 using Metano.Annotations;
+using Metano.Compiler;
 using Metano.Transformation;
 using Metano.TypeScript;
 using Microsoft.CodeAnalysis;
@@ -97,12 +98,26 @@ public static class TranspileHelper
         return compilation;
     }
 
+    /// <summary>
+    /// Builds a <see cref="TypeTransformer"/> wired to the IR the
+    /// <see cref="CSharpSourceFrontend"/> would produce in production. Lets
+    /// individual tests poke at the transformer's internal state (e.g.,
+    /// <c>CrossPackageDependencies</c>) without having to recreate the IR
+    /// extraction boilerplate.
+    /// </summary>
+    public static TypeTransformer NewTransformer(CSharpCompilation compilation) =>
+        new(new CSharpSourceFrontend().ExtractFromCompilation(compilation), compilation);
+
     private static (
         Dictionary<string, string> Files,
         IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
     ) TranspileCore(CSharpCompilation compilation, bool useIrBodies = true)
     {
-        var transformer = new TypeTransformer(compilation) { UseIrBodiesWhenCovered = useIrBodies };
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        var transformer = new TypeTransformer(ir, compilation)
+        {
+            UseIrBodiesWhenCovered = useIrBodies,
+        };
         var files = transformer.TransformAll();
         var printer = new Printer();
         var result = new Dictionary<string, string>();
