@@ -13,8 +13,12 @@ namespace Metano.Transformation;
 
 /// <summary>
 /// Transforms C# types annotated with [Transpile] into TypeScript AST source files.
+/// Receives both the shared <see cref="IrCompilation"/> (canonical input from the
+/// active source frontend) and the underlying Roslyn <see cref="Compilation"/> the
+/// legacy bridges still walk. Fields the frontend already populates are read off
+/// the IR; everything else falls back to Roslyn during the incremental migration.
 /// </summary>
-public sealed class TypeTransformer(Compilation compilation)
+public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 {
     private readonly List<MetanoDiagnostic> _diagnostics = [];
 
@@ -104,11 +108,10 @@ public sealed class TypeTransformer(Compilation compilation)
         // Read [ExportFromBcl] assembly-level attributes
         LoadBclExportMappings();
 
-        // Detect [assembly: TranspileAssembly] — MUST happen before DiscoverTranspilableTypes.
-        // SymbolHelper.HasTranspileAssembly handles both the semantic-model (real projects)
-        // and syntax-tree (inline test compilations) checks; shared with the IR producer
-        // so the two paths can't drift.
-        _assemblyWideTranspile = compilation.HasTranspileAssembly();
+        // The frontend already detects [assembly: TranspileAssembly] (semantic model
+        // first, syntax-tree fallback for inline test compilations) — read it off the
+        // IR rather than redoing the same probe.
+        _assemblyWideTranspile = ir.AssemblyWideTranspile;
 
         var transpilableTypes = DiscoverTranspilableTypes();
         // Map by both C# name and TS name (when [Name] override differs)

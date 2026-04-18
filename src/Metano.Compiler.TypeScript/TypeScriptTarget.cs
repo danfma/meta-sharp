@@ -60,7 +60,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
                     + "TypeScript transformer reads everything it needs from IrCompilation."
             );
 
-        var transformer = new TypeTransformer(compilation);
+        var transformer = new TypeTransformer(ir, compilation);
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;
         // Prefer the frontend-populated package name; the underlying Roslyn read
