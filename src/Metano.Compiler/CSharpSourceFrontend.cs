@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
@@ -84,20 +85,144 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ? new Dictionary<string, IrExternalImport>(StringComparer.Ordinal)
             : BuildExternalImports(compilation, diagnostics);
 
+        IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins;
+        IReadOnlySet<string> assembliesNeedingEmitPackage;
+        if (compilation is null)
+        {
+            crossAssemblyOrigins = new Dictionary<string, IrTypeOrigin>(StringComparer.Ordinal);
+            assembliesNeedingEmitPackage = new HashSet<string>(StringComparer.Ordinal);
+        }
+        else
+        {
+            (crossAssemblyOrigins, assembliesNeedingEmitPackage) = BuildCrossAssemblyState(
+                compilation
+            );
+        }
+
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: null,
             AssemblyWideTranspile: false,
             Modules: Array.Empty<IrModule>(),
             ReferencedModules: Array.Empty<IrModule>(),
-            CrossAssemblyOrigins: new Dictionary<string, IrTypeOrigin>(StringComparer.Ordinal),
+            CrossAssemblyOrigins: crossAssemblyOrigins,
             ExternalImports: externalImports,
             BclExports: compilation is null
                 ? new Dictionary<string, IrBclExport>(StringComparer.Ordinal)
                 : BuildBclExports(compilation),
-            AssembliesNeedingEmitPackage: new HashSet<string>(StringComparer.Ordinal),
+            AssembliesNeedingEmitPackage: assembliesNeedingEmitPackage,
             Diagnostics: diagnostics
         );
+    }
+
+    /// <summary>
+    /// Walks <see cref="Compilation.References"/> and partitions every
+    /// referenced assembly that opted into transpilation
+    /// (<c>[TranspileAssembly]</c>) into one of two buckets:
+    /// <list type="bullet">
+    ///   <item>If it also declares <c>[EmitPackage]</c> for the active
+    ///   target, every public top-level type that is not <c>[Import]</c>,
+    ///   <c>[NoEmit]</c>, or <c>[NoTranspile]</c> contributes an
+    ///   <see cref="IrTypeOrigin"/> keyed by
+    ///   <see cref="SymbolHelper.GetStableFullName(ITypeSymbol)"/>.</item>
+    ///   <item>Otherwise the assembly's metadata name is collected so the
+    ///   target can later raise <see cref="DiagnosticCodes.CrossPackageResolution"/>
+    ///   (MS0007) at the consumer site.</item>
+    /// </list>
+    /// The active target is currently hardcoded to TypeScript / JavaScript
+    /// (<c>EmitTarget</c> integer value <c>0</c>) — every consumer of this
+    /// information today is JS-bound; introducing target awareness on the
+    /// frontend is a separate concern bundled with the contract flip.
+    /// </summary>
+    private static (
+        IReadOnlyDictionary<string, IrTypeOrigin> CrossAssemblyOrigins,
+        IReadOnlySet<string> AssembliesNeedingEmitPackage
+    ) BuildCrossAssemblyState(Compilation compilation)
+    {
+        var origins = new Dictionary<string, IrTypeOrigin>(StringComparer.Ordinal);
+        var needingPackage = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var reference in compilation.References)
+        {
+            if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm)
+                continue;
+            if (SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
+                continue;
+
+            var hasTranspileAssembly = asm.GetAttributes()
+                .Any(a =>
+                    a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
+                );
+            if (!hasTranspileAssembly)
+                continue;
+
+            var packageInfo = SymbolHelper.GetEmitPackageInfo(asm, targetEnumValue: 0);
+            if (packageInfo is null)
+            {
+                needingPackage.Add(asm.Name);
+                continue;
+            }
+
+            var assemblyTypes = new List<INamedTypeSymbol>();
+            CollectPublicTopLevelTypes(asm.GlobalNamespace, assemblyTypes);
+
+            var rootNamespace = ComputeAssemblyRootNamespace(assemblyTypes);
+
+            foreach (var type in assemblyTypes)
+            {
+                if (SymbolHelper.GetImport(type) is not null)
+                    continue;
+                if (SymbolHelper.HasNoTranspile(type))
+                    continue;
+                if (SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript))
+                    continue;
+
+                origins[type.GetStableFullName()] = new IrTypeOrigin(
+                    PackageId: packageInfo.Name,
+                    Namespace: type.ContainingNamespace.IsGlobalNamespace
+                        ? null
+                        : type.ContainingNamespace.ToDisplayString(),
+                    AssemblyRootNamespace: rootNamespace,
+                    VersionHint: packageInfo.Version
+                );
+            }
+        }
+
+        return (origins, needingPackage);
+    }
+
+    private static string ComputeAssemblyRootNamespace(IReadOnlyList<INamedTypeSymbol> types)
+    {
+        var namespaces = new List<string>(types.Count);
+        foreach (var type in types)
+        {
+            if (type.ContainingNamespace.IsGlobalNamespace)
+                continue;
+            namespaces.Add(type.ContainingNamespace.ToDisplayString());
+        }
+
+        if (namespaces.Count == 0)
+            return "";
+        if (namespaces.Count == 1)
+            return namespaces[0];
+
+        var parts = namespaces[0].Split('.');
+        var commonLength = parts.Length;
+        for (var i = 1; i < namespaces.Count; i++)
+        {
+            var otherParts = namespaces[i].Split('.');
+            commonLength = Math.Min(commonLength, otherParts.Length);
+            for (var j = 0; j < commonLength; j++)
+            {
+                if (parts[j] != otherParts[j])
+                {
+                    commonLength = j;
+                    break;
+                }
+            }
+        }
+
+        return string.Join(".", parts.Take(commonLength));
     }
 
     /// <summary>

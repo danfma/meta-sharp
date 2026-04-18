@@ -150,6 +150,124 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
+    public async Task CrossAssemblyOrigins_RegisterTypesFromTranspilableLibrary()
+    {
+        var lib = TranspileHelper.CompileLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("acme-shared")]
+
+            namespace Acme.Shared.Domain
+            {
+                [Transpile]
+                public class Money { public int Amount { get; } }
+            }
+            """,
+            assemblyName: "AcmeShared"
+        );
+
+        var consumer = TranspileHelper.CompileConsumer(
+            """
+            using Acme.Shared.Domain;
+
+            [Transpile]
+            public class Marker { public Money? M { get; } }
+            """,
+            lib
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(consumer);
+
+        var moneyType = consumer.GetTypeByMetadataName("Acme.Shared.Domain.Money");
+        await Assert.That(moneyType).IsNotNull();
+        var key = moneyType!.GetStableFullName();
+
+        await Assert.That(ir.CrossAssemblyOrigins).ContainsKey(key);
+        var origin = ir.CrossAssemblyOrigins[key];
+        await Assert.That(origin.PackageId).IsEqualTo("acme-shared");
+        await Assert.That(origin.Namespace).IsEqualTo("Acme.Shared.Domain");
+        await Assert.That(origin.AssemblyRootNamespace).IsEqualTo("Acme.Shared.Domain");
+    }
+
+    [Test]
+    public async Task AssembliesNeedingEmitPackage_RecordsTranspilableLibraryWithoutEmitPackage()
+    {
+        var lib = TranspileHelper.CompileLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            namespace Orphan
+            {
+                [Transpile]
+                public class Detached {}
+            }
+            """,
+            assemblyName: "OrphanLib"
+        );
+
+        var consumer = TranspileHelper.CompileConsumer(
+            """
+            [Transpile]
+            public class Marker {}
+            """,
+            lib
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(consumer);
+
+        await Assert.That(ir.AssembliesNeedingEmitPackage).Contains("OrphanLib");
+        await Assert.That(ir.CrossAssemblyOrigins.Keys).DoesNotContain("Orphan.Detached");
+    }
+
+    [Test]
+    public async Task CrossAssemblyOrigins_SkipsImportAndNoEmitTypes()
+    {
+        var lib = TranspileHelper.CompileLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("acme-mixed")]
+
+            namespace Acme.Mixed
+            {
+                [Transpile]
+                public class Real {}
+
+                [Import("Hono", from: "hono")]
+                public class HonoStub {}
+
+                [NoEmit]
+                public class Ambient {}
+            }
+            """,
+            assemblyName: "AcmeMixed"
+        );
+
+        var consumer = TranspileHelper.CompileConsumer(
+            """
+            [Transpile]
+            public class Marker {}
+            """,
+            lib
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(consumer);
+
+        var realKey = consumer.GetTypeByMetadataName("Acme.Mixed.Real")!.GetStableFullName();
+        var honoKey = consumer.GetTypeByMetadataName("Acme.Mixed.HonoStub")!.GetStableFullName();
+        var ambientKey = consumer.GetTypeByMetadataName("Acme.Mixed.Ambient")!.GetStableFullName();
+
+        await Assert.That(ir.CrossAssemblyOrigins).ContainsKey(realKey);
+        await Assert.That(ir.CrossAssemblyOrigins.ContainsKey(honoKey)).IsFalse();
+        await Assert.That(ir.CrossAssemblyOrigins.ContainsKey(ambientKey)).IsFalse();
+    }
+
+    [Test]
     public async Task ExternalImports_NameCollisionKeepsFirstAndWarns()
     {
         // Two top-level types share the simple name `Widget` across distinct
