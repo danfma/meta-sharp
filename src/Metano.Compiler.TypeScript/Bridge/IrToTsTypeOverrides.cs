@@ -24,8 +24,12 @@ public interface IrToTsTypeOverrides
 /// version of every override that fires so the package.json writer picks
 /// up the cross-package dependency. Today it only resolves <c>decimal</c>
 /// (the only <c>[ExportFromBcl]</c> entry shipped by
-/// <c>Metano.Runtime</c>); the lookup uses Roslyn's full type name as the
-/// dictionary key, matching what the frontend stores.
+/// <c>Metano.Runtime</c>); the dictionary is keyed by the C# display
+/// string of the <c>typeof(...)</c> argument (i.e.,
+/// <c>ITypeSymbol.ToDisplayString()</c> with the default format —
+/// <c>"decimal"</c> rather than <c>"System.Decimal"</c>), which is
+/// exactly what <c>BclKey</c> below produces for each
+/// <see cref="IrPrimitive"/>.
 /// </summary>
 public sealed class BclExportTypeOverrides(
     IReadOnlyDictionary<string, IrBclExport> map,
