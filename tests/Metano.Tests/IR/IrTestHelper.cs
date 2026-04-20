@@ -42,7 +42,10 @@ public static class IrTestHelper
         return IrTypeRefMapper.Map(type);
     }
 
-    public static CSharpCompilation Compile(string csharpSource)
+    public static CSharpCompilation Compile(
+        string csharpSource,
+        OutputKind outputKind = OutputKind.DynamicallyLinkedLibrary
+    )
     {
         var source = $"""
             using System;
@@ -63,7 +66,7 @@ public static class IrTestHelper
             "TestAssembly",
             [syntaxTree],
             TranspileHelper.BaseReferences,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+            new CSharpCompilationOptions(outputKind)
         );
 
         var errors = compilation

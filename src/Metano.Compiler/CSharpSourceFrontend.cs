@@ -2,6 +2,8 @@ using Metano.Annotations;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
 
 namespace Metano.Compiler;
@@ -131,7 +133,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// target-side filter (<see cref="SymbolHelper.IsTranspilable"/>) so the
     /// prefix stays identical to what <c>TypeTransformer</c> used to compute
     /// inline — including internal <c>[Transpile]</c> types that would be
-    /// missed by a public-only walker.
+    /// missed by a public-only walker, and the synthetic Program type that
+    /// <c>TypeTransformer.DiscoverTranspilableTypes</c> injects for C# 9+
+    /// top-level statements under <c>[assembly: TranspileAssembly]</c>.
     /// </summary>
     private static string ComputeLocalRootNamespace(
         Compilation compilation,
@@ -139,7 +143,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var currentAssembly = compilation.Assembly;
-        var transpilable = new List<INamedTypeSymbol>();
+        var transpilable = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         CollectTopLevelTypes(
             currentAssembly.GlobalNamespace,
             type =>
@@ -148,7 +152,56 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     transpilable.Add(type);
             }
         );
+
+        if (assemblyWideTranspile && TryGetTopLevelProgramType(compilation, out var programType))
+            transpilable.Add(programType);
+
         return ComputeRootNamespaceFromTypes(transpilable);
+    }
+
+    /// <summary>
+    /// Detects C# 9+ top-level statements and returns the compiler-synthesized
+    /// containing type (usually <c>Program</c>) that <c>TypeTransformer</c>
+    /// treats as transpilable under assembly-wide mode. Returns <c>false</c>
+    /// when there are no global statements, when Roslyn reports no entry
+    /// point, or when the program type opts out via
+    /// <c>[ExportedAsModule]</c>.
+    /// </summary>
+    private static bool TryGetTopLevelProgramType(
+        Compilation compilation,
+        out INamedTypeSymbol programType
+    )
+    {
+        if (compilation is not CSharpCompilation csharpComp)
+        {
+            programType = null!;
+            return false;
+        }
+
+        var hasGlobalStatements = compilation.SyntaxTrees.Any(t =>
+            t.GetRoot().DescendantNodes().OfType<GlobalStatementSyntax>().Any()
+        );
+        if (!hasGlobalStatements)
+        {
+            programType = null!;
+            return false;
+        }
+
+        var entryPoint = csharpComp.GetEntryPoint(CancellationToken.None);
+        if (entryPoint?.ContainingType is not { } containingType)
+        {
+            programType = null!;
+            return false;
+        }
+
+        if (SymbolHelper.HasExportedAsModule(containingType))
+        {
+            programType = null!;
+            return false;
+        }
+
+        programType = containingType;
+        return true;
     }
 
     /// <summary>
