@@ -80,5 +80,5 @@ public sealed record IrCompilation(
     IReadOnlyDictionary<string, IrBclExport> BclExports,
     IReadOnlySet<string> AssembliesNeedingEmitPackage,
     IReadOnlyList<MetanoDiagnostic> Diagnostics,
-    string LocalRootNamespace
+    string LocalRootNamespace = ""
 );

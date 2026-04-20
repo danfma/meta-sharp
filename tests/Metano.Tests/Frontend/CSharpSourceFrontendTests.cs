@@ -574,6 +574,33 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
+    public async Task LocalRootNamespace_IncludesSyntheticProgramFromTopLevelStatements()
+    {
+        // C# 9+ top-level statements inside a namespace compile into a
+        // synthesized `Program` type under that namespace. TypeTransformer
+        // treats it as transpilable under [assembly: TranspileAssembly];
+        // the frontend must contribute its namespace to the common prefix
+        // so the generated file layout matches.
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: TranspileAssembly]
+
+            System.Console.WriteLine("hello");
+
+            namespace Acme.Shared.Services
+            {
+                public class Marker {}
+            }
+            """,
+            outputKind: Microsoft.CodeAnalysis.OutputKind.ConsoleApplication
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared.Services");
+    }
+
+    [Test]
     public async Task LocalRootNamespace_SkipsGlobalNamespaceTypes()
     {
         // A transpilable type declared directly in the global namespace
