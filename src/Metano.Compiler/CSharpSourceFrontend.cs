@@ -248,30 +248,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         var origins = new Dictionary<string, IrTypeOrigin>(StringComparer.Ordinal);
         var needingPackage = new HashSet<string>(StringComparer.Ordinal);
 
-        foreach (var reference in compilation.References)
+        foreach (
+            var (asm, packageInfo) in EnumerateTranspilableReferencedAssemblies(
+                compilation,
+                onTranspilableWithoutEmitPackage: name => needingPackage.Add(name)
+            )
+        )
         {
-            if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm)
-                continue;
-            if (SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
-                continue;
-
-            var hasTranspileAssembly = asm.GetAttributes()
-                .Any(a =>
-                    a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
-                );
-            if (!hasTranspileAssembly)
-                continue;
-
-            var packageInfo = SymbolHelper.GetEmitPackageInfo(
-                asm,
-                targetEnumValue: (int)EmitTarget.JavaScript
-            );
-            if (packageInfo is null)
-            {
-                needingPackage.Add(asm.Name);
-                continue;
-            }
-
             var assemblyTypes = new List<INamedTypeSymbol>();
             CollectTopLevelTypes(
                 asm.GlobalNamespace,
@@ -313,19 +296,23 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     }
 
     /// <summary>
-    /// Walks every public top-level type in the current compilation and
-    /// surfaces those carrying <c>[Import("name", from)]</c> as
-    /// <see cref="IrExternalImport"/> entries keyed by the C# type's simple
-    /// source name. This intentionally covers only the source-name keys for
-    /// the local assembly that the legacy
-    /// <c>TypeTransformer._externalImportMap</c> exposed; cross-assembly
-    /// <c>[Import]</c> aggregation and per-target <c>[Name]</c> aliasing
-    /// remain on the consumer side until later migration steps wire them
-    /// through the IR. Mirrors the legacy
-    /// <c>TypeTransformer.RegisterExternalImportMapping</c> conflict policy:
-    /// the first mapping wins and any divergent re-registration produces a
+    /// Walks every public top-level type in the current compilation plus
+    /// every referenced assembly that opted into transpilation
+    /// (<c>[TranspileAssembly]</c>) and declared an <c>[EmitPackage]</c>
+    /// for the active target, surfacing those carrying
+    /// <c>[Import("name", from)]</c> as <see cref="IrExternalImport"/>
+    /// entries keyed by the C# type's simple source name. The local
+    /// assembly is walked first so on collision its entry wins, matching
+    /// the legacy ordering in
+    /// <c>TypeTransformer.DiscoverCrossAssemblyTypes</c>. Per-target
+    /// <c>[Name]</c> aliasing remains on the consumer side until later
+    /// migration steps wire it through the IR.
+    /// <para>
+    /// Conflict policy: first mapping wins and any divergent
+    /// re-registration produces a
     /// <see cref="DiagnosticCodes.AmbiguousConstruct"/> warning surfaced
     /// through <see cref="IrCompilation.Diagnostics"/>.
+    /// </para>
     /// </summary>
     private static Dictionary<string, IrExternalImport> BuildExternalImports(
         Compilation compilation,
@@ -333,52 +320,116 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     )
     {
         var map = new Dictionary<string, IrExternalImport>(StringComparer.Ordinal);
-        var types = new List<INamedTypeSymbol>();
-        CollectTopLevelTypes(
-            compilation.Assembly.GlobalNamespace,
-            type =>
-            {
-                if (type.DeclaredAccessibility == Accessibility.Public)
-                    types.Add(type);
-            }
-        );
 
-        foreach (var type in types)
-        {
-            var import = SymbolHelper.GetImport(type);
-            if (import is null)
-                continue;
+        AddImportsFromAssembly(compilation.Assembly, map, diagnostics);
 
-            var entry = new IrExternalImport(
-                Name: import.Name,
-                From: import.From,
-                IsDefault: import.AsDefault,
-                Version: import.Version
-            );
-
-            if (map.TryGetValue(type.Name, out var existing))
-            {
-                if (existing == entry)
-                    continue;
-
-                diagnostics.Add(
-                    new MetanoDiagnostic(
-                        MetanoDiagnosticSeverity.Warning,
-                        DiagnosticCodes.AmbiguousConstruct,
-                        $"External import name collision for '{type.Name}'. Keeping "
-                            + $"'{existing.From}' ('{existing.Name}') and ignoring "
-                            + $"conflicting mapping from '{type.ToDisplayString()}' to "
-                            + $"'{entry.From}' ('{entry.Name}').",
-                        type.Locations.FirstOrDefault()
-                    )
-                );
-                continue;
-            }
-
-            map[type.Name] = entry;
-        }
+        foreach (var (asm, _) in EnumerateTranspilableReferencedAssemblies(compilation))
+            AddImportsFromAssembly(asm, map, diagnostics);
 
         return map;
+    }
+
+    /// <summary>
+    /// Yields every referenced assembly (excluding the one being compiled)
+    /// that opted into transpilation via <c>[TranspileAssembly]</c> and
+    /// declared an <c>[EmitPackage]</c> for the active target. When
+    /// <paramref name="onTranspilableWithoutEmitPackage"/> is supplied it
+    /// receives the metadata name of every assembly that opted in but
+    /// omitted <c>[EmitPackage]</c> — callers that need to surface that
+    /// case (MS0007 bookkeeping in
+    /// <see cref="BuildCrossAssemblyState"/>) pass a collector; callers
+    /// that just want the fully-configured set (import aggregation) leave
+    /// it null.
+    /// </summary>
+    private static IEnumerable<(
+        IAssemblySymbol Assembly,
+        SymbolHelper.EmitPackageInfo PackageInfo
+    )> EnumerateTranspilableReferencedAssemblies(
+        Compilation compilation,
+        Action<string>? onTranspilableWithoutEmitPackage = null
+    )
+    {
+        foreach (var reference in compilation.References)
+        {
+            if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm)
+                continue;
+            if (SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
+                continue;
+
+            var hasTranspileAssembly = asm.GetAttributes()
+                .Any(a =>
+                    a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
+                );
+            if (!hasTranspileAssembly)
+                continue;
+
+            var packageInfo = SymbolHelper.GetEmitPackageInfo(
+                asm,
+                targetEnumValue: (int)EmitTarget.JavaScript
+            );
+            if (packageInfo is null)
+            {
+                onTranspilableWithoutEmitPackage?.Invoke(asm.Name);
+                continue;
+            }
+
+            yield return (asm, packageInfo);
+        }
+    }
+
+    /// <summary>
+    /// Walks <paramref name="assembly"/>'s public top-level types and
+    /// registers any <c>[Import]</c>-annotated entry into
+    /// <paramref name="map"/> under the C# source name. Mirrors the
+    /// legacy <c>TypeTransformer.RegisterExternalImportMapping</c>
+    /// conflict policy (first mapping wins; collisions produce MS0003).
+    /// </summary>
+    private static void AddImportsFromAssembly(
+        IAssemblySymbol assembly,
+        Dictionary<string, IrExternalImport> map,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        CollectTopLevelTypes(
+            assembly.GlobalNamespace,
+            type =>
+            {
+                if (type.DeclaredAccessibility != Accessibility.Public)
+                    return;
+
+                var import = SymbolHelper.GetImport(type);
+                if (import is null)
+                    return;
+
+                var entry = new IrExternalImport(
+                    Name: import.Name,
+                    From: import.From,
+                    IsDefault: import.AsDefault,
+                    Version: import.Version
+                );
+
+                if (map.TryGetValue(type.Name, out var existing))
+                {
+                    if (existing == entry)
+                        return;
+
+                    diagnostics.Add(
+                        new MetanoDiagnostic(
+                            MetanoDiagnosticSeverity.Warning,
+                            DiagnosticCodes.AmbiguousConstruct,
+                            $"External import name collision for '{type.Name}'. Keeping "
+                                + $"'{existing.From}' ('{existing.Name}') and ignoring "
+                                + $"conflicting mapping from '{type.ToDisplayString()}' to "
+                                + $"'{entry.From}' ('{entry.Name}').",
+                            type.Locations.FirstOrDefault()
+                        )
+                    );
+                    return;
+                }
+
+                map[type.Name] = entry;
+            }
+        );
     }
 
     /// <summary>

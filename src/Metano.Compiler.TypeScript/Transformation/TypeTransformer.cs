@@ -122,14 +122,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         }
 
         // Seed the external-import map from the frontend. The IR already covers
-        // current-assembly [Import] types keyed by C# simple name (and emits
-        // MS0003 on collisions before the host merges its diagnostics with ours).
+        // every [Import] type (local + cross-assembly) keyed by C# simple name,
+        // with MS0003 collisions surfaced through the host's diagnostic merge.
         // The TS-name aliasing below is a target concern that stays here until
         // the frontend gains target awareness — it must walk every public
-        // top-level [Import] type (mirroring the frontend's CollectPublicTopLevelTypes
-        // pass), not just `transpilableTypes`, so an [Import] placeholder
-        // without [Transpile] in a project that does not declare
-        // [assembly: TranspileAssembly] still gets its TS-name alias.
+        // top-level [Import] type (mirroring the frontend's walker), not just
+        // `transpilableTypes`, so an [Import] placeholder without [Transpile]
+        // in a project that does not declare [assembly: TranspileAssembly]
+        // still gets its TS-name alias.
         _externalImportMap = new Dictionary<string, IrExternalImport>(
             ir.ExternalImports,
             StringComparer.Ordinal
@@ -308,14 +308,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <summary>
     /// Walks <see cref="Compilation.References"/> and, for each referenced assembly that
     /// declares <em>both</em> <c>[TranspileAssembly]</c> and <c>[EmitPackage(JavaScript)]</c>,
-    /// enumerates its public types and augments <see cref="_externalImportMap"/> with
-    /// any <c>[Import]</c> declarations from those assemblies so consumers can
-    /// transitively reach external bindings declared in a referenced library.
-    /// The non-<c>[Import]</c> cross-assembly origin map is produced by the frontend
-    /// (<see cref="IrCompilation.CrossAssemblyOrigins"/>) and consumed via
-    /// <see cref="TypeMappingContext.CrossAssemblyOrigins"/>; this method stays
-    /// target-specific until the frontend also emits cross-assembly external
-    /// imports keyed by both source and target name.
+    /// registers the TS-name alias for any <c>[Import]</c>-annotated type whose
+    /// <c>[Name(TypeScript)]</c> override differs from the C# source name. The
+    /// C#-source-name keys for cross-assembly <c>[Import]</c> types are produced
+    /// by the frontend via <see cref="IrCompilation.ExternalImports"/>; the
+    /// non-<c>[Import]</c> cross-assembly origin map is likewise frontend-built
+    /// (<see cref="IrCompilation.CrossAssemblyOrigins"/>), so this pass stays
+    /// target-specific only because <c>[Name(TypeScript)]</c> resolution needs
+    /// the active target's naming policy.
     /// </summary>
     private void DiscoverCrossAssemblyTypes()
     {
@@ -323,14 +323,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm)
                 continue;
-            // Skip the assembly currently being compiled.
             if (SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
                 continue;
 
-            // Cheap filter: only consider assemblies that opt into transpilation
-            // and have an EmitPackage for the active target — assemblies without
-            // EmitPackage are already surfaced in ir.AssembliesNeedingEmitPackage,
-            // and types they expose are not importable.
             var hasTranspileAssembly = asm.GetAttributes()
                 .Any(a =>
                     a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
@@ -347,13 +342,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             var assemblyTypes = new List<INamedTypeSymbol>();
             CollectTypesFromNamespace(asm.GlobalNamespace, assemblyTypes);
 
-            // Register cross-assembly [Import] types. The cross-assembly origin
-            // map for non-[Import] types is now produced by the frontend and read
-            // off the IR via TypeMappingContext.CrossAssemblyOrigins.
             foreach (var type in assemblyTypes)
             {
                 var import = SymbolHelper.GetImport(type);
                 if (import is null)
+                    continue;
+
+                var tsName = GetTsTypeName(type);
+                if (tsName == type.Name)
                     continue;
 
                 var entry = new IrExternalImport(
@@ -363,19 +359,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                     Version: import.Version
                 );
                 RegisterExternalImportMapping(
-                    type.Name,
+                    tsName,
                     entry,
                     type.ToDisplayString(),
                     type.Locations.FirstOrDefault()
                 );
-                var tsName = GetTsTypeName(type);
-                if (tsName != type.Name)
-                    RegisterExternalImportMapping(
-                        tsName,
-                        entry,
-                        type.ToDisplayString(),
-                        type.Locations.FirstOrDefault()
-                    );
             }
         }
     }
