@@ -59,6 +59,16 @@ namespace Metano.Compiler.IR;
 /// <param name="Diagnostics">Diagnostics raised during extraction (e.g.,
 /// conflicts in <c>[EmitInFile]</c> groupings, malformed
 /// <c>[Import]</c> attributes).</param>
+/// <param name="LocalRootNamespace">Longest common namespace prefix of the
+/// transpilable types declared in the source unit, or the empty string when
+/// no types qualify (or when they span unrelated top-level namespaces).
+/// Backends that lay generated files out on disk use this as the root of
+/// the output tree, stripping it from per-type namespaces so relative paths
+/// stay short. This value is target-agnostic provided the target uses
+/// dot-separated namespace segments for file-system layout (TypeScript,
+/// Dart). Targets using alternate layout schemes must compute their own
+/// root independently. Appended at the end of the record so adding new
+/// state cannot shift downstream positional arguments.</param>
 public sealed record IrCompilation(
     string AssemblyName,
     string? PackageName,
@@ -69,5 +79,6 @@ public sealed record IrCompilation(
     IReadOnlyDictionary<string, IrExternalImport> ExternalImports,
     IReadOnlyDictionary<string, IrBclExport> BclExports,
     IReadOnlySet<string> AssembliesNeedingEmitPackage,
-    IReadOnlyList<MetanoDiagnostic> Diagnostics
+    IReadOnlyList<MetanoDiagnostic> Diagnostics,
+    string LocalRootNamespace
 );

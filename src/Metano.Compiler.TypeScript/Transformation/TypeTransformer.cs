@@ -184,15 +184,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             _guardNameToTypeMap[$"is{tsName}"] = tsName;
         }
 
-        // Detect root namespace (longest common prefix)
-        var namespaces = transpilableTypes
-            .Select(PathNaming.GetNamespace)
-            .Where(ns => ns.Length > 0)
-            .ToList();
-
-        _pathNaming = new PathNaming(
-            namespaces.Count > 0 ? PathNaming.FindCommonNamespacePrefix(namespaces) : ""
-        );
+        _pathNaming = new PathNaming(ir.LocalRootNamespace);
 
         // Read declarative [MapMethod]/[MapProperty] from the current assembly + every
         // referenced assembly. The registry is consulted by BclMapper before its hardcoded
