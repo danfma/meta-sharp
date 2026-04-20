@@ -435,6 +435,158 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
+    public async Task ExternalImports_IncludesCrossAssemblyEntriesByCSharpName()
+    {
+        var lib = TranspileHelper.CompileLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("acme-shared")]
+
+            namespace Acme.Shared.External
+            {
+                [Import("Hono", from: "hono")]
+                public class HonoStub {}
+            }
+            """,
+            assemblyName: "AcmeShared"
+        );
+
+        var consumer = TranspileHelper.CompileConsumer(
+            """
+            [Transpile]
+            public class Marker {}
+            """,
+            lib
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(consumer);
+
+        await Assert.That(ir.ExternalImports).ContainsKey("HonoStub");
+        var entry = ir.ExternalImports["HonoStub"];
+        await Assert.That(entry.Name).IsEqualTo("Hono");
+        await Assert.That(entry.From).IsEqualTo("hono");
+    }
+
+    [Test]
+    public async Task ExternalImports_SkipsReferencesWithoutTranspileAssembly()
+    {
+        // A plain C# library without [TranspileAssembly] must NOT contribute
+        // its [Import] types to the consumer — even if an npm package happens
+        // to exist — so unrelated libraries cannot leak bindings.
+        var lib = TranspileHelper.CompileLibrary(
+            """
+            using Metano.Annotations;
+
+            namespace Plain.Library
+            {
+                [Import("Ghost", from: "ghost-pkg")]
+                public class Ghost {}
+            }
+            """,
+            assemblyName: "PlainLib"
+        );
+
+        var consumer = TranspileHelper.CompileConsumer(
+            """
+            [Transpile]
+            public class Marker {}
+            """,
+            lib
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(consumer);
+
+        await Assert.That(ir.ExternalImports.ContainsKey("Ghost")).IsFalse();
+    }
+
+    [Test]
+    public async Task ExternalImports_SkipsReferencesWithoutEmitPackage()
+    {
+        // A library that opts into transpilation but omits [EmitPackage]
+        // for the active target is already flagged via
+        // AssembliesNeedingEmitPackage — its [Import] types must not leak
+        // either so the consumer does not quietly pick up half-configured
+        // bindings.
+        var lib = TranspileHelper.CompileLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+
+            namespace Orphan.Library
+            {
+                [Import("Ghost", from: "ghost-pkg")]
+                public class Ghost {}
+            }
+            """,
+            assemblyName: "OrphanLib"
+        );
+
+        var consumer = TranspileHelper.CompileConsumer(
+            """
+            [Transpile]
+            public class Marker {}
+            """,
+            lib
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(consumer);
+
+        await Assert.That(ir.ExternalImports.ContainsKey("Ghost")).IsFalse();
+        await Assert.That(ir.AssembliesNeedingEmitPackage).Contains("OrphanLib");
+    }
+
+    [Test]
+    public async Task ExternalImports_LocalEntryWinsOverCrossAssemblyCollision()
+    {
+        // Two [Import("Widget", ...)] attributes collide on the simple name
+        // "Widget" — one in the consumer, one in a transpilable library.
+        // The local mapping must win regardless of enumeration order, so
+        // the consumer can always override bindings shipped by a library.
+        var lib = TranspileHelper.CompileLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("acme-lib")]
+
+            namespace Acme.Lib
+            {
+                [Import("Widget", from: "lib-widget")]
+                public class Widget {}
+            }
+            """,
+            assemblyName: "AcmeLib"
+        );
+
+        var consumer = TranspileHelper.CompileConsumer(
+            """
+            [Import("Widget", from: "local-widget")]
+            public class Widget {}
+
+            [Transpile]
+            public class Marker {}
+            """,
+            lib
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(consumer);
+
+        await Assert.That(ir.ExternalImports).ContainsKey("Widget");
+        var entry = ir.ExternalImports["Widget"];
+        await Assert.That(entry.From).IsEqualTo("local-widget");
+
+        var warning = ir.Diagnostics.SingleOrDefault(d =>
+            d.Code == DiagnosticCodes.AmbiguousConstruct && d.Message.Contains("Widget")
+        );
+        await Assert.That(warning).IsNotNull();
+        await Assert.That(warning!.Message).Contains("local-widget");
+        await Assert.That(warning.Message).Contains("lib-widget");
+    }
+
+    [Test]
     public async Task LocalRootNamespace_EmptyWhenNoTranspilableTypes()
     {
         var compilation = IrTestHelper.Compile(

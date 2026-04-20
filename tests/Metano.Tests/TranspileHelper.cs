@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using Metano.Compiler;
+using Metano.Compiler.IR;
 using Metano.Transformation;
 using Metano.TypeScript;
 using Microsoft.CodeAnalysis;
@@ -106,7 +107,23 @@ public static class TranspileHelper
     /// extraction boilerplate.
     /// </summary>
     public static TypeTransformer NewTransformer(CSharpCompilation compilation) =>
-        new(new CSharpSourceFrontend().ExtractFromCompilation(compilation), compilation);
+        NewTransformerWithIr(compilation).Transformer;
+
+    /// <summary>
+    /// Variant of <see cref="NewTransformer"/> that also returns the
+    /// <see cref="IrCompilation"/> produced by the frontend. Tests that
+    /// inspect diagnostics raised during extraction (for example, cross-
+    /// assembly <c>[Import]</c> collisions) merge <c>ir.Diagnostics</c>
+    /// with <c>transformer.Diagnostics</c> to see what the host would
+    /// ultimately report.
+    /// </summary>
+    public static (IrCompilation Ir, TypeTransformer Transformer) NewTransformerWithIr(
+        CSharpCompilation compilation
+    )
+    {
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+        return (ir, new TypeTransformer(ir, compilation));
+    }
 
     private static (
         Dictionary<string, string> Files,

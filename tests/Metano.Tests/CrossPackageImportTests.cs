@@ -314,16 +314,17 @@ public class CrossPackageImportTests
         var libCompilation = TranspileHelper.CompileLibrary(library);
         var consumerCompilation = TranspileHelper.CompileConsumer(consumer, libCompilation);
 
-        var transformer = TranspileHelper.NewTransformer(consumerCompilation);
+        var (ir, transformer) = TranspileHelper.NewTransformerWithIr(consumerCompilation);
         var files = transformer.TransformAll();
         var printer = new Printer();
         var output = printer.Print(files.Single(f => f.FileName == "app.ts"));
 
         await Assert.That(output).Contains("import { Moment } from \"local-moment\"");
         await Assert.That(output).DoesNotContain("shared-moment");
+        var mergedDiagnostics = ir.Diagnostics.Concat(transformer.Diagnostics);
         await Assert
             .That(
-                transformer.Diagnostics.Any(d =>
+                mergedDiagnostics.Any(d =>
                     d.Code == DiagnosticCodes.AmbiguousConstruct
                     && d.Message.Contains("Moment")
                     && d.Message.Contains("local-moment")
@@ -373,12 +374,13 @@ public class CrossPackageImportTests
             libBCompilation
         );
 
-        var transformer = TranspileHelper.NewTransformer(consumerCompilation);
+        var (ir, transformer) = TranspileHelper.NewTransformerWithIr(consumerCompilation);
         transformer.TransformAll();
 
+        var mergedDiagnostics = ir.Diagnostics.Concat(transformer.Diagnostics);
         await Assert
             .That(
-                transformer.Diagnostics.Any(d =>
+                mergedDiagnostics.Any(d =>
                     d.Code == DiagnosticCodes.AmbiguousConstruct && d.Message.Contains("Moment")
                 )
             )
