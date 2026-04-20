@@ -433,4 +433,167 @@ public class CSharpSourceFrontendTests
         await Assert.That(warning!.Message).Contains("Widget");
         await Assert.That(warning.Message).Contains("beta-pkg");
     }
+
+    [Test]
+    public async Task LocalRootNamespace_EmptyWhenNoTranspilableTypes()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            public class NotMarked {}
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo(string.Empty);
+    }
+
+    [Test]
+    public async Task LocalRootNamespace_ReturnsSingleNamespaceWhenOnlyOneInUse()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            namespace Acme.Shared.Domain
+            {
+                [Transpile]
+                public class Money {}
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared.Domain");
+    }
+
+    [Test]
+    public async Task LocalRootNamespace_ReturnsLongestCommonPrefixAcrossNamespaces()
+    {
+        var compilation = IrTestHelper.Compile(
+            """
+            namespace Acme.Shared.Domain
+            {
+                [Transpile]
+                public class Money {}
+            }
+
+            namespace Acme.Shared.Services
+            {
+                [Transpile]
+                public class PaymentProcessor {}
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared");
+    }
+
+    [Test]
+    public async Task LocalRootNamespace_IgnoresNoTranspileAndNoEmit()
+    {
+        // [NoTranspile] / [NoEmit] types live under a wildly different
+        // namespace. If the filter leaked them, the common prefix would
+        // collapse to the empty string.
+        var compilation = IrTestHelper.Compile(
+            """
+            namespace Acme.Shared.Domain
+            {
+                [Transpile]
+                public class Money {}
+            }
+
+            namespace Unrelated.Zeta
+            {
+                [NoTranspile]
+                public class Ignored {}
+
+                [NoEmit]
+                public class Ambient {}
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared.Domain");
+    }
+
+    [Test]
+    public async Task LocalRootNamespace_AssemblyWideSkipsNonPublicTypes()
+    {
+        // Assembly-wide mode only transpiles public types; an `internal`
+        // type in an unrelated namespace must not collapse the prefix.
+        var compilation = IrTestHelper.Compile(
+            """
+            [assembly: TranspileAssembly]
+
+            namespace Acme.Shared
+            {
+                public class Money {}
+            }
+
+            namespace Unrelated.Zeta
+            {
+                internal class Hidden {}
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared");
+    }
+
+    [Test]
+    public async Task LocalRootNamespace_ExplicitTranspileIncludesInternalTypes()
+    {
+        // [Transpile] overrides the public-only gate, so an internal type
+        // decorated with it must count towards the prefix — matching the
+        // target-side IsTranspilable semantics.
+        var compilation = IrTestHelper.Compile(
+            """
+            namespace Acme.Shared.Domain
+            {
+                [Transpile]
+                internal class Money {}
+            }
+
+            namespace Acme.Shared.Services
+            {
+                [Transpile]
+                public class PaymentProcessor {}
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared");
+    }
+
+    [Test]
+    public async Task LocalRootNamespace_SkipsGlobalNamespaceTypes()
+    {
+        // A transpilable type declared directly in the global namespace
+        // has no segments to contribute; the prefix is driven purely by
+        // the namespaced transpilable types.
+        var compilation = IrTestHelper.Compile(
+            """
+            [Transpile]
+            public class Marker {}
+
+            namespace Acme.Shared.Domain
+            {
+                [Transpile]
+                public class Money {}
+            }
+            """
+        );
+
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
+
+        await Assert.That(ir.LocalRootNamespace).IsEqualTo("Acme.Shared.Domain");
+    }
 }

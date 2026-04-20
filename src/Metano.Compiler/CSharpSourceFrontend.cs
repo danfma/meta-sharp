@@ -99,6 +99,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             );
         }
 
+        var assemblyWideTranspile = compilation is not null && compilation.HasTranspileAssembly();
+
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: compilation is null
@@ -107,7 +109,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     compilation.Assembly,
                     targetEnumValue: (int)EmitTarget.JavaScript
                 ),
-            AssemblyWideTranspile: compilation is not null && compilation.HasTranspileAssembly(),
+            AssemblyWideTranspile: assemblyWideTranspile,
             Modules: Array.Empty<IrModule>(),
             ReferencedModules: Array.Empty<IrModule>(),
             CrossAssemblyOrigins: crossAssemblyOrigins,
@@ -116,8 +118,54 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 ? new Dictionary<string, IrBclExport>(StringComparer.Ordinal)
                 : BuildBclExports(compilation),
             AssembliesNeedingEmitPackage: assembliesNeedingEmitPackage,
-            Diagnostics: diagnostics
+            Diagnostics: diagnostics,
+            LocalRootNamespace: compilation is null
+                ? ""
+                : ComputeLocalRootNamespace(compilation, assemblyWideTranspile)
         );
+    }
+
+    /// <summary>
+    /// Computes the longest common namespace prefix of the transpilable types
+    /// declared in <paramref name="compilation"/>'s own assembly. Mirrors the
+    /// target-side filter (<see cref="SymbolHelper.IsTranspilable"/>) so the
+    /// prefix stays identical to what <c>TypeTransformer</c> used to compute
+    /// inline — including internal <c>[Transpile]</c> types that would be
+    /// missed by a public-only walker.
+    /// </summary>
+    private static string ComputeLocalRootNamespace(
+        Compilation compilation,
+        bool assemblyWideTranspile
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        var transpilable = new List<INamedTypeSymbol>();
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type =>
+            {
+                if (SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+                    transpilable.Add(type);
+            }
+        );
+        return ComputeRootNamespaceFromTypes(transpilable);
+    }
+
+    /// <summary>
+    /// Longest common namespace prefix across <paramref name="types"/>,
+    /// skipping types declared in the global namespace so a single
+    /// unnamespaced entry cannot collapse the shared root on its own.
+    /// </summary>
+    private static string ComputeRootNamespaceFromTypes(IEnumerable<INamedTypeSymbol> types)
+    {
+        var namespaces = new List<string>();
+        foreach (var type in types)
+        {
+            if (type.ContainingNamespace.IsGlobalNamespace)
+                continue;
+            namespaces.Add(type.ContainingNamespace.ToDisplayString());
+        }
+        return NamespaceUtilities.FindCommonPrefix(namespaces);
     }
 
     /// <summary>
@@ -172,7 +220,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             }
 
             var assemblyTypes = new List<INamedTypeSymbol>();
-            CollectPublicTopLevelTypes(asm.GlobalNamespace, assemblyTypes);
+            CollectTopLevelTypes(
+                asm.GlobalNamespace,
+                type =>
+                {
+                    if (type.DeclaredAccessibility == Accessibility.Public)
+                        assemblyTypes.Add(type);
+                }
+            );
 
             // Filter the same way the legacy CollectTypesFromNamespace does — anything
             // that wouldn't be discovered for emission must not influence the assembly
@@ -186,7 +241,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 )
                 .ToList();
 
-            var rootNamespace = ComputeAssemblyRootNamespace(emittedAssemblyTypes);
+            var rootNamespace = ComputeRootNamespaceFromTypes(emittedAssemblyTypes);
 
             foreach (var type in emittedAssemblyTypes)
             {
@@ -202,19 +257,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         }
 
         return (origins, needingPackage);
-    }
-
-    private static string ComputeAssemblyRootNamespace(IReadOnlyList<INamedTypeSymbol> types)
-    {
-        var namespaces = new List<string>(types.Count);
-        foreach (var type in types)
-        {
-            if (type.ContainingNamespace.IsGlobalNamespace)
-                continue;
-            namespaces.Add(type.ContainingNamespace.ToDisplayString());
-        }
-
-        return NamespaceUtilities.FindCommonPrefix(namespaces);
     }
 
     /// <summary>
@@ -239,7 +281,14 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     {
         var map = new Dictionary<string, IrExternalImport>(StringComparer.Ordinal);
         var types = new List<INamedTypeSymbol>();
-        CollectPublicTopLevelTypes(compilation.Assembly.GlobalNamespace, types);
+        CollectTopLevelTypes(
+            compilation.Assembly.GlobalNamespace,
+            type =>
+            {
+                if (type.DeclaredAccessibility == Accessibility.Public)
+                    types.Add(type);
+            }
+        );
 
         foreach (var type in types)
         {
@@ -279,19 +328,26 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         return map;
     }
 
-    private static void CollectPublicTopLevelTypes(INamespaceSymbol ns, List<INamedTypeSymbol> sink)
+    /// <summary>
+    /// Recursively walks every top-level type (i.e. non-nested) declared
+    /// under <paramref name="ns"/>, regardless of accessibility, and
+    /// passes each to <paramref name="visit"/>. Callers that only want
+    /// public types (BCL-wide transpile, cross-assembly emission) filter
+    /// via the visitor; callers that need to see internal
+    /// <c>[Transpile]</c> types (local root-namespace computation) leave
+    /// the visitor unfiltered.
+    /// </summary>
+    private static void CollectTopLevelTypes(INamespaceSymbol ns, Action<INamedTypeSymbol> visit)
     {
         foreach (var member in ns.GetMembers())
         {
             switch (member)
             {
                 case INamespaceSymbol childNs:
-                    CollectPublicTopLevelTypes(childNs, sink);
+                    CollectTopLevelTypes(childNs, visit);
                     break;
-                case INamedTypeSymbol type
-                    when type.ContainingType is null
-                        && type.DeclaredAccessibility == Accessibility.Public:
-                    sink.Add(type);
+                case INamedTypeSymbol type when type.ContainingType is null:
+                    visit(type);
                     break;
             }
         }
