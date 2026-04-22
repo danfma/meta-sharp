@@ -116,8 +116,6 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var typeNamesBySymbol =
             ir.TypeNamesBySymbol ?? new Dictionary<string, string>(StringComparer.Ordinal);
-        string ResolveTsName(INamedTypeSymbol t) =>
-            typeNamesBySymbol.TryGetValue(t.GetCrossAssemblyOriginKey(), out var n) ? n : t.Name;
 
         var transpilableTypes = DiscoverTranspilableTypes();
         // Map by both C# name and TS name (when [Name] override differs)
@@ -125,7 +123,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         foreach (var t in transpilableTypes)
         {
             _transpilableTypeMap[t.Name] = t;
-            var tsName = ResolveTsName(t);
+            var tsName = TypeScriptTransformContext.ResolveTsName(typeNamesBySymbol, t);
             if (tsName != t.Name)
                 _transpilableTypeMap[tsName] = t;
         }
