@@ -277,7 +277,7 @@ public class TypeGuardTranspileTests
             """
         );
 
-        var quoteKey = result.Keys.Single(k => k.EndsWith("quote.ts"));
+        var quoteKey = result.Keys.Single(k => k.EndsWith("quote.ts", StringComparison.Ordinal));
         var quote = result[quoteKey];
         await Assert.That(quote).Contains("isTicker");
         await Assert.That(quote).Contains("Ticker");
