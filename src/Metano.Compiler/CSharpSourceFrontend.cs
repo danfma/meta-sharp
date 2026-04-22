@@ -193,7 +193,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             }
         );
 
-        if (assemblyWideTranspile && TryGetTopLevelProgramType(compilation, out var programType))
+        if (assemblyWideTranspile && TryGetTopLevelEntryPoint(compilation, out _, out var programType))
             transpilable.Add(programType);
 
         return ComputeRootNamespaceFromTypes(transpilable);
@@ -201,17 +201,20 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
     /// <summary>
     /// Detects C# 9+ top-level statements and returns the compiler-synthesized
-    /// containing type (usually <c>Program</c>) that <c>TypeTransformer</c>
-    /// treats as transpilable under assembly-wide mode. Returns <c>false</c>
-    /// when there are no global statements, when Roslyn reports no entry
-    /// point, or when the program type opts out via
-    /// <c>[ExportedAsModule]</c>.
+    /// entry-point method plus its containing type (usually <c>Program</c>)
+    /// that <c>TypeTransformer</c> treats as transpilable under assembly-wide
+    /// mode. Returns <c>false</c> when there are no global statements, when
+    /// Roslyn reports no entry point, or when the program type opts out via
+    /// <c>[ExportedAsModule]</c>. Callers that only need the containing type
+    /// can discard <paramref name="entryPointMethod"/> with <c>out _</c>.
     /// </summary>
-    private static bool TryGetTopLevelProgramType(
+    private static bool TryGetTopLevelEntryPoint(
         Compilation compilation,
+        out IMethodSymbol? entryPointMethod,
         out INamedTypeSymbol programType
     )
     {
+        entryPointMethod = null;
         if (compilation is not CSharpCompilation csharpComp)
         {
             programType = null!;
@@ -240,6 +243,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             return false;
         }
 
+        entryPointMethod = entryPoint;
         programType = containingType;
         return true;
     }
@@ -435,7 +439,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             }
         );
 
-        if (assemblyWideTranspile && TryGetTopLevelProgramType(compilation, out var programType))
+        if (assemblyWideTranspile && TryGetTopLevelEntryPoint(compilation, out _, out var programType))
             Register(programType);
 
         return map;
@@ -503,8 +507,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// <c>[assembly: TranspileAssembly]</c> is absent, the compilation has
     /// no <c>GlobalStatementSyntax</c>, Roslyn reports no entry point, or
     /// the containing type opts out via <c>[ExportedAsModule]</c>. Reuses
-    /// <see cref="TryGetTopLevelProgramType"/> so the detection logic
-    /// stays in one place.
+    /// <see cref="TryGetTopLevelEntryPoint"/> so the detection logic stays
+    /// in one place — a single <c>GetEntryPoint</c> call services every
+    /// caller.
     /// </summary>
     private static IrEntryPointInfo? BuildEntryPointInfo(
         Compilation compilation,
@@ -513,16 +518,16 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     {
         if (!assemblyWideTranspile)
             return null;
-        if (compilation is not CSharpCompilation csharpComp)
-            return null;
-        if (!TryGetTopLevelProgramType(compilation, out var programType))
+        if (
+            !TryGetTopLevelEntryPoint(
+                compilation,
+                out var entryPointMethod,
+                out var programType
+            )
+        )
             return null;
 
-        var entryPoint = csharpComp.GetEntryPoint(CancellationToken.None);
-        if (entryPoint is null)
-            return null;
-
-        return new IrEntryPointInfo(Method: entryPoint, ContainingType: programType);
+        return new IrEntryPointInfo(Method: entryPointMethod!, ContainingType: programType);
     }
 
     /// <summary>
