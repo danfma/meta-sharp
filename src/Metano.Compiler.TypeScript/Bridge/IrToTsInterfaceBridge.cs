@@ -52,7 +52,7 @@ public static class IrToTsInterfaceBridge
         var name = IrToTsNamingPolicy.ToInterfaceMemberName(prop.Name, prop.Attributes);
         var type = IrToTsTypeMapper.Map(prop.Type);
         var isReadonly = prop.Accessors == IrPropertyAccessors.GetOnly;
-        return new TsProperty(name, type, isReadonly);
+        return new TsProperty(name, type, isReadonly, Optional: prop.IsOptional);
     }
 
     private static TsInterfaceMethod ConvertMethod(IrMethodDeclaration method)

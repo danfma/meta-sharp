@@ -14,11 +14,20 @@ namespace Metano.Compiler.IR;
 /// expression uses features outside the covered IR subset) may fall back to
 /// rendering the parameter as required.</param>
 /// <param name="IsParams">Whether this is a <c>params</c> (variadic) parameter.</param>
+/// <param name="IsOptional">Whether the parameter carries
+/// <c>[Optional]</c> (from <c>Metano.Annotations.TypeScript</c>). When
+/// <c>true</c>, the TS backend lowers the parameter to the
+/// optional-presence form (<c>name?: T</c>) so a consumer can omit the
+/// key entirely; other targets treat it as a no-op. The attribute
+/// requires the parameter to already be nullable — the extractor
+/// emits <c>MS0010</c> for <c>[Optional]</c> on a non-nullable
+/// type.</param>
 public sealed record IrParameter(
     string Name,
     IrTypeRef Type,
     bool HasDefaultValue = false,
     IrExpression? DefaultValue = null,
     bool IsParams = false,
-    bool HasExplicitType = true
+    bool HasExplicitType = true,
+    bool IsOptional = false
 );

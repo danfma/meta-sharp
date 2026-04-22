@@ -46,7 +46,7 @@ public static class IrToTsPlainObjectBridge
                         propName,
                         propType,
                         Readonly: true,
-                        Optional: param.HasDefaultValue
+                        Optional: param.HasDefaultValue || param.IsOptional
                     )
                 );
             }

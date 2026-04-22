@@ -39,7 +39,8 @@ public sealed record IrPropertyDeclaration(
     IrExpression? Initializer = null,
     IReadOnlyList<IrStatement>? GetterBody = null,
     IReadOnlyList<IrStatement>? SetterBody = null,
-    IrPropertySemantics? Semantics = null
+    IrPropertySemantics? Semantics = null,
+    bool IsOptional = false
 ) : IrMemberDeclaration(Name, Visibility, IsStatic);
 
 /// <summary>
