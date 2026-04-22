@@ -83,6 +83,23 @@ public sealed class TypeScriptTransformContext(
     }
 
     /// <summary>
+    /// Resolves the target-facing TypeScript name for a Roslyn type
+    /// symbol without needing a constructed
+    /// <see cref="TypeScriptTransformContext"/>. Used during the early
+    /// setup phase of <c>TypeTransformer.TransformAll</c> where the
+    /// context does not yet exist; in every other call site prefer the
+    /// instance method so future changes stay in one place.
+    /// </summary>
+    public static string ResolveTsName(
+        IReadOnlyDictionary<string, string>? typeNamesBySymbol,
+        INamedTypeSymbol type
+    ) =>
+        typeNamesBySymbol is not null
+        && typeNamesBySymbol.TryGetValue(type.GetCrossAssemblyOriginKey(), out var name)
+            ? name
+            : type.Name;
+
+    /// <summary>
     /// Resolves the target-facing TypeScript name for a Roslyn type symbol.
     /// Reads the frontend-populated <see cref="TypeNamesBySymbol"/> dictionary
     /// so <c>[Name(TypeScript, …)]</c> overrides are honored; falls back to
@@ -90,10 +107,7 @@ public sealed class TypeScriptTransformContext(
     /// not precompute (mirrors the legacy <c>TypeTransformer.GetTsTypeName</c>
     /// contract that this helper replaces).
     /// </summary>
-    public string ResolveTsName(INamedTypeSymbol type) =>
-        TypeNamesBySymbol.TryGetValue(type.GetCrossAssemblyOriginKey(), out var name)
-            ? name
-            : type.Name;
+    public string ResolveTsName(INamedTypeSymbol type) => ResolveTsName(TypeNamesBySymbol, type);
 
     /// <summary>
     /// Reports MS0001 (UnsupportedFeature) for an IR-pipeline body the bridge
