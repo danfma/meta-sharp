@@ -206,6 +206,14 @@ public static class SymbolHelper
     public static bool HasPlainObject(this ISymbol symbol) => HasAttribute(symbol, "PlainObject");
 
     /// <summary>
+    /// Reads <c>[Optional]</c> from the
+    /// <c>Metano.Annotations.TypeScript</c> namespace. TS-specific
+    /// attribute — callers outside the TS target should treat
+    /// <c>true</c> as a no-op (the field stays nullable either way).
+    /// </summary>
+    public static bool HasOptional(this ISymbol symbol) => HasAttribute(symbol, "Optional");
+
+    /// <summary>
     /// Reads the file name from <c>[EmitInFile("name")]</c> on a type symbol, or null
     /// when the attribute isn't present (in which case the type takes its own name as
     /// the file).

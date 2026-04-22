@@ -135,6 +135,9 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ? null
             : BuildTranspilableTypeEntries(compilation, assemblyWideTranspile, entryPoint);
 
+        if (compilation is not null)
+            ValidateOptionalAttribute(compilation, assemblyWideTranspile, diagnostics);
+
         return new IrCompilation(
             AssemblyName: compilation?.AssemblyName ?? fallbackAssemblyName,
             PackageName: compilation is null
@@ -506,6 +509,77 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         return entries;
     }
+
+    /// <summary>
+    /// Walks every transpilable type in the current assembly and emits
+    /// <c>MS0010</c> for any parameter or property that carries
+    /// <c>[Optional]</c> (from <c>Metano.Annotations.TypeScript</c>) on a
+    /// non-nullable type. The attribute is TS-specific but the check
+    /// runs on every target because a misuse is a bug regardless of the
+    /// active backend — ignoring it under Dart would let a broken
+    /// attribute ship to the TS consumer later.
+    /// </summary>
+    private static void ValidateOptionalAttribute(
+        Compilation compilation,
+        bool assemblyWideTranspile,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type => VisitTypeForOptional(type, assemblyWideTranspile, currentAssembly, diagnostics)
+        );
+    }
+
+    private static void VisitTypeForOptional(
+        INamedTypeSymbol type,
+        bool assemblyWideTranspile,
+        IAssemblySymbol currentAssembly,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+            return;
+
+        foreach (var member in type.GetMembers())
+        {
+            switch (member)
+            {
+                case IPropertySymbol prop when prop.HasOptional():
+                    if (!IsNullableType(prop.Type))
+                        diagnostics.Add(OptionalOnNonNullableDiagnostic(prop, "property"));
+                    break;
+                case IMethodSymbol method:
+                    foreach (var p in method.Parameters)
+                    {
+                        if (!p.HasOptional())
+                            continue;
+                        if (!IsNullableType(p.Type))
+                            diagnostics.Add(OptionalOnNonNullableDiagnostic(p, "parameter"));
+                    }
+                    break;
+            }
+        }
+
+        foreach (var nested in type.GetTypeMembers())
+            VisitTypeForOptional(nested, assemblyWideTranspile, currentAssembly, diagnostics);
+    }
+
+    private static bool IsNullableType(ITypeSymbol type) =>
+        type.NullableAnnotation == NullableAnnotation.Annotated
+        || type.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;
+
+    private static MetanoDiagnostic OptionalOnNonNullableDiagnostic(ISymbol symbol, string kind) =>
+        new(
+            MetanoDiagnosticSeverity.Error,
+            DiagnosticCodes.OptionalRequiresNullable,
+            $"[Optional] on {kind} '{symbol.ContainingSymbol.Name}.{symbol.Name}' requires a "
+                + $"nullable C# type. The attribute relies on the TS consumer emitting "
+                + $"'undefined' collapsing to C# 'null'; a non-nullable target cannot "
+                + $"represent the absent case. Make the type nullable (e.g., 'string?').",
+            symbol.Locations.FirstOrDefault()
+        );
 
     /// <summary>
     /// Detects the C# 9+ top-level-statement entry point and returns the

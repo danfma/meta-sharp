@@ -140,7 +140,15 @@ public static class TranspileHelper
         var result = new Dictionary<string, string>();
         foreach (var file in files)
             result[file.FileName] = printer.Print(file);
-        return (result, transformer.Diagnostics);
+        // Mirror the production host merge — frontend-raised diagnostics
+        // (extraction-time validations like MS0010) need to surface to
+        // test callers alongside the transformer's own output.
+        var diagnostics =
+            ir.Diagnostics.Count == 0
+                ? (IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic>)
+                    transformer.Diagnostics
+                : ir.Diagnostics.Concat(transformer.Diagnostics).ToList();
+        return (result, diagnostics);
     }
 
     /// <summary>

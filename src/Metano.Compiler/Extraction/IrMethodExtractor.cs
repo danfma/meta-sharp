@@ -30,7 +30,8 @@ public static class IrMethodExtractor
                 p.Name,
                 IrTypeRefMapper.Map(p.Type, originResolver),
                 HasDefaultValue: p.HasExplicitDefaultValue,
-                DefaultValue: ExtractDefaultValue(p, compilation, originResolver)
+                DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                IsOptional: p.HasOptional()
             ))
             .ToList();
 

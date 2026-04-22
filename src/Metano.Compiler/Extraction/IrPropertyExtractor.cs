@@ -100,7 +100,8 @@ public static class IrPropertyExtractor
             Initializer: initializer,
             GetterBody: getterBody,
             SetterBody: setterBody,
-            Semantics: semantics
+            Semantics: semantics,
+            IsOptional: prop.HasOptional()
         )
         {
             Attributes = IrAttributeExtractor.Extract(prop),

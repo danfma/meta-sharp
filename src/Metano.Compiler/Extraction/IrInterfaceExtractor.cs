@@ -81,7 +81,8 @@ public static class IrInterfaceExtractor
             IrVisibility.Public,
             prop.IsStatic,
             IrTypeRefMapper.Map(prop.Type, originResolver),
-            accessors
+            accessors,
+            IsOptional: prop.HasOptional()
         )
         {
             Attributes = IrAttributeExtractor.Extract(prop),
@@ -96,7 +97,8 @@ public static class IrInterfaceExtractor
         var parameters = method
             .Parameters.Select(p => new IrParameter(
                 p.Name,
-                IrTypeRefMapper.Map(p.Type, originResolver)
+                IrTypeRefMapper.Map(p.Type, originResolver),
+                IsOptional: p.HasOptional()
             ))
             .ToList();
 

@@ -86,4 +86,13 @@ public static class DiagnosticCodes
     /// file missing, MSBuild workspace failure, null compilation, or language-level
     /// errors reported by Roslyn).</summary>
     public const string FrontendLoadFailure = "MS0009";
+
+    /// <summary>MS0010 — <c>[Optional]</c> (from
+    /// <c>Metano.Annotations.TypeScript</c>) was applied to a
+    /// non-nullable parameter or property. The attribute relies on JS
+    /// <c>undefined</c> collapsing to C# <c>null</c>; a non-nullable
+    /// target cannot represent the absent case without undefined
+    /// behavior. The fix is to make the C# type nullable
+    /// (<c>[Optional] string? Name</c>).</summary>
+    public const string OptionalRequiresNullable = "MS0010";
 }
