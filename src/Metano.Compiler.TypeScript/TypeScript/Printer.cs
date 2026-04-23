@@ -237,10 +237,14 @@ public sealed class Printer(string indent = "  ")
                 _sb.WriteLn();
                 break;
             case TsExportImportAlias n:
-                // `export import Alias = Target;` — namespace aliasing
-                // under --namespace-barrels. Valid only inside a
-                // `namespace { … }` block; the root barrel generator
-                // never emits this at file scope.
+                // `export import Alias = Target;` — namespace-style
+                // aliasing emitted by --namespace-barrels. Printed
+                // wherever a TsExportImportAlias appears in the AST,
+                // including file scope as well as inside a
+                // `namespace { … }` block. Single-segment leaves
+                // (`shared-kernel` → `$SharedKernel`) land at file
+                // scope; multi-segment paths nest inside `export
+                // namespace` blocks.
                 _sb.Write($"export import {n.Alias} = {n.Target};");
                 break;
         }
