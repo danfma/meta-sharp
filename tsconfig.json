@@ -3,8 +3,9 @@
   "references": [
     { "path": "./targets/js/metano-runtime/tsconfig.json" },
     { "path": "./targets/js/sample-todo/tsconfig.json" },
+    { "path": "./targets/js/sample-todo-with-dom-view/tsconfig.json" },
     { "path": "./targets/js/sample-todo-service/tsconfig.json" },
     { "path": "./targets/js/sample-issue-tracker/tsconfig.json" },
-    { "path": "./targets/js/sample-counter/tsconfig.json" }
-  ]
+    { "path": "./targets/js/sample-counter/tsconfig.json" },
+  ],
 }
