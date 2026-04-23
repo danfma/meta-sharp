@@ -14,5 +14,14 @@
   },
   "dependencies": {
     "upgrade": "^1.1.0"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "imports": {
+    "#/*": {
+      "types": "./dist/js/sample-counter-with-view/src/sample-counter-with-view/*.d.ts",
+      "import": "./dist/js/sample-counter-with-view/src/sample-counter-with-view/*.js",
+      "default": "./targets/js/sample-counter-with-view/src/sample-counter-with-view/*.ts"
+    }
   }
 }

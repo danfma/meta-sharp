@@ -9,11 +9,15 @@
   <Folder Name="/tests/">
     <Project Path="tests/Metano.Tests/Metano.Tests.csproj" />
   </Folder>
+  <Folder Name="/bindings/">
+    <Project Path="bindings/Metano.TypeScript.DOM/Metano.TypeScript.DOM.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/SampleCounter/SampleCounter.csproj" />
     <Project Path="samples/SampleIssueTracker/SampleIssueTracker.csproj" />
     <Project Path="samples/SampleOperatorOverloading/SampleOperatorOverloading.csproj" />
     <Project Path="samples/SampleTodo.Service/SampleTodo.Service.csproj" />
     <Project Path="samples/SampleTodo/SampleTodo.csproj" />
+    <Project Path="samples\SampleCounterWithDomView\SampleCounterWithDomView.csproj" />
   </Folder>
 </Solution>
