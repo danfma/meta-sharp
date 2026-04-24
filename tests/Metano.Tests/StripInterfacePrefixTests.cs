@@ -122,6 +122,41 @@ public class StripInterfacePrefixTests
     }
 
     [Test]
+    public async Task StripInterfacePrefix_ConsumerImportsUseStrippedName()
+    {
+        // Integration: a separate transpilable class references the
+        // interface. The consumer must import the stripped name from
+        // the stripped file path; without mirroring the rewrite into
+        // TranspilableTypes, the import collector would emit the
+        // original `IIssueRepository` / `i-issue-repository` pair and
+        // the generated TS would break.
+        var (files, _) = TranspileHelper.TranspileWithStripInterfacePrefix(
+            """
+            [assembly: TranspileAssembly]
+
+            public interface IIssueRepository
+            {
+                string Name { get; }
+            }
+
+            public class Service
+            {
+                private readonly IIssueRepository _repo;
+                public Service(IIssueRepository repo) { _repo = repo; }
+                public string Name => _repo.Name;
+            }
+            """
+        );
+
+        await Assert.That(files).ContainsKey("service.ts");
+        var output = files["service.ts"];
+        await Assert.That(output).Contains("IssueRepository");
+        await Assert.That(output).Contains("./issue-repository");
+        await Assert.That(output).DoesNotContain("IIssueRepository");
+        await Assert.That(output).DoesNotContain("i-issue-repository");
+    }
+
+    [Test]
     public async Task StripInterfacePrefix_DoesNotTouchClasses()
     {
         // `IpAddress` is a class, not an interface — its name must
