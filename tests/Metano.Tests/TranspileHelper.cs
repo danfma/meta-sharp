@@ -131,7 +131,8 @@ public static class TranspileHelper
     ) TranspileCore(
         CSharpCompilation compilation,
         bool useIrBodies = true,
-        bool namespaceBarrels = false
+        bool namespaceBarrels = false,
+        bool stripInterfacePrefix = false
     )
     {
         var ir = new CSharpSourceFrontend().ExtractFromCompilation(compilation);
@@ -139,6 +140,7 @@ public static class TranspileHelper
         {
             UseIrBodiesWhenCovered = useIrBodies,
             NamespaceBarrels = namespaceBarrels,
+            StripInterfacePrefix = stripInterfacePrefix,
         };
         var files = transformer.TransformAll();
         var printer = new Printer();
@@ -190,6 +192,25 @@ public static class TranspileHelper
             OutputKind.DynamicallyLinkedLibrary
         );
         return TranspileCore(compilation, namespaceBarrels: true).Files;
+    }
+
+    /// <summary>
+    /// Variant of <see cref="Transpile"/> that enables the opt-in
+    /// <c>--strip-interface-prefix</c> flag. Returns both the emitted
+    /// files and the merged diagnostics so collision tests can
+    /// assert <c>MS0017</c> when the strip cannot apply.
+    /// </summary>
+    public static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileWithStripInterfacePrefix(string csharpSource)
+    {
+        var compilation = CompileAssembly(
+            csharpSource,
+            "TestAssembly",
+            OutputKind.DynamicallyLinkedLibrary
+        );
+        return TranspileCore(compilation, stripInterfacePrefix: true);
     }
 
     /// <summary>

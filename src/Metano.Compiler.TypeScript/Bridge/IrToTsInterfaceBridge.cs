@@ -9,7 +9,11 @@ namespace Metano.TypeScript.Bridge;
 /// </summary>
 public static class IrToTsInterfaceBridge
 {
-    public static void Convert(IrInterfaceDeclaration ir, List<TsTopLevel> statements)
+    public static void Convert(
+        IrInterfaceDeclaration ir,
+        List<TsTopLevel> statements,
+        string? nameOverride = null
+    )
     {
         var properties = new List<TsProperty>();
         var methods = new List<TsInterfaceMethod>();
@@ -34,7 +38,12 @@ public static class IrToTsInterfaceBridge
             }
         }
 
-        var tsName = IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
+        // A transformer-provided override (e.g.,
+        // `--strip-interface-prefix`) takes precedence over the naming
+        // policy so the emitted declaration matches the name the
+        // transformer already registered in `TypeNamesBySymbol` (and
+        // consequently the file name + import collector).
+        var tsName = nameOverride ?? IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
         var typeParams = ConvertTypeParameters(ir.TypeParameters);
 
         statements.Add(

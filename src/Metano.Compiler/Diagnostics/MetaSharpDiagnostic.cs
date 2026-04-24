@@ -128,6 +128,16 @@ public static class DiagnosticCodes
     /// literal form without a separate analyzer pass.</summary>
     public const string InvalidConstant = "MS0014";
 
+    /// <summary>MS0017 — Stripping the <c>I</c> prefix from an
+    /// interface name would collide with another top-level type in
+    /// the same namespace. Emitted only when
+    /// <c>--strip-interface-prefix</c> / <c>MetanoStripInterfacePrefix</c>
+    /// is enabled. The generator falls back to keeping the original
+    /// prefixed name so the consumer surface stays compilable;
+    /// authors wanting the strip must rename the conflicting type or
+    /// override one side with <c>[Name(TypeScript, "…")]</c>.</summary>
+    public const string InterfacePrefixCollision = "MS0017";
+
     /// <summary>MS0016 — <c>[Inline]</c> (from
     /// <c>Metano.Annotations</c>) was applied to an unsupported
     /// shape or its expansion would cycle. Valid targets are

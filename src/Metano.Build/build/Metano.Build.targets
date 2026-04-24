@@ -48,6 +48,9 @@
       <_MetanoArgs Condition="'$(MetanoNamespaceBarrels)' == 'true'"
         >$(_MetanoArgs) --namespace-barrels</_MetanoArgs
       >
+      <_MetanoArgs Condition="'$(MetanoStripInterfacePrefix)' == 'true'"
+        >$(_MetanoArgs) --strip-interface-prefix</_MetanoArgs
+      >
       <_MetanoArgs Condition="'$(MetanoExtraArgs)' != ''"
         >$(_MetanoArgs) $(MetanoExtraArgs)</_MetanoArgs
       >

@@ -63,6 +63,19 @@ public sealed class TypeScriptTarget : ITranspilerTarget
     /// </summary>
     public bool NamespaceBarrels { get; init; }
 
+    /// <summary>
+    /// When <c>true</c>, the transformer rewrites every interface
+    /// whose C# name matches <c>^I[A-Z]</c> to drop the leading
+    /// <c>I</c> (so <c>IIssueRepository</c> emits as
+    /// <c>IssueRepository</c>). Interfaces whose stripped name would
+    /// collide with another top-level type in the same namespace
+    /// keep the prefix and raise <c>MS0017</c>. Explicit
+    /// <c>[Name(TypeScript, "…")]</c> overrides win over the strip.
+    /// Opt-in via <c>--strip-interface-prefix</c>; the default stays
+    /// off so existing consumer imports keep working on upgrade.
+    /// </summary>
+    public bool StripInterfacePrefix { get; init; }
+
     public TargetOutput Transform(IrCompilation ir, Compilation? compilation)
     {
         if (compilation is null)
@@ -75,6 +88,7 @@ public sealed class TypeScriptTarget : ITranspilerTarget
         var transformer = new TypeTransformer(ir, compilation)
         {
             NamespaceBarrels = NamespaceBarrels,
+            StripInterfacePrefix = StripInterfacePrefix,
         };
         var sourceFiles = transformer.TransformAll();
         LastSourceFiles = sourceFiles;
