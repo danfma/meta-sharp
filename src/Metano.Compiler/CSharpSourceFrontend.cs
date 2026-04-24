@@ -871,12 +871,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     ///   accessor). Block-bodied getters fall outside the covered
     ///   substitution surface and are deferred to a follow-up
     ///   slice.</item>
+    ///   <item>Recursion between <c>[Inline]</c> members
+    ///   (<c>A =&gt; B</c>, <c>B =&gt; A</c>, or <c>A =&gt; A</c>)
+    ///   is detected via a DFS over each member's initializer and
+    ///   surfaces before extraction runs, so downstream lowering
+    ///   never sees a chain that would recurse indefinitely.</item>
     /// </list>
-    /// Violations raise <c>MS0016 InvalidInline</c>. Recursion
-    /// between <c>[Inline]</c> members is handled at extraction time
-    /// (the extractor's cycle set bails out before the second
-    /// re-entry); the recursion-specific diagnostic ships alongside
-    /// the follow-up slice that adds method inlining.
+    /// All violations raise <c>MS0016 InvalidInline</c>.
     /// </summary>
     private static void ValidateInlineAttribute(
         Compilation compilation,
@@ -888,6 +889,115 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             currentAssembly.GlobalNamespace,
             type => VisitTypeForInline(type, diagnostics)
         );
+        DetectInlineCycles(compilation, diagnostics);
+    }
+
+    /// <summary>
+    /// Collects every <c>[Inline]</c> member in the compilation and
+    /// walks the transitive dependency graph induced by their
+    /// initializers. Any member whose chain revisits itself emits
+    /// <c>MS0016</c> at the cycle's source.
+    /// </summary>
+    private static void DetectInlineCycles(
+        Compilation compilation,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var inlineMembers = new List<ISymbol>();
+        CollectTopLevelTypes(
+            compilation.Assembly.GlobalNamespace,
+            type => CollectInlineMembers(type, inlineMembers)
+        );
+
+        foreach (var member in inlineMembers)
+        {
+            var visiting = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+            if (DetectCycle(member, compilation, visiting))
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidInline,
+                        $"[Inline] on {FormatMemberPath(member)} forms a cycle through "
+                            + $"another [Inline] member. Substitution would recurse "
+                            + $"indefinitely; break the chain or drop [Inline] on one "
+                            + $"of the participants.",
+                        member.Locations.FirstOrDefault()
+                    )
+                );
+            }
+        }
+    }
+
+    private static void CollectInlineMembers(INamedTypeSymbol type, List<ISymbol> sink)
+    {
+        foreach (var member in type.GetMembers())
+        {
+            if (!SymbolHelper.HasInline(member))
+                continue;
+            if (member is IFieldSymbol or IPropertySymbol)
+                sink.Add(member);
+        }
+        foreach (var nested in type.GetTypeMembers())
+            CollectInlineMembers(nested, sink);
+    }
+
+    private static bool DetectCycle(
+        ISymbol start,
+        Compilation compilation,
+        HashSet<ISymbol> visiting
+    )
+    {
+        if (!visiting.Add(start))
+            return true;
+        try
+        {
+            var initializer = TryFindInlineInitializerExpression(start);
+            if (initializer is null)
+                return false;
+            var semanticModel = compilation.GetSemanticModel(initializer.SyntaxTree);
+            foreach (var identifier in initializer.DescendantNodesAndSelf().OfType<NameSyntax>())
+            {
+                var referenced = semanticModel.GetSymbolInfo(identifier).Symbol;
+                if (referenced is null || !SymbolHelper.HasInline(referenced))
+                    continue;
+                if (DetectCycle(referenced, compilation, visiting))
+                    return true;
+            }
+            return false;
+        }
+        finally
+        {
+            visiting.Remove(start);
+        }
+    }
+
+    private static ExpressionSyntax? TryFindInlineInitializerExpression(ISymbol symbol)
+    {
+        foreach (var reference in symbol.DeclaringSyntaxReferences)
+        {
+            switch (reference.GetSyntax())
+            {
+                case VariableDeclaratorSyntax declarator
+                    when declarator.Initializer?.Value is { } fieldInit:
+                    return fieldInit;
+                case PropertyDeclarationSyntax prop
+                    when prop.ExpressionBody?.Expression is { } arrow:
+                    return arrow;
+                case PropertyDeclarationSyntax prop
+                    when prop.AccessorList?.Accessors is { } accessors:
+                    foreach (var accessor in accessors)
+                    {
+                        if (
+                            accessor.IsKind(SyntaxKind.GetAccessorDeclaration)
+                            && accessor.ExpressionBody?.Expression is { } body
+                        )
+                            return body;
+                    }
+                    break;
+            }
+        }
+        return null;
     }
 
     private static void VisitTypeForInline(

@@ -15,24 +15,43 @@ namespace Metano.Compiler.Extraction;
 /// phases add explicit support — this keeps the API total while letting callers
 /// detect and fall back to legacy handling.
 /// </summary>
-public sealed class IrExpressionExtractor(
-    SemanticModel semanticModel,
-    IrTypeOriginResolver? originResolver = null,
-    Metano.Annotations.TargetLanguage? target = null
-)
+public sealed class IrExpressionExtractor
 {
-    private readonly SemanticModel _semantic = semanticModel;
-    private readonly IrTypeOriginResolver? _originResolver = originResolver;
-    private readonly Metano.Annotations.TargetLanguage? _target = target;
+    private readonly SemanticModel _semantic;
+    private readonly IrTypeOriginResolver? _originResolver;
+    private readonly Metano.Annotations.TargetLanguage? _target;
 
     /// <summary>
     /// Tracks the set of <c>[Inline]</c> members currently being
     /// expanded so cyclic references (<c>[Inline] A =&gt; B</c>,
     /// <c>[Inline] B =&gt; A</c>) bail out rather than recurse
-    /// indefinitely. Populated on entry into
-    /// <see cref="TryExpandInlineAccess"/> and cleared on exit.
+    /// indefinitely. Shared across nested extractors spawned during
+    /// an <c>[Inline]</c> expansion so the cycle set survives the
+    /// jump to the initializer's semantic model — an earlier
+    /// iteration created a fresh set per nested extractor, which
+    /// defeated the guard.
     /// </summary>
-    private readonly HashSet<ISymbol> _inlineExpanding = new(SymbolEqualityComparer.Default);
+    private readonly HashSet<ISymbol> _inlineExpanding;
+
+    public IrExpressionExtractor(
+        SemanticModel semanticModel,
+        IrTypeOriginResolver? originResolver = null,
+        Metano.Annotations.TargetLanguage? target = null
+    )
+        : this(semanticModel, originResolver, target, inlineExpanding: null) { }
+
+    private IrExpressionExtractor(
+        SemanticModel semanticModel,
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target,
+        HashSet<ISymbol>? inlineExpanding
+    )
+    {
+        _semantic = semanticModel;
+        _originResolver = originResolver;
+        _target = target;
+        _inlineExpanding = inlineExpanding ?? new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+    }
 
     public IrExpression Extract(ExpressionSyntax expression) =>
         expression switch
@@ -856,12 +875,14 @@ public sealed class IrExpressionExtractor(
             // Reuse the declaring syntax tree's SemanticModel so
             // constant folding + symbol resolution inside the
             // initializer reflect the declaration site, not the call
-            // site. The extractor is stateless beyond the cycle set,
-            // so a transient instance is safe to spin up.
+            // site. The cycle-tracking set is shared with the nested
+            // extractor so a transitive reference back to the
+            // original member bails out instead of recursing.
             var extractor = new IrExpressionExtractor(
                 _semantic.Compilation.GetSemanticModel(initializer.SyntaxTree),
                 _originResolver,
-                _target
+                _target,
+                _inlineExpanding
             );
             return extractor.Extract(initializer);
         }

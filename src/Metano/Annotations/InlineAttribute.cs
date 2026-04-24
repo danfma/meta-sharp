@@ -28,9 +28,11 @@ namespace Metano.Annotations;
 /// Invalid shapes (instance fields, mutable fields, methods, or
 /// properties with block-bodied accessors) raise
 /// <c>MS0016 InvalidInline</c>. Recursion through <c>[Inline]</c>
-/// members is detected by the extractor and raises the same code
-/// with a cycle message so a self-referential catalog does not
-/// trigger unbounded expansion.
+/// members (<c>A =&gt; B</c>, <c>B =&gt; A</c>, or <c>A =&gt; A</c>)
+/// is detected by the frontend validator via a DFS over each
+/// member's initializer graph and surfaces the same code with a
+/// cycle message, so a self-referential catalog fails at the
+/// validation phase rather than recursing during extraction.
 /// </para>
 /// <para>
 /// <c>[Inline]</c> lives in <see cref="Metano.Annotations"/> because

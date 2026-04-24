@@ -130,14 +130,15 @@ public static class DiagnosticCodes
 
     /// <summary>MS0016 — <c>[Inline]</c> (from
     /// <c>Metano.Annotations</c>) was applied to an unsupported
-    /// shape or its expansion introduced a cycle. Valid targets are
+    /// shape or its expansion would cycle. Valid targets are
     /// <c>static readonly</c> fields with an initializer and
-    /// <c>static</c> properties with an expression-bodied getter.
-    /// Instance members, mutable fields, methods, properties with
-    /// block-bodied accessors, and any member whose initializer
-    /// references another <c>[Inline]</c> member that (transitively)
-    /// references the original all surface here so downstream
-    /// substitution stays bounded.</summary>
+    /// <c>static</c> properties with an expression-bodied getter;
+    /// instance members, mutable fields, methods, and properties
+    /// with block-bodied accessors raise the code with a
+    /// shape-specific message. Cycles between <c>[Inline]</c>
+    /// members (detected by the frontend validator via DFS over
+    /// each initializer) raise the code with a cycle message so
+    /// downstream substitution stays bounded.</summary>
     public const string InvalidInline = "MS0016";
 
     /// <summary>MS0015 — <c>[Erasable]</c> (from

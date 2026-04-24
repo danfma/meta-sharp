@@ -194,6 +194,56 @@ public class InlineAttributeTranspileTests
     }
 
     [Test]
+    public async Task Inline_SelfReferentialProperty_EmitsMs0016()
+    {
+        // A property whose initializer refers to itself would cause
+        // unbounded substitution. The validator detects the cycle
+        // via DFS and surfaces MS0016 before extraction runs.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public static class Loop
+            {
+                [Inline]
+                public static string X => X;
+            }
+            """
+        );
+
+        var ms0016 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidInline);
+        await Assert.That(ms0016).IsNotNull();
+        await Assert.That(ms0016!.Message).Contains("cycle");
+    }
+
+    [Test]
+    public async Task Inline_MutualRecursion_EmitsMs0016()
+    {
+        // Two [Inline] members pointing at each other also form a
+        // cycle. The DFS flags at least one of the two.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public static class Loop
+            {
+                [Inline]
+                public static string A => B;
+
+                [Inline]
+                public static string B => A;
+            }
+            """
+        );
+
+        var ms0016 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidInline);
+        await Assert.That(ms0016).IsNotNull();
+        await Assert.That(ms0016!.Message).Contains("cycle");
+    }
+
+    [Test]
     public async Task Inline_Property_CascadesThroughAnotherInline()
     {
         var result = TranspileHelper.Transpile(
