@@ -839,19 +839,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     )
                 );
             }
-            if (SymbolHelper.HasTranspile(type))
-            {
-                diagnostics.Add(
-                    new MetanoDiagnostic(
-                        MetanoDiagnosticSeverity.Error,
-                        DiagnosticCodes.InvalidErasable,
-                        $"[Erasable] on '{type.Name}' conflicts with [Transpile]. "
-                            + $"[Erasable] asks for no file emission and call-site scope "
-                            + $"erasure; [Transpile] asks for full emission. Pick one.",
-                        type.Locations.FirstOrDefault()
-                    )
-                );
-            }
         }
 
         foreach (var nested in type.GetTypeMembers())
@@ -936,7 +923,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         {
             if (!SymbolHelper.HasInline(member))
                 continue;
-            if (member is IFieldSymbol or IPropertySymbol)
+            if (member is IFieldSymbol or IPropertySymbol or IMethodSymbol)
                 sink.Add(member);
         }
         foreach (var nested in type.GetTypeMembers())
@@ -956,15 +943,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             var initializer = TryFindInlineInitializerExpression(start);
             if (initializer is null)
                 return false;
-            // Cross-assembly guard: an `[Inline]` member pulled from
-            // a referenced assembly carries a SyntaxTree that belongs
-            // to the declaring compilation, not ours. The cycle walk
-            // cannot inspect initializers outside the current
-            // compilation — skip them. A follow-up slice covers the
-            // cross-assembly case.
-            if (!compilation.ContainsSyntaxTree(initializer.SyntaxTree))
+            var semanticModel = TryGetSemanticModel(compilation, initializer.SyntaxTree);
+            if (semanticModel is null)
                 return false;
-            var semanticModel = compilation.GetSemanticModel(initializer.SyntaxTree);
+
             foreach (var identifier in initializer.DescendantNodesAndSelf().OfType<NameSyntax>())
             {
                 var referenced = semanticModel.GetSymbolInfo(identifier).Symbol;
@@ -979,6 +961,23 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         {
             visiting.Remove(start);
         }
+    }
+
+    private static SemanticModel? TryGetSemanticModel(
+        Compilation compilation,
+        SyntaxTree syntaxTree
+    )
+    {
+        if (compilation.ContainsSyntaxTree(syntaxTree))
+            return compilation.GetSemanticModel(syntaxTree);
+
+        foreach (var reference in compilation.References.OfType<CompilationReference>())
+        {
+            if (reference.Compilation.ContainsSyntaxTree(syntaxTree))
+                return reference.Compilation.GetSemanticModel(syntaxTree);
+        }
+
+        return null;
     }
 
     private static ExpressionSyntax? TryFindInlineInitializerExpression(ISymbol symbol)
@@ -1004,6 +1003,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                             return body;
                     }
                     break;
+                case MethodDeclarationSyntax method
+                    when method.ExpressionBody?.Expression is { } methodArrow:
+                    return methodArrow;
+                case MethodDeclarationSyntax method
+                    when method.Body is { Statements: { Count: 1 } statements }
+                        && statements[0] is ReturnStatementSyntax { Expression: { } returnExpr }:
+                    return returnExpr;
             }
         }
         return null;
@@ -1081,14 +1087,32 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                         );
                     }
                     break;
+                case IMethodSymbol method:
+                    if (!HasInlinableMethodBody(method))
+                    {
+                        diagnostics.Add(
+                            new MetanoDiagnostic(
+                                MetanoDiagnosticSeverity.Error,
+                                DiagnosticCodes.InvalidInline,
+                                $"[Inline] on method {FormatMemberPath(method)} requires "
+                                    + $"an expression body ('=> expression') or a block "
+                                    + $"with a single 'return <expression>;' statement. "
+                                    + $"Multi-statement or void bodies cannot be substituted "
+                                    + $"at the call site.",
+                                method.Locations.FirstOrDefault()
+                            )
+                        );
+                    }
+                    break;
                 default:
                     diagnostics.Add(
                         new MetanoDiagnostic(
                             MetanoDiagnosticSeverity.Error,
                             DiagnosticCodes.InvalidInline,
                             $"[Inline] on {FormatMemberPath(member)} applies only to "
-                                + $"'static readonly' fields and 'static' properties with "
-                                + $"an expression-bodied getter.",
+                                + $"'static readonly' fields, 'static' properties with "
+                                + $"an expression-bodied getter, or methods whose body is a "
+                                + $"single return expression.",
                             member.Locations.FirstOrDefault()
                         )
                     );
@@ -1107,6 +1131,31 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             if (
                 reference.GetSyntax() is VariableDeclaratorSyntax declarator
                 && declarator.Initializer is not null
+            )
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// An <c>[Inline]</c> method must resolve to a single expression so
+    /// every call site can substitute parameters into the body. Accept
+    /// an expression body (<c>=&gt; expr</c>) or a block body containing
+    /// exactly one <c>return expr;</c> statement; anything richer
+    /// (locals, branches, void side-effects) falls outside the covered
+    /// substitution surface and raises MS0016.
+    /// </summary>
+    private static bool HasInlinableMethodBody(IMethodSymbol method)
+    {
+        foreach (var reference in method.DeclaringSyntaxReferences)
+        {
+            if (reference.GetSyntax() is not MethodDeclarationSyntax decl)
+                continue;
+            if (decl.ExpressionBody is not null)
+                return true;
+            if (
+                decl.Body is { Statements: { Count: 1 } statements }
+                && statements[0] is ReturnStatementSyntax { Expression: not null }
             )
                 return true;
         }

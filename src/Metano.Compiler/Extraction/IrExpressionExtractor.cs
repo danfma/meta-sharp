@@ -33,7 +33,6 @@ public sealed class IrExpressionExtractor
     /// </summary>
     private readonly HashSet<ISymbol> _inlineExpanding;
 
-    /// <summary>
     /// Map of primary-constructor parameter symbols that were captured
     /// by member bodies, keyed to the synthesized backing field name.
     /// When the extractor resolves an identifier to one of these
@@ -56,24 +55,42 @@ public sealed class IrExpressionExtractor
         set => _capturedPrimaryCtorParams.Value = value;
     }
 
+    /// <summary>
+    /// When an <c>[Inline]</c> method is being expanded, the outer
+    /// extractor binds each of the method's parameter symbols to the
+    /// caller's argument expressions here. Identifier resolution
+    /// checks this map first so parameter uses inside the body
+    /// substitute to the caller's IR instead of re-resolving to the
+    /// (uninvokable) parameter symbol.
+    /// </summary>
+    private readonly IReadOnlyDictionary<ISymbol, IrExpression>? _inlineParameterSubs;
+
     public IrExpressionExtractor(
         SemanticModel semanticModel,
         IrTypeOriginResolver? originResolver = null,
         Metano.Annotations.TargetLanguage? target = null
     )
-        : this(semanticModel, originResolver, target, inlineExpanding: null) { }
+        : this(
+            semanticModel,
+            originResolver,
+            target,
+            inlineExpanding: null,
+            inlineParameterSubs: null
+        ) { }
 
     internal IrExpressionExtractor(
         SemanticModel semanticModel,
         IrTypeOriginResolver? originResolver,
         Metano.Annotations.TargetLanguage? target,
-        HashSet<ISymbol>? inlineExpanding
+        HashSet<ISymbol>? inlineExpanding,
+        IReadOnlyDictionary<ISymbol, IrExpression>? inlineParameterSubs
     )
     {
         _semantic = semanticModel;
         _originResolver = originResolver;
         _target = target;
         _inlineExpanding = inlineExpanding ?? new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        _inlineParameterSubs = inlineParameterSubs;
     }
 
     internal HashSet<ISymbol> InlineExpandingSet => _inlineExpanding;
@@ -640,6 +657,14 @@ public sealed class IrExpressionExtractor
         var symbol = _semantic.GetSymbolInfo(id).Symbol;
         if (symbol is ITypeSymbol or INamespaceSymbol)
             return new IrTypeReference(id.Identifier.ValueText);
+
+        // Inline method expansion: when the enclosing extractor is
+        // lowering an `[Inline]` method body, each use of a method
+        // parameter (including the extension receiver) substitutes to
+        // the caller's argument IR instead of resolving to the
+        // parameter symbol — parameters cannot exist at the call site.
+        if (symbol is not null && _inlineParameterSubs?.TryGetValue(symbol, out var sub) is true)
+            return sub;
 
         // Captured primary-constructor parameter referenced from a
         // member body. Roslyn synthesizes a backing field on the
@@ -1213,6 +1238,25 @@ public sealed class IrExpressionExtractor
         if (TryExpandInlineAccess(symbol) is { } inlined)
             return inlined;
 
+        // PlainObject property fold: `new T(value).Prop` reduces to
+        // `value` when `T` is `[PlainObject]` and `Prop` binds to that
+        // constructor parameter. Inline method expansion can leave a
+        // PlainObject literal in receiver position (e.g. the extension
+        // receiver/parameter substitution) with an immediate field
+        // access; folding keeps the lowered expression as compact as
+        // the original source would have been.
+        if (
+            target
+                is IrNewExpression
+                {
+                    IsPlainObject: true,
+                    ParameterNames: { } parameterNames,
+                    Arguments: { } newArgs,
+                }
+            && TryMatchPlainObjectMember(parameterNames, newArgs, name) is { } folded
+        )
+            return folded;
+
         var origin = BuildOrigin(_semantic.GetSymbolInfo(member).Symbol);
         var memberAccess = new IrMemberAccess(target, name, origin);
         return WrapMethodGroupForDelegate(member, symbol, memberAccess);
@@ -1375,6 +1419,20 @@ public sealed class IrExpressionExtractor
         return true;
     }
 
+    private static IrExpression? TryMatchPlainObjectMember(
+        IReadOnlyList<string> parameterNames,
+        IReadOnlyList<IrArgument> args,
+        string memberName
+    )
+    {
+        for (var i = 0; i < parameterNames.Count && i < args.Count; i++)
+        {
+            if (string.Equals(parameterNames[i], memberName, StringComparison.Ordinal))
+                return args[i].Value;
+        }
+        return null;
+    }
+
     /// <summary>
     /// If <paramref name="symbol"/> carries <c>[Inline]</c> and resolves
     /// to a supported shape (<c>static readonly</c> field with
@@ -1397,29 +1455,24 @@ public sealed class IrExpressionExtractor
             if (initializer is null)
                 return null;
 
-            // Cross-assembly guard: when the `[Inline]` member lives
-            // in a referenced assembly, its SyntaxTree belongs to the
-            // declaring compilation, not ours. Calling
-            // `GetSemanticModel` with a tree the current compilation
-            // does not own throws `ArgumentException` ("SyntaxTree is
-            // not part of the compilation"). Cross-assembly inline
-            // substitution is tracked as a follow-up — for now the
-            // caller falls through to a regular member access so the
-            // transpiler does not crash.
-            if (!_semantic.Compilation.ContainsSyntaxTree(initializer.SyntaxTree))
+            var semanticModel = TryGetSemanticModelForInlineInitializer(initializer.SyntaxTree);
+            if (semanticModel is null)
                 return null;
 
             // Reuse the declaring syntax tree's SemanticModel so
             // constant folding + symbol resolution inside the
             // initializer reflect the declaration site, not the call
-            // site. The cycle-tracking set is shared with the nested
-            // extractor so a transitive reference back to the
-            // original member bails out instead of recursing.
+            // site. For source ProjectReferences the syntax tree
+            // belongs to the referenced CompilationReference, so look
+            // there before giving up. The cycle-tracking set is shared
+            // with the nested extractor so a transitive reference back
+            // to the original member bails out instead of recursing.
             var extractor = new IrExpressionExtractor(
-                _semantic.Compilation.GetSemanticModel(initializer.SyntaxTree),
+                semanticModel,
                 _originResolver,
                 _target,
-                _inlineExpanding
+                _inlineExpanding,
+                inlineParameterSubs: null
             );
             return extractor.Extract(initializer);
         }
@@ -1427,6 +1480,20 @@ public sealed class IrExpressionExtractor
         {
             _inlineExpanding.Remove(symbol);
         }
+    }
+
+    private SemanticModel? TryGetSemanticModelForInlineInitializer(SyntaxTree syntaxTree)
+    {
+        if (_semantic.Compilation.ContainsSyntaxTree(syntaxTree))
+            return _semantic.Compilation.GetSemanticModel(syntaxTree);
+
+        foreach (var reference in _semantic.Compilation.References.OfType<CompilationReference>())
+        {
+            if (reference.Compilation.ContainsSyntaxTree(syntaxTree))
+                return reference.Compilation.GetSemanticModel(syntaxTree);
+        }
+
+        return null;
     }
 
     private static ExpressionSyntax? TryFindInlineInitializer(ISymbol symbol)
@@ -1533,6 +1600,18 @@ public sealed class IrExpressionExtractor
         if (TryRewriteMathDecimalCall(inv, symbol) is { } mathRewrite)
             return mathRewrite;
 
+        // `[Inline]` method: beta-reduce the body at the call site.
+        // Parameters bind to the caller's argument IR (the reduced
+        // extension receiver becomes the first parameter) so the body
+        // emits as if it had been written inline at the call site. A
+        // cross-assembly body resolves through the referenced
+        // compilation's semantic model, matching field/property inline.
+        if (symbol is not null && SymbolHelper.HasInline(symbol))
+        {
+            if (TryExpandInlineMethod(inv, symbol) is { } inlinedBody)
+                return inlinedBody;
+        }
+
         var target = Extract(inv.Expression);
         var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
         IReadOnlyList<IrTypeRef>? typeArguments = null;
@@ -1628,6 +1707,95 @@ public sealed class IrExpressionExtractor
         // non-receiver slot: cannot safely identify the receiver
         // syntactic position. Bail out.
         return -1;
+    }
+
+    /// <summary>
+    /// Expands a call to an <c>[Inline]</c> method into the method's
+    /// body with each parameter substituted by the caller's argument
+    /// IR. Returns <c>null</c> when the method shape is not supported
+    /// (multi-statement body, no declaring syntax, cycle).
+    /// </summary>
+    private IrExpression? TryExpandInlineMethod(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol symbol
+    )
+    {
+        // For a reduced extension call (`receiver.Method(args)`) Roslyn
+        // hides the static declaration behind `ReducedFrom`; its first
+        // parameter is the receiver slot the body references. Use that
+        // form so parameter-symbol identity lines up with the body's
+        // identifiers.
+        var declaringMethod = symbol.ReducedFrom ?? symbol.OriginalDefinition;
+        var cycleKey = declaringMethod.OriginalDefinition;
+        if (!_inlineExpanding.Add(cycleKey))
+            return null;
+        try
+        {
+            var bodyExpr = TryFindInlineMethodBody(declaringMethod);
+            if (bodyExpr is null)
+                return null;
+
+            var semanticModel = TryGetSemanticModelForInlineInitializer(bodyExpr.SyntaxTree);
+            if (semanticModel is null)
+                return null;
+
+            var subs = new Dictionary<ISymbol, IrExpression>(SymbolEqualityComparer.Default);
+            var parameters = declaringMethod.Parameters;
+            var argIndex = 0;
+
+            // Reduced extension call: parameter 0 is the receiver;
+            // the remaining parameters line up with the syntactic
+            // argument list. Unreduced calls bind all parameters from
+            // the argument list directly.
+            if (
+                symbol.ReducedFrom is not null
+                && inv.Expression is MemberAccessExpressionSyntax memberAccess
+            )
+            {
+                if (parameters.Length == 0)
+                    return null;
+                subs[parameters[0]] = Extract(memberAccess.Expression);
+                argIndex = 1;
+            }
+
+            for (var i = argIndex; i < parameters.Length; i++)
+            {
+                var syntaxIndex = i - argIndex;
+                if (syntaxIndex >= inv.ArgumentList.Arguments.Count)
+                    return null;
+                subs[parameters[i]] = Extract(inv.ArgumentList.Arguments[syntaxIndex].Expression);
+            }
+
+            var extractor = new IrExpressionExtractor(
+                semanticModel,
+                _originResolver,
+                _target,
+                _inlineExpanding,
+                inlineParameterSubs: subs
+            );
+            return extractor.Extract(bodyExpr);
+        }
+        finally
+        {
+            _inlineExpanding.Remove(cycleKey);
+        }
+    }
+
+    private static ExpressionSyntax? TryFindInlineMethodBody(IMethodSymbol method)
+    {
+        foreach (var reference in method.DeclaringSyntaxReferences)
+        {
+            if (reference.GetSyntax() is not MethodDeclarationSyntax decl)
+                continue;
+            if (decl.ExpressionBody?.Expression is { } arrow)
+                return arrow;
+            if (
+                decl.Body is { Statements: { Count: 1 } statements }
+                && statements[0] is ReturnStatementSyntax { Expression: { } returnExpr }
+            )
+                return returnExpr;
+        }
+        return null;
     }
 
     private IrExpression? TryRewriteMathDecimalCall(

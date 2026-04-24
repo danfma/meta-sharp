@@ -105,15 +105,15 @@ public class InlineAttributeTranspileTests
     // ─── Cross-assembly ───────────────────────────────────────
 
     [Test]
-    public async Task Inline_CrossAssembly_DoesNotCrashAndSkipsExpansion()
+    public async Task Inline_CrossAssembly_ExpandsFromProjectReference()
     {
         // Regression for issue #109: an [Inline] member declared in a
         // referenced assembly carries a SyntaxTree that belongs to
         // the declaring compilation, not ours. Calling
-        // GetSemanticModel on that tree used to throw
-        // ArgumentException. Cross-assembly inline expansion is
-        // deferred to a follow-up — for now the transpiler must bail
-        // out cleanly and fall back to a regular member access.
+        // GetSemanticModel on that tree used to throw ArgumentException
+        // or fall back to the Erasable member identifier. Source
+        // ProjectReferences should now inline through the referenced
+        // compilation.
         var result = TranspileHelper.TranspileWithLibrary(
             """
             using Metano.Annotations;
@@ -135,13 +135,80 @@ public class InlineAttributeTranspileTests
             """
         );
 
-        // The consumer still emits without crashing. Inline expansion
-        // does NOT happen across the assembly boundary in this slice,
-        // so the caller sees the Erasable-class-flattened bare
-        // identifier; the follow-up will wire cross-assembly
-        // expansion so the literal substitutes properly.
         var output = result["asker.ts"];
-        await Assert.That(output).Contains("return answer;");
+        await Assert.That(output).Contains("return 42;");
+        await Assert.That(output).DoesNotContain("return answer;");
+    }
+
+    [Test]
+    public async Task Inline_CrossAssembly_DomBindingCatalogEntry_StaysStringLiteral()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            using Metano.Annotations;
+            using Metano.Annotations.TypeScript;
+
+            [External, NoEmit]
+            public static class Js
+            {
+                [Name("document")]
+                public static Document Document => throw null!;
+            }
+
+            [NoEmit, Name("HTMLElement")]
+            public abstract class HtmlElement
+            {
+                public string Id { get; set; } = "";
+            }
+
+            [NoEmit, Name("HTMLDivElement")]
+            public abstract class HtmlDivElement : HtmlElement;
+
+            [External]
+            public abstract class Document
+            {
+                public HtmlElement CreateElement(string elementName) => throw null!;
+            }
+
+            [Transpile, Erasable]
+            public static class DocumentExtensions
+            {
+                extension(Document document)
+                {
+                    [Inline]
+                    public TElement CreateElement<TElement>(HtmlElementType.Of<TElement> type)
+                        where TElement : HtmlElement
+                    {
+                        return (TElement)document.CreateElement(type.TagName);
+                    }
+                }
+            }
+
+            [Transpile, Erasable]
+            public static class HtmlElementType
+            {
+                [PlainObject]
+                public sealed record Of<T>(string TagName)
+                    where T : HtmlElement;
+
+                [Inline]
+                public static Of<HtmlDivElement> Div => new("div");
+            }
+            """,
+            """
+            [assembly: TranspileAssembly]
+
+            public class Renderer
+            {
+                public HtmlElement Create() => Js.Document.CreateElement(HtmlElementType.Div);
+            }
+            """
+        );
+
+        var output = result["renderer.ts"];
+        await Assert.That(output).Contains("return document.createElement(\"div\");");
+        await Assert.That(output).DoesNotContain("document.createElement(div)");
+        await Assert.That(output).DoesNotContain("new HtmlElementType.Of");
     }
 
     // ─── Diagnostics (MS0016) ─────────────────────────────────
