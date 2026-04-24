@@ -17,6 +17,7 @@ public class Commands
     /// <param name="srcRoot">TypeScript source root relative to packageRoot (default: inferred from first segment of output path). Used to compute the dist prefix when output targets a subdirectory (e.g., src/domain/).</param>
     /// <param name="skipPackageJson">Skip generating/updating package.json</param>
     /// <param name="namespaceBarrels">Emit an additional src/index.ts root barrel mirroring the C# namespace hierarchy via `export namespace` blocks (opt-in; see ADR-0006).</param>
+    /// <param name="stripInterfacePrefix">Drop the C# `I` prefix from generated interface names when it is followed by another uppercase letter (opt-in). Collisions with sibling types in the same namespace keep the prefix and emit MS0017.</param>
     [Command("")]
     public async Task Transpile(
         string project,
@@ -27,10 +28,15 @@ public class Commands
         string dist = "./dist",
         string? srcRoot = null,
         bool skipPackageJson = false,
-        bool namespaceBarrels = false
+        bool namespaceBarrels = false,
+        bool stripInterfacePrefix = false
     )
     {
-        var target = new TypeScriptTarget { NamespaceBarrels = namespaceBarrels };
+        var target = new TypeScriptTarget
+        {
+            NamespaceBarrels = namespaceBarrels,
+            StripInterfacePrefix = stripInterfacePrefix,
+        };
 
         var options = new TranspileOptions(
             ProjectPath: project,

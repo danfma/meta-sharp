@@ -41,6 +41,18 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     public bool NamespaceBarrels { get; init; }
 
     /// <summary>
+    /// When <c>true</c>, <see cref="ApplyInterfacePrefixStrip"/>
+    /// rewrites every interface entry in
+    /// <see cref="IrCompilation.TypeNamesBySymbol"/> whose C# name
+    /// matches <c>^I[A-Z]</c>, dropping the leading <c>I</c>.
+    /// Collisions with sibling types in the same namespace keep the
+    /// prefix and raise <c>MS0017</c>. Explicit
+    /// <c>[Name(TypeScript, "…")]</c> overrides win over the strip.
+    /// Opt-in via <c>--strip-interface-prefix</c>.
+    /// </summary>
+    public bool StripInterfacePrefix { get; init; }
+
+    /// <summary>
     /// Diagnostics collected during transformation. Includes warnings about unsupported
     /// language features and other issues that the user should know about.
     /// </summary>
@@ -122,8 +134,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // IR rather than redoing the same probe.
         _assemblyWideTranspile = ir.AssemblyWideTranspile;
 
-        var typeNamesBySymbol =
-            ir.TypeNamesBySymbol ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        // Copy the frontend-produced map so any in-transformer
+        // rewrites (e.g., StripInterfacePrefix) stay scoped to this
+        // run without mutating the shared IR.
+        var typeNamesBySymbol = ir.TypeNamesBySymbol is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : new Dictionary<string, string>(ir.TypeNamesBySymbol, StringComparer.Ordinal);
 
         // Frontend owns discovery now — read the ordered entry list off the
         // IR and project it back to raw symbols for the existing per-type
@@ -134,6 +150,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         var transpilableTypeEntries =
             ir.TranspilableTypeEntries ?? Array.Empty<IrTranspilableTypeEntry>();
         var transpilableTypes = transpilableTypeEntries.Select(e => e.Symbol).ToList();
+
+        // Opt-in `I`-prefix strip runs once per transform, mutating the
+        // shared name dictionary so every downstream consumer
+        // (ResolveTsName, file-name derivation, import collector) sees
+        // the same rewritten identifier.
+        if (StripInterfacePrefix)
+            ApplyInterfacePrefixStrip(transpilableTypes, typeNamesBySymbol, _diagnostics);
 
         // Build the explicit per-compilation context that replaces TypeMapper statics.
         var crossPackageMisses = new HashSet<string>();
@@ -284,7 +307,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         else if (type.TypeKind == TypeKind.Interface)
         {
             var ifaceIr = (IrInterfaceDeclaration)GetOrExtractIr(type, irCache)!;
-            IrToTsInterfaceBridge.Convert(ifaceIr, sink);
+            IrToTsInterfaceBridge.Convert(ifaceIr, sink, Context.ResolveTsName(type));
         }
         else if (IsExceptionType(type))
         {
@@ -495,6 +518,91 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         string FileName,
         List<INamedTypeSymbol> Types
     );
+
+    /// <summary>
+    /// Rewrites every interface entry in
+    /// <paramref name="typeNamesBySymbol"/> whose C# name matches
+    /// <c>^I[A-Z]</c>, dropping the leading <c>I</c>. An interface
+    /// whose stripped name would collide with another top-level type
+    /// in the same namespace keeps the prefix and surfaces
+    /// <c>MS0017</c> so the consumer notices and picks an explicit
+    /// rename. Interfaces that already carry a
+    /// <c>[Name(TypeScript, "…")]</c> override skip the pass — the
+    /// author-chosen name wins.
+    /// </summary>
+    private static void ApplyInterfacePrefixStrip(
+        IReadOnlyList<INamedTypeSymbol> transpilableTypes,
+        Dictionary<string, string> typeNamesBySymbol,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        // Index the sibling space once so collision checks stay O(1):
+        // namespace display string → set of top-level type names
+        // (current emitted, not original) living there.
+        var namespaceIndex = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        foreach (var t in transpilableTypes)
+        {
+            var ns = t.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+            var key = t.GetCrossAssemblyOriginKey();
+            if (!typeNamesBySymbol.TryGetValue(key, out var emitted))
+                emitted = t.Name;
+            if (!namespaceIndex.TryGetValue(ns, out var bucket))
+            {
+                bucket = new HashSet<string>(StringComparer.Ordinal);
+                namespaceIndex[ns] = bucket;
+            }
+            bucket.Add(emitted);
+        }
+
+        foreach (var type in transpilableTypes)
+        {
+            if (type.TypeKind != TypeKind.Interface)
+                continue;
+            var key = type.GetCrossAssemblyOriginKey();
+            if (!typeNamesBySymbol.TryGetValue(key, out var current))
+                continue;
+            // `[Name(TypeScript, "…")]` wins. If the frontend-stored
+            // name differs from the Roslyn name, an override is
+            // already in play — leave it alone.
+            if (!string.Equals(current, type.Name, StringComparison.Ordinal))
+                continue;
+            if (!LooksLikeInterfacePrefix(current))
+                continue;
+
+            var stripped = current[1..];
+            var ns = type.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+            var siblings = namespaceIndex[ns];
+            if (siblings.Contains(stripped))
+            {
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Warning,
+                        DiagnosticCodes.InterfacePrefixCollision,
+                        $"Cannot strip the 'I' prefix from '{current}' in '{ns}' — "
+                            + $"another top-level type named '{stripped}' already lives in "
+                            + $"the same namespace. Keeping the prefixed name. Rename the "
+                            + $"conflicting type or set [Name(TypeScript, \"…\")] to resolve.",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
+                continue;
+            }
+
+            typeNamesBySymbol[key] = stripped;
+            siblings.Remove(current);
+            siblings.Add(stripped);
+        }
+    }
+
+    /// <summary>
+    /// Matches <c>^I[A-Z]</c> — captures <c>IFoo</c> and
+    /// <c>ISO8601</c> alike. <c>[Name(TypeScript, "…")]</c> is the
+    /// documented escape hatch for names users explicitly want to
+    /// keep (<c>IOrder</c> that is not an interface, acronym-led
+    /// names).
+    /// </summary>
+    private static bool LooksLikeInterfacePrefix(string name) =>
+        name.Length >= 2 && name[0] == 'I' && char.IsUpper(name[1]);
 
     /// <summary>
     /// Lowers an <c>[ExportedAsModule]</c> static class (or any static class
