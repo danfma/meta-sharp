@@ -860,14 +860,24 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// Validates <c>[Constant]</c> from <c>Metano.Annotations</c>.
     /// Two checks:
     /// <list type="bullet">
-    ///   <item>Fields decorated with <c>[Constant]</c> must have an
-    ///   initializer that Roslyn recognizes as a compile-time constant
-    ///   (<see cref="IFieldSymbol.HasConstantValue"/> or a
-    ///   <c>readonly</c> initializer resolvable through
-    ///   <see cref="SemanticModel.GetConstantValue(SyntaxNode, CancellationToken)"/>).</item>
+    ///   <item>Fields decorated with <c>[Constant]</c> must be
+    ///   <c>const</c> or <c>static readonly</c> with an initializer
+    ///   Roslyn reduces to a constant
+    ///   (<see cref="IFieldSymbol.HasConstantValue"/> for <c>const</c>,
+    ///   <see cref="SemanticModel.GetConstantValue(SyntaxNode, CancellationToken)"/>
+    ///   applied to the <c>readonly</c> initializer). Mutable fields
+    ///   are rejected so downstream lowering can trust the value.</item>
     ///   <item>Every call site whose target method exposes a
     ///   <c>[Constant]</c> parameter must pass a constant-valued
-    ///   argument in that position.</item>
+    ///   argument. Literal tokens, <c>const</c> fields/locals, and
+    ///   references to a <c>[Constant]</c>-decorated field
+    ///   (validated above) all qualify. Call-site walk covers
+    ///   <see cref="InvocationExpressionSyntax"/>,
+    ///   <see cref="ObjectCreationExpressionSyntax"/>,
+    ///   <see cref="ImplicitObjectCreationExpressionSyntax"/>, and
+    ///   <see cref="ConstructorInitializerSyntax"/>
+    ///   (<c>: this(...)</c> / <c>: base(...)</c>) so every
+    ///   constructor path is covered.</item>
     /// </list>
     /// Both failures raise <c>MS0014 InvalidConstant</c>. The checks
     /// run once per compilation and span every syntax tree reachable
@@ -903,6 +913,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     invocation.ArgumentList,
                     semanticModel.GetSymbolInfo(invocation).Symbol as IMethodSymbol,
                     semanticModel,
+                    compilation,
                     diagnostics
                 );
 
@@ -913,6 +924,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     creation.ArgumentList,
                     semanticModel.GetSymbolInfo(creation).Symbol as IMethodSymbol,
                     semanticModel,
+                    compilation,
                     diagnostics
                 );
 
@@ -924,6 +936,22 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     creation.ArgumentList,
                     semanticModel.GetSymbolInfo(creation).Symbol as IMethodSymbol,
                     semanticModel,
+                    compilation,
+                    diagnostics
+                );
+
+            // Constructor chaining: `: this(...)` and `: base(...)`
+            // surface as ConstructorInitializerSyntax. The target
+            // constructor's `[Constant]` parameters must still
+            // receive literal-valued args.
+            foreach (
+                var initializer in root.DescendantNodes().OfType<ConstructorInitializerSyntax>()
+            )
+                ValidateConstantCallSite(
+                    initializer.ArgumentList,
+                    semanticModel.GetSymbolInfo(initializer).Symbol as IMethodSymbol,
+                    semanticModel,
+                    compilation,
                     diagnostics
                 );
         }
@@ -946,9 +974,11 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 new MetanoDiagnostic(
                     MetanoDiagnosticSeverity.Error,
                     DiagnosticCodes.InvalidConstant,
-                    $"[Constant] on field {FormatMemberPath(field)} requires a compile-time "
-                        + $"constant initializer. Use a literal token, a 'const' local or "
-                        + $"field, or a 'readonly' field whose initializer is itself constant.",
+                    $"[Constant] on field {FormatMemberPath(field)} requires a 'const' "
+                        + $"field or a 'readonly' field whose initializer is itself a "
+                        + $"compile-time constant (literal token or 'const' reference). "
+                        + $"Mutable fields cannot carry [Constant] — the value must be "
+                        + $"fixed for downstream lowering to trust it.",
                     field.Locations.FirstOrDefault()
                 )
             );
@@ -964,6 +994,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         // accepts them when the initializer folds to a primitive.
         if (field.HasConstantValue)
             return true;
+
+        // Mutable fields are rejected. A field that can be reassigned
+        // after construction cannot guarantee a compile-time value at
+        // every read site, which defeats the purpose of [Constant]
+        // as a narrowing/inlining safety net.
+        if (!field.IsReadOnly)
+            return false;
 
         // `readonly` fields need a syntax probe: if the declaration's
         // initializer reduces to a Roslyn constant in its own
@@ -986,6 +1023,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         BaseArgumentListSyntax? argumentList,
         IMethodSymbol? target,
         SemanticModel semanticModel,
+        Compilation compilation,
         List<MetanoDiagnostic> diagnostics
     )
     {
@@ -1001,7 +1039,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             var parameter = ResolveParameter(argument, arguments, i, target);
             if (parameter is null || !parameter.HasConstant())
                 continue;
-            if (semanticModel.GetConstantValue(argument.Expression).HasValue)
+            if (IsConstantArgument(argument.Expression, semanticModel, compilation))
                 continue;
 
             diagnostics.Add(
@@ -1010,12 +1048,41 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     DiagnosticCodes.InvalidConstant,
                     $"Argument passed to [Constant] parameter '{parameter.Name}' of "
                         + $"{FormatMemberPath(target)} is not a compile-time constant. "
-                        + $"Use a literal, a 'const' local/field, or a 'readonly' field "
-                        + $"whose initializer is itself constant.",
+                        + $"Use a literal, a 'const' field/local, or a reference to a "
+                        + $"[Constant]-decorated 'readonly' field whose initializer is "
+                        + $"itself constant.",
                     argument.GetLocation()
                 )
             );
         }
+    }
+
+    /// <summary>
+    /// Accepts as "constant" either a Roslyn-reducible expression
+    /// (literal token, <c>const</c> field/local) or a reference to a
+    /// field carrying <c>[Constant]</c>. The second path piggybacks
+    /// on <see cref="IsFieldInitializerConstant"/>: if a
+    /// <c>readonly</c> field qualifies for the field-level
+    /// validation, it is safe to pass on as a <c>[Constant]</c>
+    /// argument. Roslyn's <see cref="SemanticModel.GetConstantValue"/>
+    /// does not fold <c>readonly</c> field references, so the extra
+    /// resolution happens here rather than in the core check.
+    /// </summary>
+    private static bool IsConstantArgument(
+        ExpressionSyntax expression,
+        SemanticModel semanticModel,
+        Compilation compilation
+    )
+    {
+        if (semanticModel.GetConstantValue(expression).HasValue)
+            return true;
+        if (
+            semanticModel.GetSymbolInfo(expression).Symbol is IFieldSymbol field
+            && field.HasConstant()
+            && IsFieldInitializerConstant(field, compilation)
+        )
+            return true;
+        return false;
     }
 
     private static IParameterSymbol? ResolveParameter(

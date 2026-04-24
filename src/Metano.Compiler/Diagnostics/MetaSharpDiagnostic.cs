@@ -116,16 +116,16 @@ public static class DiagnosticCodes
 
     /// <summary>MS0014 — <c>[Constant]</c> (from
     /// <c>Metano.Annotations</c>) was applied to a parameter whose
-    /// call-site argument is not a compile-time constant literal, or
-    /// to a field whose initializer is not a compile-time constant
-    /// literal. The attribute's contract requires the value to be
-    /// reducible by the C# compiler (literal token, <c>const</c>
-    /// local/field, or a <c>readonly</c> field whose initializer is
-    /// itself a constant). Method calls, mutable variables, and any
-    /// expression whose value depends on runtime state are rejected
-    /// so downstream lowering (<c>[Emit]</c> templates,
-    /// <c>[Inline]</c> expansion) can substitute the literal form
-    /// without a separate analyzer pass.</summary>
+    /// call-site argument is not a compile-time constant, or to a
+    /// field that cannot carry the attribute. Parameters accept
+    /// Roslyn <c>ConstantValue</c> expressions (literal,
+    /// <c>const</c> field/local) and references to another
+    /// <c>[Constant]</c>-decorated field whose own initializer has
+    /// been validated. Fields must be <c>const</c> or
+    /// <c>readonly</c> with a literal-reducible initializer; mutable
+    /// fields are rejected so downstream lowering (<c>[Emit]</c>
+    /// templates, <c>[Inline]</c> expansion) can substitute the
+    /// literal form without a separate analyzer pass.</summary>
     public const string InvalidConstant = "MS0014";
 
     /// <summary>MS0015 — <c>[Erasable]</c> (from

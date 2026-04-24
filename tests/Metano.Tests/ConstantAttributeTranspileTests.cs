@@ -236,4 +236,145 @@ public class ConstantAttributeTranspileTests
         var ms0014 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidConstant);
         await Assert.That(ms0014).IsNotNull();
     }
+
+    // ─── Field chain-of-trust ─────────────────────────────────
+
+    [Test]
+    public async Task Constant_Parameter_ConstantReadonlyField_Passes()
+    {
+        // A reference to a `[Constant]`-decorated readonly field
+        // with a literal initializer is accepted as a constant arg
+        // (chain of trust — the field's own validation already ran).
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public static class Tags
+            {
+                [Constant] public static readonly string Div = "div";
+            }
+
+            public static class Runtime
+            {
+                public static void Use([Constant] string tag) {}
+            }
+
+            public class Caller
+            {
+                public void Run() => Runtime.Use(Tags.Div);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidConstant))
+            .IsFalse();
+    }
+
+    [Test]
+    public async Task Constant_Parameter_UndecoratedReadonlyField_EmitsMs0014()
+    {
+        // A plain `readonly` field (no `[Constant]` on the source)
+        // is rejected even when its initializer is a literal —
+        // Roslyn does not fold the reference and the transpiler
+        // refuses to chase the initializer without the explicit
+        // attribute on the source field.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public static class Tags
+            {
+                public static readonly string Div = "div";
+            }
+
+            public static class Runtime
+            {
+                public static void Use([Constant] string tag) {}
+            }
+
+            public class Caller
+            {
+                public void Run() => Runtime.Use(Tags.Div);
+            }
+            """
+        );
+
+        var ms0014 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidConstant);
+        await Assert.That(ms0014).IsNotNull();
+    }
+
+    // ─── Field mutability ─────────────────────────────────────
+
+    [Test]
+    public async Task Constant_Field_MutableField_EmitsMs0014()
+    {
+        // A mutable field cannot carry `[Constant]` — the value
+        // might be reassigned later and downstream lowering cannot
+        // trust the compile-time reading. Even with a literal
+        // initializer the field fails MS0014.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public static class Tags
+            {
+                [Constant] public static string Div = "div";
+            }
+            """
+        );
+
+        var ms0014 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidConstant);
+        await Assert.That(ms0014).IsNotNull();
+        await Assert.That(ms0014!.Message).Contains("Div");
+    }
+
+    // ─── Constructor initializer walk ─────────────────────────
+
+    [Test]
+    public async Task Constant_ConstructorInitializer_ThisCall_LiteralArgument_Passes()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Caller
+            {
+                public Caller([Constant] string tag) {}
+                public Caller() : this("div") {}
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidConstant))
+            .IsFalse();
+    }
+
+    [Test]
+    public async Task Constant_ConstructorInitializer_ThisCall_Variable_EmitsMs0014()
+    {
+        // `: this(...)` chaining with a non-constant arg must still
+        // surface MS0014 — the walk covers ConstructorInitializerSyntax
+        // alongside invocation/object-creation nodes.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Caller
+            {
+                public Caller([Constant] string tag) {}
+                public Caller(int _, string runtimeValue) : this(runtimeValue) {}
+            }
+            """
+        );
+
+        var ms0014 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidConstant);
+        await Assert.That(ms0014).IsNotNull();
+    }
 }
