@@ -151,12 +151,34 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             ir.TranspilableTypeEntries ?? Array.Empty<IrTranspilableTypeEntry>();
         var transpilableTypes = transpilableTypeEntries.Select(e => e.Symbol).ToList();
 
-        // Opt-in `I`-prefix strip runs once per transform, mutating the
-        // shared name dictionary so every downstream consumer
-        // (ResolveTsName, file-name derivation, import collector) sees
-        // the same rewritten identifier.
+        // Clone the frontend-produced TranspilableTypes map so the
+        // strip pass (and any future in-transformer renamer) can
+        // rewrite entries without mutating the shared IR.
+        var transpilableTypesDict = ir.TranspilableTypes is null
+            ? new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal)
+            : new Dictionary<string, IrTranspilableTypeRef>(
+                ir.TranspilableTypes,
+                StringComparer.Ordinal
+            );
+
+        // Opt-in `I`-prefix strip runs once per transform, mutating
+        // both name dictionaries so every downstream consumer
+        // (ResolveTsName, file-name derivation, the import collector
+        // that walks IrTranspilableTypeRef) sees the same rewritten
+        // identifier. The rename dictionary also feeds
+        // IrToTsTypeMapper.NamedTypeRenames so emitted type
+        // references at usage sites (method parameters, property
+        // types, generic arguments) pick up the stripped identifier
+        // at the emit boundary.
+        var nameRenames = new Dictionary<string, string>(StringComparer.Ordinal);
         if (StripInterfacePrefix)
-            ApplyInterfacePrefixStrip(transpilableTypes, typeNamesBySymbol, _diagnostics);
+            ApplyInterfacePrefixStrip(
+                transpilableTypes,
+                typeNamesBySymbol,
+                transpilableTypesDict,
+                nameRenames,
+                _diagnostics
+            );
 
         // Build the explicit per-compilation context that replaces TypeMapper statics.
         var crossPackageMisses = new HashSet<string>();
@@ -179,8 +201,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             compilation,
             _currentAssembly,
             _assemblyWideTranspile,
-            ir.TranspilableTypes
-                ?? new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal),
+            transpilableTypesDict,
             ir.ExternalImports,
             ir.BclExports,
             typeNamesBySymbol,
@@ -196,16 +217,31 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var files = new List<TsSourceFile>();
 
-        // Group types by output file. Types decorated with [EmitInFile("name")] share
-        // the same file; everything else gets its own file (legacy 1:1 default). The
-        // grouping is keyed by (namespace, fileName) so types with the same EmitInFile
-        // value but different namespaces don't accidentally collide — that case is
-        // rejected later as MS0008.
-        foreach (var group in GroupTypesByFile(transpilableTypes))
+        // Publish the interface-prefix rename dict for the duration
+        // of this transform so `IrToTsTypeMapper.MapNamed` rewrites
+        // every TsNamedType identifier emitted below. The try/finally
+        // guarantees the static slot is cleared even when a bridge
+        // throws, keeping subsequent TransformAll runs clean.
+        var previousRenames = IrToTsTypeMapper.NamedTypeRenames;
+        IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
+        try
         {
-            var file = TransformGroup(group);
-            if (file is not null)
-                files.Add(file);
+            // Group types by output file. Types decorated with
+            // [EmitInFile("name")] share the same file; everything else gets
+            // its own file (legacy 1:1 default). The grouping is keyed by
+            // (namespace, fileName) so types with the same EmitInFile value
+            // but different namespaces don't accidentally collide — that case
+            // is rejected later as MS0008.
+            foreach (var group in GroupTypesByFile(transpilableTypes))
+            {
+                var file = TransformGroup(group);
+                if (file is not null)
+                    files.Add(file);
+            }
+        }
+        finally
+        {
+            IrToTsTypeMapper.NamedTypeRenames = previousRenames;
         }
 
         // Generate index.ts barrel files per namespace folder
@@ -520,36 +556,50 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     );
 
     /// <summary>
-    /// Rewrites every interface entry in
-    /// <paramref name="typeNamesBySymbol"/> whose C# name matches
-    /// <c>^I[A-Z]</c>, dropping the leading <c>I</c>. An interface
+    /// Rewrites every top-level transpilable interface whose C# name
+    /// matches <c>^I[A-Z]</c> in both
+    /// <paramref name="typeNamesBySymbol"/> (read by
+    /// <see cref="TypeScriptTransformContext.ResolveTsName"/> and the
+    /// interface-bridge <c>nameOverride</c> plumbing) and
+    /// <paramref name="transpilableTypesDict"/> (read by
+    /// <see cref="ImportCollector"/> + guard builder). An interface
     /// whose stripped name would collide with another top-level type
-    /// in the same namespace keeps the prefix and surfaces
-    /// <c>MS0017</c> so the consumer notices and picks an explicit
-    /// rename. Interfaces that already carry a
+    /// in the same enclosing scope (namespace for top-level types,
+    /// containing-type for nested ones) keeps the prefix and
+    /// surfaces <c>MS0017</c> so the consumer notices and picks an
+    /// explicit rename. Interfaces that already carry a
     /// <c>[Name(TypeScript, "…")]</c> override skip the pass — the
-    /// author-chosen name wins.
+    /// author-chosen name wins. Nested interfaces are deliberately
+    /// out of scope for this first slice; they retain their original
+    /// names because the downstream lowering has not yet been
+    /// audited for a rename there.
     /// </summary>
     private static void ApplyInterfacePrefixStrip(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes,
         Dictionary<string, string> typeNamesBySymbol,
+        Dictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
+        Dictionary<string, string> nameRenames,
         List<MetanoDiagnostic> diagnostics
     )
     {
-        // Index the sibling space once so collision checks stay O(1):
-        // namespace display string → set of top-level type names
-        // (current emitted, not original) living there.
-        var namespaceIndex = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
+        // Index the sibling space once so collision checks stay O(1).
+        // The scope key is the type's *enclosing container*: the
+        // containing type (`…+Outer`) when the interface is nested,
+        // or the namespace display string for top-level types. Using
+        // `ToDisplayString()` on the namespace would falsely collide
+        // nested interfaces across different outer types that happen
+        // to share a namespace.
+        var scopeIndex = new Dictionary<string, HashSet<string>>(StringComparer.Ordinal);
         foreach (var t in transpilableTypes)
         {
-            var ns = t.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+            var scope = GetEnclosingScopeKey(t);
             var key = t.GetCrossAssemblyOriginKey();
             if (!typeNamesBySymbol.TryGetValue(key, out var emitted))
                 emitted = t.Name;
-            if (!namespaceIndex.TryGetValue(ns, out var bucket))
+            if (!scopeIndex.TryGetValue(scope, out var bucket))
             {
                 bucket = new HashSet<string>(StringComparer.Ordinal);
-                namespaceIndex[ns] = bucket;
+                scopeIndex[scope] = bucket;
             }
             bucket.Add(emitted);
         }
@@ -557,6 +607,13 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         foreach (var type in transpilableTypes)
         {
             if (type.TypeKind != TypeKind.Interface)
+                continue;
+            // Nested interfaces skip the rewrite in this slice — the
+            // bridge + file-naming paths for nested types have not
+            // been audited for the renamed identifier, and a mixed
+            // shape (stripped top-level but prefixed nested) would
+            // surprise consumers. Follow-up work can lift this.
+            if (type.ContainingType is not null)
                 continue;
             var key = type.GetCrossAssemblyOriginKey();
             if (!typeNamesBySymbol.TryGetValue(key, out var current))
@@ -570,17 +627,21 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 continue;
 
             var stripped = current[1..];
-            var ns = type.ContainingNamespace?.ToDisplayString() ?? string.Empty;
-            var siblings = namespaceIndex[ns];
+            var scope = GetEnclosingScopeKey(type);
+            var siblings = scopeIndex[scope];
             if (siblings.Contains(stripped))
             {
+                var ns = type.ContainingNamespace is { IsGlobalNamespace: false } nsSymbol
+                    ? nsSymbol.ToDisplayString()
+                    : null;
+                var location = ns is null ? "the global namespace" : $"namespace '{ns}'";
                 diagnostics.Add(
                     new MetanoDiagnostic(
                         MetanoDiagnosticSeverity.Warning,
                         DiagnosticCodes.InterfacePrefixCollision,
-                        $"Cannot strip the 'I' prefix from '{current}' in '{ns}' — "
+                        $"Cannot strip the 'I' prefix from '{current}' in {location} — "
                             + $"another top-level type named '{stripped}' already lives in "
-                            + $"the same namespace. Keeping the prefixed name. Rename the "
+                            + $"the same scope. Keeping the prefixed name. Rename the "
                             + $"conflicting type or set [Name(TypeScript, \"…\")] to resolve.",
                         type.Locations.FirstOrDefault()
                     )
@@ -591,8 +652,46 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             typeNamesBySymbol[key] = stripped;
             siblings.Remove(current);
             siblings.Add(stripped);
+            RewriteTranspilableTypeEntry(transpilableTypesDict, current, stripped);
+            nameRenames[current] = stripped;
         }
     }
+
+    /// <summary>
+    /// Propagates the rewritten name into
+    /// <see cref="TypeScriptTransformContext.TranspilableTypes"/>.
+    /// The frontend registers each entry under its source name (and
+    /// its TS alias when they diverge). Under the strip, the source
+    /// name (<c>IIssueRepository</c>) goes away from the dict and
+    /// the stripped form (<c>IssueRepository</c>) becomes the
+    /// consumer-visible key, with <c>TsName</c> + <c>FileName</c>
+    /// updated so the import collector emits the rewritten file
+    /// path and identifier.
+    /// </summary>
+    private static void RewriteTranspilableTypeEntry(
+        Dictionary<string, IrTranspilableTypeRef> dict,
+        string sourceName,
+        string stripped
+    )
+    {
+        if (!dict.TryGetValue(sourceName, out var entry))
+            return;
+        var rewrittenFileName = string.Equals(entry.FileName, SymbolHelper.ToKebabCase(sourceName))
+            ? SymbolHelper.ToKebabCase(stripped)
+            : entry.FileName;
+        var updated = entry with { TsName = stripped, FileName = rewrittenFileName };
+        dict.Remove(sourceName);
+        dict[stripped] = updated;
+    }
+
+    private static string GetEnclosingScopeKey(INamedTypeSymbol type) =>
+        type.ContainingType is { } outer
+            ? outer.ToDisplayString()
+            : (
+                type.ContainingNamespace is { IsGlobalNamespace: false } ns
+                    ? ns.ToDisplayString()
+                    : string.Empty
+            );
 
     /// <summary>
     /// Matches <c>^I[A-Z]</c> — captures <c>IFoo</c> and

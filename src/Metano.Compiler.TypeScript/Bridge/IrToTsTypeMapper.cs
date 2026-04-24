@@ -46,15 +46,38 @@ public static class IrToTsTypeMapper
             _ => new TsAnyType(),
         };
 
+    /// <summary>
+    /// Optional name rewriter consulted by <see cref="MapNamed"/>.
+    /// Set by <see cref="Metano.Transformation.TypeTransformer"/>
+    /// when <c>--strip-interface-prefix</c> is active so every
+    /// named-type reference picks up the stripped identifier at the
+    /// emit boundary. Uses <see cref="AsyncLocal{T}"/> so the flow
+    /// state stays scoped to the transformer's execution context —
+    /// parallel test runs (TUnit default) each see their own value
+    /// instead of racing on a process-wide static slot.
+    /// </summary>
+    private static readonly AsyncLocal<IReadOnlyDictionary<string, string>?> _namedTypeRenames =
+        new();
+
+    internal static IReadOnlyDictionary<string, string>? NamedTypeRenames
+    {
+        get => _namedTypeRenames.Value;
+        set => _namedTypeRenames.Value = value;
+    }
+
     private static TsType MapNamed(IrNamedTypeRef named, IrToTsTypeOverrides? overrides)
     {
-        TsTypeOrigin? origin = named.Origin is { } o ? BuildTsOrigin(o, named.Name) : null;
+        var name = named.Name;
+        if (NamedTypeRenames is { } renames && renames.TryGetValue(name, out var renamed))
+            name = renamed;
+
+        TsTypeOrigin? origin = named.Origin is { } o ? BuildTsOrigin(o, name) : null;
 
         IReadOnlyList<TsType>? args = named.TypeArguments is { Count: > 0 } ta
             ? ta.Select(t => Map(t, overrides)).ToList()
             : null;
 
-        return new TsNamedType(named.Name, args, origin);
+        return new TsNamedType(name, args, origin);
     }
 
     /// <summary>

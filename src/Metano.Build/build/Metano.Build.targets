@@ -16,6 +16,8 @@
       MetanoSrcRoot          (optional)  TS source root relative to package root (default: inferred)
       MetanoSkipPackageJson  (optional)  true to skip package.json generation (default: false)
       MetanoShowTimings      (optional)  true to print timing info (default: false)
+      MetanoNamespaceBarrels (optional)  true to emit a root src/index.ts barrel mirroring C# namespaces (default: false)
+      MetanoStripInterfacePrefix (optional)  true to drop the `I` prefix from interface names when the second letter is uppercase (default: false). Collisions with sibling types surface MS0017.
       MetanoExtraArgs        (optional)  Additional CLI arguments
   -->
 
