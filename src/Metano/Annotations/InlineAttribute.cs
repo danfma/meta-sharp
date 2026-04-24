@@ -41,5 +41,8 @@ namespace Metano.Annotations;
 /// its own AST.
 /// </para>
 /// </summary>
-[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, Inherited = false)]
+[AttributeUsage(
+    AttributeTargets.Field | AttributeTargets.Property | AttributeTargets.Method,
+    Inherited = false
+)]
 public sealed class InlineAttribute : Attribute;

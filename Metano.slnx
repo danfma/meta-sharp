@@ -14,10 +14,11 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/SampleCounter/SampleCounter.csproj" />
+    <Project Path="samples/SampleCounterV3/SampleCounterV3.csproj" />
     <Project Path="samples/SampleIssueTracker/SampleIssueTracker.csproj" />
     <Project Path="samples/SampleOperatorOverloading/SampleOperatorOverloading.csproj" />
     <Project Path="samples/SampleTodo.Service/SampleTodo.Service.csproj" />
     <Project Path="samples/SampleTodo/SampleTodo.csproj" />
-    <Project Path="samples\SampleCounterWithDomView\SampleCounterWithDomView.csproj" />
+    <Project Path="samples\SampleCounterV2\SampleCounterV2.csproj" />
   </Folder>
 </Solution>

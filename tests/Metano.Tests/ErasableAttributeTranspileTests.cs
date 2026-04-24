@@ -123,26 +123,32 @@ public class ErasableAttributeTranspileTests
     }
 
     [Test]
-    public async Task Erasable_WithTranspile_EmitsMs0015()
+    public async Task Erasable_WithTranspile_EmitsModuleStyle()
     {
-        // The two attributes are semantically incompatible — one asks
-        // for no emission, the other asks for full emission. MS0015
-        // surfaces the conflict at extraction time.
-        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+        // `[Transpile]` forces discovery inside binding projects that
+        // do not opt into assembly-wide transpilation; `[Erasable]`
+        // still dictates call-site scope erasure + module-style
+        // emission. The combo is valid so catalog/extension helpers
+        // shipped from a referenced binding project can be authored
+        // without `[assembly: TranspileAssembly]`.
+        var (files, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations;
 
             [Transpile]
             [Erasable]
-            public static class Conflict
+            public static class Bridge
             {
-                public static int X => 42;
+                public static int Double(int value) => value * 2;
             }
             """
         );
 
-        var ms0015 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidErasable);
-        await Assert.That(ms0015).IsNotNull();
-        await Assert.That(ms0015!.Message).Contains("[Transpile]");
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidErasable))
+            .IsFalse();
+        var output = files["bridge.ts"];
+        await Assert.That(output).Contains("export function double(value: number): number");
+        await Assert.That(output).DoesNotContain("class Bridge");
     }
 }
