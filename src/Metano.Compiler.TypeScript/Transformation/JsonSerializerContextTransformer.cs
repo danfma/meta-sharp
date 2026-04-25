@@ -426,8 +426,22 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             if (named.IsSetLike() && named.TypeArguments.Length > 0)
                 return "hashSet";
 
-            // Collection-like → array
-            if (named.IsCollectionLike() && named.TypeArguments.Length > 0)
+            // Collection-like / IEnumerable / IReadOnlyCollection → array.
+            // Since #129 these no longer share the `IsCollectionLike`
+            // predicate (they lower to TS `Iterable<T>` at the type
+            // level), but JSON-wise they still serialize as arrays —
+            // `JSON.stringify([...iter])` works the same as a plain
+            // array. Keep the descriptor as "array" so the generated
+            // serializer context knows to iterate and emit the element
+            // descriptor.
+            if (
+                (
+                    named.IsCollectionLike()
+                    || fullName.StartsWith("System.Collections.Generic.IEnumerable")
+                    || fullName.StartsWith("System.Collections.Generic.IReadOnlyCollection")
+                )
+                && named.TypeArguments.Length > 0
+            )
                 return "array";
 
             // Enum with [StringEnum] → enum, otherwise numericEnum

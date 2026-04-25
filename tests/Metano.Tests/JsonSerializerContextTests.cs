@@ -346,4 +346,41 @@ public class JsonSerializerContextTests
         // And UUID should be imported from metano-runtime
         await Assert.That(ts).Contains("import { UUID } from \"metano-runtime\"");
     }
+
+    [Test]
+    public async Task IEnumerableProperty_ClassifiesAsArrayDescriptor()
+    {
+        // After #129, `IEnumerable<T>` lowers to `Iterable<T>` at the
+        // type level, but JSON-wise it still serializes as an array.
+        // The serializer context must classify the property as
+        // `kind: "array"` so the runtime knows to iterate and emit
+        // each element through the inner descriptor — falling
+        // through to `kind: "ref"` would break serialization.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+            using System.Text.Json.Serialization;
+
+            namespace TestApp;
+
+            [Transpile]
+            public record Tag(string Value);
+
+            [Transpile]
+            public record Article(string Title, IEnumerable<Tag> Tags);
+
+            [Transpile]
+            [JsonSerializable(typeof(Article))]
+            public partial class JsonContext : JsonSerializerContext
+            {
+                public JsonContext() : base(new System.Text.Json.JsonSerializerOptions()) { }
+                protected override System.Text.Json.JsonSerializerOptions? GeneratedSerializerOptions => null;
+                public override System.Text.Json.Serialization.Metadata.JsonTypeInfo? GetTypeInfo(Type type) => null;
+            }
+            """
+        );
+
+        var ts = result["json-context.ts"];
+        await Assert.That(ts).Contains("kind: \"array\"");
+    }
 }
