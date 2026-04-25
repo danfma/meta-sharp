@@ -99,11 +99,28 @@ public static class IrToTsPlainObjectBridge
         if (field.Initializer is null)
             return;
 
-        var name = IrToTsNamingPolicy.ToTypeName(field.Name, field.Attributes);
+        // Member naming policy for fields stays on
+        // `ToInterfaceMemberName` (camelCase + reserved-word
+        // escaping) so a static field on a `[PlainObject]` record
+        // surfaces under the same identifier shape as the rest of
+        // the module's members. Using `ToTypeName` here would
+        // PascalCase the export and disagree with every other field
+        // in the codebase.
+        var name = IrToTsNamingPolicy.ToInterfaceMemberName(field.Name, field.Attributes);
         var initializer = IrToTsExpressionBridge.Map(field.Initializer, bclRegistry);
+        // `readonly` C# fields lower to a `const` declaration; the
+        // rare mutable-static case (a top-level cache or counter)
+        // emits as a `let` so call sites can still rebind it. Both
+        // forms keep the `export` modifier so consumers in the same
+        // module can import the symbol.
         sink.Add(
             new TsTopLevelStatement(
-                new TsVariableDeclaration(name, initializer, Const: true, Exported: true)
+                new TsVariableDeclaration(
+                    name,
+                    initializer,
+                    Const: field.IsReadonly,
+                    Exported: true
+                )
             )
         );
     }

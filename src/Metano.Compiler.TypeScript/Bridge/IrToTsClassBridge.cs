@@ -808,12 +808,14 @@ internal static class IrToTsClassBridge
             field.Initializer is not null && !field.IsCapturedByCtor
                 ? IrToTsExpressionBridge.Map(field.Initializer, bclRegistry)
                 : null;
-        // Static fields with an explicit initializer are the canonical
-        // shape (`static readonly Zero = new Counter(0)`); the
-        // default-initializer fallback only makes sense for instance
-        // fields that the constructor would otherwise leave undefined.
-        if (!field.IsStatic)
-            initializer ??= ComputeDefaultInitializer(field.Type);
+        // Mirror C#'s zero-initialization story for both instance and
+        // static fields: a C# field without an explicit initializer
+        // still reads as the type's default at runtime (`0`,
+        // `false`, `null`, …). TypeScript leaves a no-initializer
+        // field as `undefined`, which would silently shift behavior
+        // — fall back to the matching default so the generated
+        // class keeps the C# semantics.
+        initializer ??= ComputeDefaultInitializer(field.Type);
 
         return new TsFieldMember(
             name,
