@@ -341,6 +341,42 @@ public class DelegateEventTests
     }
 
     [Test]
+    public async Task BaseMethodGroup_BindsThisInsteadOfSuper()
+    {
+        // `base.Method` lowers to `super.method` in TS, but `super`
+        // is not a value expression — it cannot be passed to
+        // `.bind(...)`. The wrapper substitutes `this` in the bind
+        // argument so the emitted JS stays valid; the base method
+        // body still runs against the current instance, matching
+        // the C# semantics of `base`-qualified method groups
+        // (non-virtual dispatch but receiver stays `this`).
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class BaseHandler
+            {
+                public virtual void Handle() { }
+            }
+
+            [Transpile]
+            public class DerivedHandler : BaseHandler
+            {
+                public Action GetBaseHandler()
+                {
+                    return base.Handle;
+                }
+            }
+            """
+        );
+
+        var output = result["derived-handler.ts"];
+        await Assert.That(output).Contains("super.handle.bind(this)");
+        await Assert.That(output).DoesNotContain("super.handle.bind(super)");
+    }
+
+    [Test]
     public async Task ThisDelegate_InstanceMethodGroup_StacksBindAndBindReceiver()
     {
         // `[This]`-bearing delegate assigned an instance method

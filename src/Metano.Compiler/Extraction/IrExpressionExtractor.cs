@@ -1186,13 +1186,12 @@ public sealed class IrExpressionExtractor
         if (IsDartTarget)
             return reference;
 
-        var hasThisDelegate =
-            invoke.Parameters.Length > 0 && SymbolHelper.HasThis(invoke.Parameters[0]);
+        var hasThisDelegate = HasThisParameter(invoke);
 
         var boundReference = ShouldBindInstanceReceiver(method, reference, out var instanceAccess)
             ? new IrCallExpression(
                 new IrMemberAccess(instanceAccess, "bind"),
-                [new IrArgument(instanceAccess.Target)]
+                [new IrArgument(BindArgumentFor(instanceAccess.Target))]
             )
             : reference;
 
@@ -1205,6 +1204,20 @@ public sealed class IrExpressionExtractor
     }
 
     private bool IsDartTarget => _target == Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
+    /// Returns the expression that should be passed to
+    /// <c>.bind(...)</c> as the receiver. <c>base.Method</c> lowers
+    /// to <c>super.method</c> in TypeScript, but <c>super</c> is not
+    /// a value expression in JS/TS and cannot be a <c>.bind</c>
+    /// argument. Substitute <c>this</c> in that position — the base
+    /// method's body still runs against the current instance, which
+    /// matches the C# semantics of <c>base</c>-qualified method
+    /// groups (the dispatch is non-virtual but the receiver is
+    /// still <c>this</c>).
+    /// </summary>
+    private static IrExpression BindArgumentFor(IrExpression receiver) =>
+        receiver is IrBaseExpression ? new IrThisExpression() : receiver;
 
     /// <summary>
     /// True when an instance method-group reference must
