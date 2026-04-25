@@ -581,7 +581,7 @@ public sealed class IrExpressionExtractor
             && symbol.ContainingType is not null
             && !IsLocalLikeSymbol(symbol)
         )
-            return WrapMethodGroupForThisDelegate(
+            return WrapMethodGroupForDelegate(
                 generic,
                 symbol,
                 new IrMemberAccess(
@@ -595,7 +595,7 @@ public sealed class IrExpressionExtractor
             symbol is { IsStatic: true } and (IPropertySymbol or IFieldSymbol or IMethodSymbol)
             && symbol.ContainingType is not null
         )
-            return WrapMethodGroupForThisDelegate(
+            return WrapMethodGroupForDelegate(
                 generic,
                 symbol,
                 new IrMemberAccess(
@@ -605,7 +605,7 @@ public sealed class IrExpressionExtractor
                 )
             );
 
-        return WrapMethodGroupForThisDelegate(
+        return WrapMethodGroupForDelegate(
             generic,
             symbol,
             new IrIdentifier(generic.Identifier.ValueText)
@@ -642,7 +642,7 @@ public sealed class IrExpressionExtractor
                 id.Identifier.ValueText,
                 BuildOrigin(symbol)
             );
-            return WrapMethodGroupForThisDelegate(id, symbol, memberAccess);
+            return WrapMethodGroupForDelegate(id, symbol, memberAccess);
         }
 
         // Static member of the enclosing (or any other) type reached without a
@@ -660,14 +660,10 @@ public sealed class IrExpressionExtractor
                 id.Identifier.ValueText,
                 BuildOrigin(symbol)
             );
-            return WrapMethodGroupForThisDelegate(id, symbol, staticAccess);
+            return WrapMethodGroupForDelegate(id, symbol, staticAccess);
         }
 
-        return WrapMethodGroupForThisDelegate(
-            id,
-            symbol,
-            new IrIdentifier(id.Identifier.ValueText)
-        );
+        return WrapMethodGroupForDelegate(id, symbol, new IrIdentifier(id.Identifier.ValueText));
     }
 
     private static bool IsLocalLikeSymbol(ISymbol symbol) =>
@@ -1142,31 +1138,33 @@ public sealed class IrExpressionExtractor
 
         var origin = BuildOrigin(_semantic.GetSymbolInfo(member).Symbol);
         var memberAccess = new IrMemberAccess(target, name, origin);
-        return WrapMethodGroupForThisDelegate(member, symbol, memberAccess);
+        return WrapMethodGroupForDelegate(member, symbol, memberAccess);
     }
 
     /// <summary>
-    /// Method-group conversion to a <c>[This]</c>-bearing delegate: a
-    /// reference like <c>button.OnClick = handler</c> (or the static
-    /// equivalent) implicitly funnels the dispatcher's JS <c>this</c>
-    /// into the method's first parameter at every invocation. The
-    /// extractor wraps the method reference in a runtime
-    /// <c>bindReceiver(...)</c> call so the resulting TS function
-    /// rebinds <c>this</c> the same way a <c>[This]</c> lambda does.
+    /// Method-group conversion to a delegate type. C# captures the
+    /// instance receiver implicitly so any later invocation runs the
+    /// body with the original <c>this</c>; JS does not — a bare
+    /// <c>obj.method</c> reference loses its receiver as soon as it
+    /// leaves the access expression. This wrapper normalizes the IR
+    /// so the emitted TS preserves the C# semantics in two layers:
+    /// <list type="bullet">
+    ///   <item><c>.bind(receiver)</c> on every instance method group
+    ///   assigned to a delegate slot. Static methods skip the bind
+    ///   (no instance to capture). Type-qualified references
+    ///   (<c>Class.StaticMember</c>) skip too.</item>
+    ///   <item><c>bindReceiver(...)</c> trampoline added on top when
+    ///   the delegate's first parameter carries <c>[This]</c>: the
+    ///   trampoline rebinds JS <c>this</c> from the call-site
+    ///   dispatcher into the method's first parameter, matching the
+    ///   <c>[This]</c> lambda lowering.</item>
+    /// </list>
     /// Plain identifier references (calls or non-delegate uses)
-    /// fall through unchanged.
-    /// <para>
-    /// Instance method-group references additionally
-    /// <c>.bind(receiver)</c> the inner reference before handing it
-    /// to <c>bindReceiver</c>. C# method groups capture the instance
-    /// as the call-time receiver, so a subsequent <c>fn(args)</c>
-    /// dispatch inside <c>bindReceiver</c>'s trampoline must already
-    /// know which object owns the method — otherwise the body's own
-    /// <c>this</c> would be lost. Static method groups skip the
-    /// <c>.bind</c> step (no instance to capture).
-    /// </para>
+    /// fall through unchanged. The Dart target is opted out — Dart
+    /// tear-offs auto-bind, so the runtime helpers and the JS-only
+    /// <c>.bind</c> idiom would only get in the way.
     /// </summary>
-    private IrExpression WrapMethodGroupForThisDelegate(
+    private IrExpression WrapMethodGroupForDelegate(
         ExpressionSyntax expression,
         ISymbol? symbol,
         IrExpression reference
@@ -1174,6 +1172,7 @@ public sealed class IrExpressionExtractor
     {
         if (symbol is not IMethodSymbol method)
             return reference;
+
         if (
             _semantic.GetTypeInfo(expression).ConvertedType
             is not INamedTypeSymbol
@@ -1183,23 +1182,57 @@ public sealed class IrExpressionExtractor
             }
         )
             return reference;
-        if (invoke.Parameters.Length == 0 || !SymbolHelper.HasThis(invoke.Parameters[0]))
+
+        if (IsDartTarget)
             return reference;
 
-        var inner = reference;
-        if (
-            !method.IsStatic
-            && reference is IrMemberAccess { Target: { } receiver } memberAccess
-            && receiver is not IrTypeReference
-        )
-        {
-            inner = new IrCallExpression(
-                new IrMemberAccess(memberAccess, "bind"),
-                [new IrArgument(receiver)]
-            );
-        }
+        var hasThisDelegate =
+            invoke.Parameters.Length > 0 && SymbolHelper.HasThis(invoke.Parameters[0]);
 
-        return new IrCallExpression(new IrIdentifier("bindReceiver"), [new IrArgument(inner)]);
+        var boundReference = ShouldBindInstanceReceiver(method, reference, out var instanceAccess)
+            ? new IrCallExpression(
+                new IrMemberAccess(instanceAccess, "bind"),
+                [new IrArgument(instanceAccess.Target)]
+            )
+            : reference;
+
+        return hasThisDelegate
+            ? new IrCallExpression(
+                new IrIdentifier("bindReceiver"),
+                [new IrArgument(boundReference)]
+            )
+            : boundReference;
+    }
+
+    private bool IsDartTarget => _target == Metano.Annotations.TargetLanguage.Dart;
+
+    /// <summary>
+    /// True when an instance method-group reference must
+    /// <c>.bind(receiver)</c> the underlying member access. Static
+    /// methods and type-qualified references skip the bind because
+    /// there is no instance to capture; non-member-access shapes
+    /// (bare identifiers from local functions, locals, parameters)
+    /// also skip — there is nothing to bind onto.
+    /// </summary>
+    private static bool ShouldBindInstanceReceiver(
+        IMethodSymbol method,
+        IrExpression reference,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out IrMemberAccess? memberAccess
+    )
+    {
+        memberAccess = null;
+
+        if (method.IsStatic)
+            return false;
+
+        if (reference is not IrMemberAccess { Target: { } receiver } access)
+            return false;
+
+        if (receiver is IrTypeReference)
+            return false;
+
+        memberAccess = access;
+        return true;
     }
 
     /// <summary>

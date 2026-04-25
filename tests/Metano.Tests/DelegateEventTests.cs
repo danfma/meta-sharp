@@ -126,4 +126,347 @@ public class DelegateEventTests
         var output = result["app.ts"];
         await Assert.That(output).Contains("countChanged$remove(");
     }
+
+    // ── Method group → delegate binding ──────────────────────────
+
+    [Test]
+    public async Task MethodGroupAssignment_InstanceMethod_BindsThis()
+    {
+        // C# method group conversion captures the receiver
+        // implicitly. JS doesn't auto-bind, so the IR must wrap the
+        // member access in `.bind(this)` before assigning to the
+        // delegate field — otherwise invoking the delegate via
+        // another object loses `this` and the body's member access
+        // crashes at runtime.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class View
+            {
+                public Action? OnClick { get; set; }
+            }
+
+            [Transpile]
+            public class Presenter
+            {
+                private readonly View _view = new();
+
+                public void Setup()
+                {
+                    _view.OnClick = OnButtonClicked;
+                }
+
+                private void OnButtonClicked() { }
+            }
+            """
+        );
+
+        var output = result["presenter.ts"];
+        await Assert.That(output).Contains("this._view.onClick = this.onButtonClicked.bind(this)");
+        await Assert.That(output).DoesNotContain("bindReceiver");
+    }
+
+    [Test]
+    public async Task MethodGroupAssignment_StaticMethod_SkipsBind()
+    {
+        // Static method groups have no instance to capture; the
+        // emitted reference stays bare. Wrapping in `.bind(...)`
+        // would be wasted allocation.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class View
+            {
+                public Action? OnClick { get; set; }
+            }
+
+            [Transpile]
+            public static class Handlers
+            {
+                public static void HandleClick() { }
+            }
+
+            [Transpile]
+            public class Presenter
+            {
+                public void Setup(View view)
+                {
+                    view.OnClick = Handlers.HandleClick;
+                }
+            }
+            """
+        );
+
+        var output = result["presenter.ts"];
+        await Assert.That(output).Contains("view.onClick = Handlers.handleClick");
+        await Assert.That(output).DoesNotContain("Handlers.handleClick.bind");
+    }
+
+    [Test]
+    public async Task MethodGroupAsArgument_InstanceMethod_BindsThis()
+    {
+        // Method group passed as a delegate-typed argument flows
+        // through the same path — bind preserves `this` inside the
+        // callee.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Scheduler
+            {
+                public void Run(Action callback) { }
+            }
+
+            [Transpile]
+            public class Worker
+            {
+                private readonly Scheduler _scheduler = new();
+
+                public void Start()
+                {
+                    _scheduler.Run(Tick);
+                }
+
+                private void Tick() { }
+            }
+            """
+        );
+
+        var output = result["worker.ts"];
+        await Assert.That(output).Contains("this._scheduler.run(this.tick.bind(this))");
+        await Assert.That(output).DoesNotContain("bindReceiver");
+    }
+
+    [Test]
+    public async Task MethodGroupReturn_InstanceMethod_BindsThis()
+    {
+        // Returning a method group as a delegate must bind too —
+        // the caller will invoke the result through whatever
+        // dispatcher it owns and lose `this` otherwise.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Box
+            {
+                private int _value;
+
+                public Func<int> GetReader()
+                {
+                    return Read;
+                }
+
+                private int Read() => _value;
+            }
+            """
+        );
+
+        var output = result["box.ts"];
+        await Assert.That(output).Contains("return this.read.bind(this)");
+        await Assert.That(output).DoesNotContain("bindReceiver");
+    }
+
+    [Test]
+    public async Task EventSubscription_InstanceHandler_BindsThis()
+    {
+        // `event += handler` lowers to `event$add(handler)`. The
+        // method group inside the assignment still flows through
+        // the wrapper, so the handler arrives at `event$add`
+        // already bound. No double-binding because the bind happens
+        // at the leaf reference.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Counter
+            {
+                public event Action<int>? CountChanged;
+            }
+
+            [Transpile]
+            public class Watcher
+            {
+                private readonly Counter _counter = new();
+
+                public void Listen()
+                {
+                    _counter.CountChanged += OnChanged;
+                }
+
+                private void OnChanged(int n) { }
+            }
+            """
+        );
+
+        var output = result["watcher.ts"];
+        await Assert.That(output).Contains("countChanged$add(this.onChanged.bind(this))");
+        await Assert.That(output).DoesNotContain("bind(this).bind");
+    }
+
+    [Test]
+    public async Task OrdinaryMethodCall_DoesNotBind()
+    {
+        // Plain method invocation must stay un-bound. The wrapper
+        // relies on Roslyn reporting no `ConvertedType` for method
+        // groups used as call targets — pin that invariant so a
+        // future Roslyn change does not silently double-bind every
+        // call site.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Calculator
+            {
+                public void Run()
+                {
+                    Tick();
+                }
+
+                private void Tick() { }
+            }
+            """
+        );
+
+        var output = result["calculator.ts"];
+        await Assert.That(output).Contains("this.tick()");
+        await Assert.That(output).DoesNotContain(".bind(this)");
+    }
+
+    [Test]
+    public async Task ThisDelegate_InstanceMethodGroup_StacksBindAndBindReceiver()
+    {
+        // `[This]`-bearing delegate assigned an instance method
+        // group must stack both wraps: `.bind(this)` on the inner
+        // reference (so the body's own `this` survives the
+        // dispatcher rebind) plus `bindReceiver(...)` on the
+        // outside (so the dispatcher rewrites JS `this` into the
+        // first parameter at call time).
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App;
+
+            [Transpile]
+            public abstract class Element
+            {
+                public string Tag { get; set; } = "";
+            }
+
+            public delegate void Listener([This] Element self);
+
+            [Transpile]
+            public class Widget
+            {
+                public Listener? OnClick { get; set; }
+            }
+
+            [Transpile]
+            public class Page
+            {
+                private readonly Widget _widget = new();
+
+                public void Setup()
+                {
+                    _widget.OnClick = OnButtonClicked;
+                }
+
+                private void OnButtonClicked(Element self) { }
+            }
+            """
+        );
+
+        var output = result["page.ts"];
+        await Assert.That(output).Contains("bindReceiver(this.onButtonClicked.bind(this))");
+    }
+
+    [Test]
+    public async Task DartTarget_DoesNotEmitBind()
+    {
+        // Dart tear-offs auto-bind, so the JS-only `.bind(this)`
+        // idiom must not appear in Dart output. The wrapper opts
+        // out via the `IsDartTarget` guard.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public class View
+            {
+                public Action? OnClick { get; set; }
+            }
+
+            [Transpile]
+            public class Presenter
+            {
+                private readonly View _view = new();
+
+                public void Setup()
+                {
+                    _view.OnClick = OnButtonClicked;
+                }
+
+                private void OnButtonClicked() { }
+            }
+            """
+        );
+
+        var dart = files["presenter.dart"];
+        await Assert.That(dart).Contains("onButtonClicked");
+        await Assert.That(dart).DoesNotContain(".bind(");
+        await Assert.That(dart).DoesNotContain("bindReceiver");
+    }
+
+    private static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileDart(string csharpSource)
+    {
+        var source = $"""
+            using System;
+            using Metano.Annotations;
+            {csharpSource}
+            """;
+        var syntaxTree = Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(
+            source,
+            new Microsoft.CodeAnalysis.CSharp.CSharpParseOptions(
+                Microsoft.CodeAnalysis.CSharp.LanguageVersion.Preview
+            )
+        );
+        var compilation = Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(
+            "DartTestAssembly",
+            [syntaxTree],
+            TranspileHelper.BaseReferences,
+            new Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions(
+                Microsoft.CodeAnalysis.OutputKind.DynamicallyLinkedLibrary
+            )
+        );
+
+        var errors = compilation
+            .GetDiagnostics()
+            .Where(d => d.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error)
+            .ToList();
+        if (errors.Count > 0)
+            throw new InvalidOperationException(
+                "C# compilation failed:\n" + string.Join("\n", errors.Select(e => e.ToString()))
+            );
+
+        var ir = new Metano.Compiler.CSharpSourceFrontend().ExtractFromCompilation(
+            compilation,
+            Metano.Annotations.TargetLanguage.Dart
+        );
+        var transformer = new Metano.Dart.Transformation.DartTransformer(ir, compilation);
+        var files = transformer.TransformAll();
+        var printer = new Metano.Dart.Printer();
+        var result = new Dictionary<string, string>();
+        foreach (var file in files)
+            result[file.FileName] = printer.Print(file);
+        return (result, transformer.Diagnostics);
+    }
 }
