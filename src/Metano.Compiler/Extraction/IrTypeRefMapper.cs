@@ -178,11 +178,11 @@ public static class IrTypeRefMapper
                 )
                 && named.TypeArguments.Length > 0
             )
-                return new IrIterableTypeRef(Map(named.TypeArguments[0], originResolver));
+                return new IrIterableTypeRef(Map(named.TypeArguments[0], originResolver, target));
 
             // Collection-like → Array
             if (named.IsCollectionLike() && named.TypeArguments.Length > 0)
-                return new IrArrayTypeRef(Map(named.TypeArguments[0], originResolver));
+                return new IrArrayTypeRef(Map(named.TypeArguments[0], originResolver, target));
 
             // Delegate types → function type
             if (named.TypeKind == TypeKind.Delegate)
