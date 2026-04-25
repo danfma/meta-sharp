@@ -85,7 +85,33 @@ public class RecordStaticMembersTests
 
         var output = result["counter.ts"];
         // PlainObject records don't get a TS class wrapper; static
-        // members surface as top-level exports in the same module.
-        await Assert.That(output).Contains("export const Zero");
+        // members surface as top-level exports in the same module
+        // under the same camelCased naming policy as the interface
+        // members.
+        await Assert.That(output).Contains("export const zero");
+    }
+
+    [Test]
+    public async Task PlainObjectRecordWithMutableStaticField_EmitsTopLevelExportLet()
+    {
+        // Mutable static fields (no `readonly`) lower to a `let`
+        // declaration so call sites can still rebind the symbol —
+        // matching the C# semantics that a `static int` on a record
+        // can be reassigned from anywhere with access.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [PlainObject]
+            public sealed record Counter(int Count)
+            {
+                public static int Cached = 0;
+            }
+            """
+        );
+
+        var output = result["counter.ts"];
+        await Assert.That(output).Contains("export let cached");
     }
 }
