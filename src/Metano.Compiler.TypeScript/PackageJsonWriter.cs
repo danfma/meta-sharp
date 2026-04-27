@@ -151,10 +151,15 @@ public static class PackageJsonWriter
         WriteIfMissing(root, "type", "module");
         WriteIfMissing(root, "sideEffects", false);
 
-        // Imports: the transpiler owns `#` and `#/*` — stale aliases
-        // are removed; user-defined keys survive.
-        HashSet<string> managedImportKeys = ["#", "#/*"];
-        ReplacePreservingUserEntries(root, "imports", imports, managedImportKeys);
+        // Imports follow the same write-if-missing rule as the
+        // scalar fields above: the transpiler seeds `#` and `#/*`
+        // on first creation, but a consumer who has retargeted
+        // either alias by hand (e.g. pointing `#/*` at `./lib/*`
+        // for a non-default build directory) keeps that mapping
+        // across regenerations. Keys absent from the existing
+        // object are added; existing keys — including transpiler-
+        // shaped ones from a previous run — are left alone.
+        SeedMissingImports(root, imports);
 
         // Exports merge additively — see `MergeTranspilerManagedExports`
         // for the shape-detection rule and the deep-merge contract. Run
@@ -357,42 +362,28 @@ public static class PackageJsonWriter
     }
 
     /// <summary>
-    /// Replaces the JSON object at <paramref name="key"/> with <paramref name="generated"/>,
-    /// preserving any user-defined entries whose keys are absent from the generated set.
-    /// Keys listed in <paramref name="managedKeys"/> are considered transpiler-managed — if
-    /// they appear in the existing object but not in <paramref name="generated"/>, they are
-    /// stale and silently dropped instead of being preserved.
+    /// Seeds the <c>imports</c> object with the transpiler's
+    /// <c>#</c> / <c>#/*</c> aliases on first creation while
+    /// leaving every existing key untouched on subsequent runs. A
+    /// consumer who retargeted <c>#/*</c> by hand (for a custom
+    /// build dir, alternate dist layout, or wrapper pre-processor)
+    /// keeps that mapping across regenerations — the transpiler
+    /// only fills in keys the consumer has not picked yet.
     /// </summary>
-    private static void ReplacePreservingUserEntries(
-        JsonObject root,
-        string key,
-        JsonObject generated,
-        IReadOnlySet<string>? managedKeys = null
-    )
+    private static void SeedMissingImports(JsonObject root, JsonObject generated)
     {
-        if (root[key] is JsonObject existing)
+        if (root["imports"] is not JsonObject existing)
         {
-            // Copy user-defined entries that the transpiler doesn't manage.
-            foreach (var (entryKey, entryValue) in existing.ToList())
-            {
-                if (generated.ContainsKey(entryKey))
-                    continue; // Already in generated — transpiler's version wins.
-                if (managedKeys is not null && managedKeys.Contains(entryKey))
-                    continue; // Stale transpiler key — drop it.
-                generated[entryKey] = entryValue?.DeepClone();
-            }
-
-            // Replace in-place to preserve key ordering in the JSON output.
-            // Clear the existing object and copy generated entries into it.
-            foreach (var k in existing.Select(e => e.Key).ToList())
-                existing.Remove(k);
-            foreach (var (entryKey, entryValue) in generated)
-                existing[entryKey] = entryValue?.DeepClone();
-            // existing is already parented to root at the correct position.
+            root["imports"] = generated;
             return;
         }
 
-        root[key] = generated;
+        foreach (var (entryKey, entryValue) in generated)
+        {
+            if (existing.ContainsKey(entryKey))
+                continue;
+            existing[entryKey] = entryValue?.DeepClone();
+        }
     }
 
     /// <summary>
