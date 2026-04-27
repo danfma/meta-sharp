@@ -17,7 +17,7 @@
       "rollForward": false
     },
     "dotnet-releaser": {
-      "version": "0.16.0",
+      "version": "0.18.1",
       "commands": [
         "dotnet-releaser"
       ],
