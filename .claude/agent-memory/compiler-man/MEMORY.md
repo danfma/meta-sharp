@@ -1,3 +1,3 @@
 # compiler-man Agent Memory
 
-(Empty — will be populated as compiler-man accumulates project-specific findings and user feedback.)
+- [IR captured ctor params](ir_captured_ctor_params.md) — `CapturedFieldName` + `IsCapturedByCtor` already exist; extend `AnnotateCapturedParams`, don't redesign IR.
