@@ -384,13 +384,18 @@ public class EmitPackageTests
     }
 
     [Test]
-    public async Task Imports_StaleRootAliasRemovedWhenBarrelDisappears()
+    public async Task Imports_ExistingAliasesPreservedAcrossRegenerations()
     {
+        // Write-if-missing rule (per #136): both transpiler-shaped
+        // aliases (`#`, `#/*`) and user-defined ones survive across
+        // regenerations once they exist on disk. The transpiler
+        // only seeds new keys when the field is empty or missing
+        // an alias entirely. Removing the obsolete `#` when its
+        // barrel disappears would clobber a consumer who left the
+        // alias pointing at a hand-curated bundle output.
         var tempDir = CreateTempDir();
         var srcDir = Path.Combine(tempDir, "src");
         Directory.CreateDirectory(srcDir);
-
-        // Existing package.json with "#" root alias from a previous run that had index.ts
         File.WriteAllText(
             Path.Combine(tempDir, "package.json"),
             """
@@ -405,7 +410,6 @@ public class EmitPackageTests
             """
         );
 
-        // Current generation has no root barrel (no index.ts)
         var files = new[] { new TsSourceFile("item.ts", [], "") };
 
         PackageJsonWriter.UpdateOrCreate(
@@ -417,13 +421,56 @@ public class EmitPackageTests
 
         var pkg = ReadJson(tempDir);
         var imports = pkg["imports"] as JsonObject;
+
         await Assert.That(imports).IsNotNull();
-        // Stale "#" alias removed (no root barrel in current generation)
-        await Assert.That(imports!.ContainsKey("#")).IsFalse();
-        // "#/*" still present (always generated)
+        await Assert.That(imports!.ContainsKey("#")).IsTrue();
         await Assert.That(imports.ContainsKey("#/*")).IsTrue();
-        // User-defined entry preserved
         await Assert.That(imports.ContainsKey("#custom/*")).IsTrue();
+
+        Directory.Delete(tempDir, recursive: true);
+    }
+
+    [Test]
+    public async Task Imports_RetargetedAlias_PreservedAcrossRegenerations()
+    {
+        // The consumer pointed `#/*` at `./lib/*` instead of the
+        // default `./dist/*` — perhaps using a custom build
+        // pipeline that emits to `lib/`. The transpiler must not
+        // flip the alias back to `./dist/*` on every regeneration.
+        var tempDir = CreateTempDir();
+        var srcDir = Path.Combine(tempDir, "src");
+        Directory.CreateDirectory(srcDir);
+        File.WriteAllText(
+            Path.Combine(tempDir, "package.json"),
+            """
+            {
+              "name": "consumer",
+              "imports": {
+                "#/*": {
+                  "types": "./lib/*.d.ts",
+                  "import": "./lib/*.js",
+                  "default": "./src/*.ts"
+                }
+              }
+            }
+            """
+        );
+
+        var files = new[] { new TsSourceFile("index.ts", [], "") };
+
+        PackageJsonWriter.UpdateOrCreate(
+            tempDir,
+            srcDir,
+            files,
+            authoritativePackageName: "consumer"
+        );
+
+        var pkg = ReadJson(tempDir);
+        var subpathAlias = pkg["imports"]?["#/*"] as JsonObject;
+
+        await Assert.That(subpathAlias).IsNotNull();
+        await Assert.That(subpathAlias!["types"]?.GetValue<string>()).IsEqualTo("./lib/*.d.ts");
+        await Assert.That(subpathAlias["import"]?.GetValue<string>()).IsEqualTo("./lib/*.js");
 
         Directory.Delete(tempDir, recursive: true);
     }
