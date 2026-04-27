@@ -33,6 +33,29 @@ public sealed class IrExpressionExtractor
     /// </summary>
     private readonly HashSet<ISymbol> _inlineExpanding;
 
+    /// <summary>
+    /// Map of primary-constructor parameter symbols that were captured
+    /// by member bodies, keyed to the synthesized backing field name.
+    /// When the extractor resolves an identifier to one of these
+    /// parameters, it rewrites the reference to <c>this._field</c> so
+    /// the emitted code goes through the auto-synthesized field
+    /// instead of an undefined parameter binding. Stored in an
+    /// <see cref="AsyncLocal{T}"/> to scope the rewrite to a single
+    /// type's member-body extraction without threading an extra
+    /// parameter through every extractor constructor; tests run
+    /// concurrently each see their own value.
+    /// </summary>
+    private static readonly AsyncLocal<IReadOnlyDictionary<
+        ISymbol,
+        string
+    >?> _capturedPrimaryCtorParams = new();
+
+    internal static IReadOnlyDictionary<ISymbol, string>? CapturedPrimaryCtorParams
+    {
+        get => _capturedPrimaryCtorParams.Value;
+        set => _capturedPrimaryCtorParams.Value = value;
+    }
+
     public IrExpressionExtractor(
         SemanticModel semanticModel,
         IrTypeOriginResolver? originResolver = null,
@@ -617,6 +640,21 @@ public sealed class IrExpressionExtractor
         var symbol = _semantic.GetSymbolInfo(id).Symbol;
         if (symbol is ITypeSymbol or INamespaceSymbol)
             return new IrTypeReference(id.Identifier.ValueText);
+
+        // Captured primary-constructor parameter referenced from a
+        // member body. Roslyn synthesizes a backing field on the
+        // class for the param; the transpiler does the same and
+        // rewrites the bare reference into `this._field` so the
+        // emitted code reads from the auto-synthesized field instead
+        // of an out-of-scope parameter binding. The map is set by
+        // `IrClassExtractor` around member-body extraction; outside
+        // that scope the lookup is a no-op.
+        if (
+            symbol is IParameterSymbol paramSymbol
+            && CapturedPrimaryCtorParams is { } captured
+            && captured.TryGetValue(paramSymbol, out var capturedFieldName)
+        )
+            return new IrMemberAccess(new IrThisExpression(), capturedFieldName);
 
         // `[Inline]` member referenced without an explicit qualifier
         // (same-type static access, extension receiver, etc.). Expand

@@ -42,7 +42,20 @@ public static class IrClassExtractor
                     .ToList()
                 : null;
 
-        var members = ExtractMembers(type, originResolver, compilation, target);
+        // Detect primary-constructor parameters captured implicitly by
+        // member bodies. Walk the type's method/property syntax once
+        // BEFORE extracting members: the captured-param map drives an
+        // identifier-rewrite inside `IrExpressionExtractor` so member
+        // bodies see `this._field` instead of an out-of-scope param
+        // binding. The map and its synthesized fields are scoped to
+        // this type's extraction via an `AsyncLocal`.
+        var captureScan = ImplicitCaptureDetector.Scan(type, compilation, originResolver);
+        var members = ExtractWithCaptureContext(
+            captureScan.ParamFieldMap,
+            () => ExtractMembers(type, originResolver, compilation, target)
+        );
+        members.AddRange(captureScan.SynthesizedFields);
+
         var constructor = IrConstructorExtractor.Extract(type, originResolver, compilation, target);
 
         // Mark constructor parameters that are captured by a field
@@ -52,6 +65,13 @@ public static class IrClassExtractor
         // it runs as a post-processing pass after the regular member /
         // constructor extraction completes.
         constructor = AnnotateCapturedParams(constructor, members);
+
+        // Annotate constructor params synthesized by the implicit-capture
+        // scan. The detector already paired each param with the right
+        // field name; surface that on the IR so the backend's ctor body
+        // emitter assigns the field the same way it does for explicit
+        // captures.
+        constructor = AnnotateImplicitCaptures(constructor, captureScan.ParamFieldMap);
 
         return new IrClassDeclaration(
             type.Name,
@@ -65,6 +85,65 @@ public static class IrClassExtractor
             TypeParameters: typeParameters,
             Attributes: IrAttributeExtractor.Extract(type)
         );
+    }
+
+    private static T ExtractWithCaptureContext<T>(
+        IReadOnlyDictionary<ISymbol, string>? captureMap,
+        Func<T> extract
+    )
+    {
+        if (captureMap is null || captureMap.Count == 0)
+            return extract();
+
+        var previous = IrExpressionExtractor.CapturedPrimaryCtorParams;
+        IrExpressionExtractor.CapturedPrimaryCtorParams = captureMap;
+        try
+        {
+            return extract();
+        }
+        finally
+        {
+            IrExpressionExtractor.CapturedPrimaryCtorParams = previous;
+        }
+    }
+
+    /// <summary>
+    /// Surfaces the implicit-capture map produced by
+    /// <see cref="ImplicitCaptureDetector"/> on the constructor IR.
+    /// The detector pairs each captured param with the synthesized
+    /// backing field's name; mirroring that on
+    /// <see cref="IrConstructorParameter.CapturedFieldName"/> lets
+    /// the backend emit the <c>this._field = param</c> assignment
+    /// using the same code path it uses for explicit captures.
+    /// </summary>
+    private static IrConstructorDeclaration? AnnotateImplicitCaptures(
+        IrConstructorDeclaration? ctor,
+        IReadOnlyDictionary<ISymbol, string>? captureMap
+    )
+    {
+        if (ctor is null || captureMap is null || captureMap.Count == 0)
+            return ctor;
+
+        var byParamName = captureMap
+            .Keys.OfType<IParameterSymbol>()
+            .ToDictionary(p => p.Name, p => captureMap[p], StringComparer.Ordinal);
+
+        var annotated = ctor
+            .Parameters.Select(p =>
+                p.CapturedFieldName is null
+                && byParamName.TryGetValue(p.Parameter.Name, out var fieldName)
+                    ? p with
+                    {
+                        CapturedFieldName = fieldName,
+                    }
+                    : p
+            )
+            .ToList();
+
+        return ctor with
+        {
+            Parameters = annotated,
+        };
     }
 
     /// <summary>
