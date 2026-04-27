@@ -649,10 +649,20 @@ public sealed class IrExpressionExtractor
         // of an out-of-scope parameter binding. The map is set by
         // `IrClassExtractor` around member-body extraction; outside
         // that scope the lookup is a no-op.
+        //
+        // Field / property initializers are exempt from the rewrite:
+        // they execute during class construction BEFORE the ctor
+        // body assigns the synthesized field, so reading
+        // `this._view` from an initializer would observe `undefined`.
+        // Keep the bare param reference in those positions — the
+        // primary-ctor parameter is still in scope at that point and
+        // the ctor body captures the value once initializers
+        // complete.
         if (
             symbol is IParameterSymbol paramSymbol
             && CapturedPrimaryCtorParams is { } captured
             && captured.TryGetValue(paramSymbol, out var capturedFieldName)
+            && !IsInsideInitializer(id)
         )
             return new IrMemberAccess(new IrThisExpression(), capturedFieldName);
 
@@ -706,6 +716,35 @@ public sealed class IrExpressionExtractor
 
     private static bool IsLocalLikeSymbol(ISymbol symbol) =>
         symbol is ILocalSymbol or IParameterSymbol or IRangeVariableSymbol;
+
+    /// <summary>
+    /// True when the identifier sits inside a field or property
+    /// initializer (the right-hand side of an <c>=</c> on a
+    /// <see cref="VariableDeclaratorSyntax"/> or
+    /// <see cref="PropertyDeclarationSyntax"/>). Captured
+    /// primary-ctor parameter references must not be rewritten in
+    /// these positions because field initializers execute before
+    /// the constructor body assigns the synthesized backing field.
+    /// </summary>
+    private static bool IsInsideInitializer(SyntaxNode node)
+    {
+        for (var current = node.Parent; current is not null; current = current.Parent)
+        {
+            if (current is EqualsValueClauseSyntax equalsValue)
+            {
+                var owner = equalsValue.Parent;
+                if (owner is VariableDeclaratorSyntax or PropertyDeclarationSyntax)
+                    return true;
+            }
+            // Descending past method/ctor bodies means the
+            // identifier lives inside ordinary executable code, not
+            // an initializer — short-circuit so we do not climb
+            // beyond the surrounding member.
+            if (current is BlockSyntax or ArrowExpressionClauseSyntax or AccessorDeclarationSyntax)
+                return false;
+        }
+        return false;
+    }
 
     // ── Literals ──────────────────────────────────────────────────────────
 

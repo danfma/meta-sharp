@@ -309,9 +309,15 @@ internal static class ImplicitCaptureDetector
         IReadOnlyList<SyntaxNode> primaryCtorScopes
     )
     {
+        // `Span.Contains` only makes sense within a single `SyntaxTree`
+        // — partial types declared across multiple files share the same
+        // INamedTypeSymbol but live in distinct trees, so an identifier
+        // in file A could spuriously match a primary-ctor scope in
+        // file B. Compare both span and tree identity to avoid the
+        // false positive.
         foreach (var scope in primaryCtorScopes)
         {
-            if (scope.Span.Contains(identifier.Span))
+            if (scope.SyntaxTree == identifier.SyntaxTree && scope.Span.Contains(identifier.Span))
                 return true;
         }
         return false;
