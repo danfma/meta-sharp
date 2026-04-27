@@ -27,6 +27,15 @@ enable = false
 [coverage]
 enable = false
 
-# Changelog autolabeler config temporarily removed while #136
-# follow-up investigates the v0.8.1 release pipeline failure.
-# See https://github.com/danfma/metano/issues/<TBD>.
+# ── Changelog ────────────────────────────────────────────────────
+#
+# We point dotnet-releaser at a static CHANGELOG.md instead of
+# letting it auto-generate the release notes from commits + PRs.
+# The auto-generation walks `/repos/{owner}/{repo}/commits/{sha}/pulls`
+# for every commit in the release range; that endpoint returns 5xx
+# intermittently for our repo (verified empirically) and Octokit
+# does not retry on 5xx. The PR mapping ends up failing the entire
+# pipeline. The static-changelog path side-steps the whole API
+# walk — release notes ship verbatim from CHANGELOG.md.
+[changelog]
+path = "./CHANGELOG.md"
