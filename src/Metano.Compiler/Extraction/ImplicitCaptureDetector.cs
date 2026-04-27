@@ -61,29 +61,53 @@ internal static class ImplicitCaptureDetector
             SymbolEqualityComparer.Default
         );
         foreach (var param in primaryCtor.Parameters)
+        {
+            // Parameters that match a public property of the type are
+            // already promoted to that property by C# 12's positional-
+            // record / primary-ctor surface; the existing constructor
+            // bridge handles them end-to-end. Synthesizing a private
+            // backing field would duplicate state and surface as
+            // double-emitted fields in regenerated samples.
+            if (IsPromotedToProperty(param, type))
+                continue;
             primaryParams[param] = param;
+        }
+
+        if (primaryParams.Count == 0)
+            return Empty;
 
         // Parameters captured by an explicit field initializer get their
         // synthesis suppressed early — the existing AnnotateCapturedParams
-        // pass already wires the field/param pair end-to-end. The guard
-        // also stops us from misclassifying the initializer's identifier
-        // (which lives inside the type's syntax tree) as an implicit
-        // capture.
-        var explicitlyCapturedParams = CollectExplicitlyCapturedParams(type, primaryParams);
+        // pass already wires the field/param pair end-to-end. Symbol-
+        // identity match guards against the false positive where an
+        // initializer references a static / base member that happens to
+        // share the parameter's name.
+        var explicitlyCapturedParams = CollectExplicitlyCapturedParams(
+            type,
+            compilation,
+            primaryParams
+        );
 
         var primaryCtorSyntaxNodes = CollectPrimaryCtorSyntaxNodes(type);
-        var existingFieldNames = type.GetMembers()
-            .OfType<IFieldSymbol>()
-            .Select(f => f.Name)
+        // TypeScript shares one namespace across fields, properties and
+        // methods, so the collision check has to consider every
+        // member's name — not just fields — or the synthesizer would
+        // happily emit a private field that shadows a public method.
+        var existingMemberNames = type.GetMembers()
+            .Select(m => m.Name)
             .ToHashSet(StringComparer.Ordinal);
         var captured = new HashSet<ISymbol>(SymbolEqualityComparer.Default);
 
-        foreach (var declaringRef in type.DeclaringSyntaxReferences)
+        // Walk only the members of THIS type (skip nested types); C# 12
+        // primary-ctor parameters are not in scope for a nested type,
+        // so an identifier inside a nested type that happens to share a
+        // parameter name must not be misclassified as a capture.
+        foreach (var memberSyntax in EnumerateMemberSyntaxNodes(type))
         {
-            var typeSyntax = declaringRef.GetSyntax();
-            var model = compilation.GetSemanticModel(typeSyntax.SyntaxTree);
-
-            foreach (var identifier in typeSyntax.DescendantNodes().OfType<IdentifierNameSyntax>())
+            var model = compilation.GetSemanticModel(memberSyntax.SyntaxTree);
+            foreach (
+                var identifier in memberSyntax.DescendantNodes().OfType<IdentifierNameSyntax>()
+            )
             {
                 if (IsInsidePrimaryCtor(identifier, primaryCtorSyntaxNodes))
                     continue;
@@ -120,10 +144,10 @@ internal static class ImplicitCaptureDetector
             // <see cref="MetanoDiagnostic"/> up from the extractor;
             // tracked as a follow-up once the extraction pipeline
             // gains a diagnostic sink.
-            if (existingFieldNames.Contains(fieldName))
+            if (existingMemberNames.Contains(fieldName))
                 continue;
 
-            existingFieldNames.Add(fieldName);
+            existingMemberNames.Add(fieldName);
             paramFieldMap[paramSymbol] = fieldName;
             synthesized.Add(
                 new IrFieldDeclaration(
@@ -162,37 +186,78 @@ internal static class ImplicitCaptureDetector
     /// <summary>
     /// Collects parameters already captured by an explicit field
     /// initializer of the form <c>= paramName</c>, so the detector
-    /// does not synthesize a second backing field for them. The
-    /// existing <c>AnnotateCapturedParams</c> pass owns those
-    /// captures end-to-end.
+    /// does not synthesize a second backing field for them. Symbol-
+    /// identity match (via <see cref="SemanticModel.GetSymbolInfo"/>)
+    /// guards against the false positive where the initializer
+    /// references a static / base member that happens to share the
+    /// parameter's name.
     /// </summary>
     private static HashSet<IParameterSymbol> CollectExplicitlyCapturedParams(
         INamedTypeSymbol type,
+        Compilation compilation,
         Dictionary<ISymbol, IParameterSymbol> primaryParams
     )
     {
         var result = new HashSet<IParameterSymbol>(SymbolEqualityComparer.Default);
         foreach (var field in type.GetMembers().OfType<IFieldSymbol>())
         {
-            var declaration =
+            if (
                 field.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()
-                as VariableDeclaratorSyntax;
-            if (declaration?.Initializer?.Value is not IdentifierNameSyntax initializerId)
+                is not VariableDeclaratorSyntax declaration
+            )
+                continue;
+            if (declaration.Initializer?.Value is not IdentifierNameSyntax initializerId)
                 continue;
 
-            foreach (var param in primaryParams.Values)
-            {
-                if (
-                    string.Equals(
-                        param.Name,
-                        initializerId.Identifier.ValueText,
-                        StringComparison.Ordinal
-                    )
-                )
-                    result.Add(param);
-            }
+            var model = compilation.GetSemanticModel(declaration.SyntaxTree);
+            if (
+                model.GetSymbolInfo(initializerId).Symbol is IParameterSymbol param
+                && primaryParams.ContainsKey(param)
+            )
+                result.Add(param);
         }
         return result;
+    }
+
+    /// <summary>
+    /// True when a primary-ctor parameter is promoted to a public
+    /// property of the type — the C# 12 positional-record /
+    /// primary-ctor rule that pairs <c>(string name)</c> with the
+    /// type's <c>Name</c> property. Promoted params already have a
+    /// public storage slot; synthesizing a separate private field
+    /// would duplicate state. Match is case-insensitive to mirror
+    /// <c>IrConstructorExtractor.ResolvePromotionInfo</c>, which
+    /// also pairs camelCase params with PascalCase properties.
+    /// </summary>
+    private static bool IsPromotedToProperty(IParameterSymbol param, INamedTypeSymbol type)
+    {
+        foreach (var member in type.GetMembers())
+        {
+            if (
+                member is IPropertySymbol
+                && string.Equals(member.Name, param.Name, StringComparison.OrdinalIgnoreCase)
+            )
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Returns the syntax nodes of every direct member of the type
+    /// (fields, properties, methods, events, accessors) so the
+    /// detector can iterate identifier references without descending
+    /// into nested types — primary-ctor parameters are not in scope
+    /// for a nested type's body.
+    /// </summary>
+    private static IEnumerable<SyntaxNode> EnumerateMemberSyntaxNodes(INamedTypeSymbol type)
+    {
+        foreach (var member in type.GetMembers())
+        {
+            if (member is INamedTypeSymbol)
+                continue;
+            foreach (var declaringRef in member.DeclaringSyntaxReferences)
+                yield return declaringRef.GetSyntax();
+        }
     }
 
     /// <summary>
