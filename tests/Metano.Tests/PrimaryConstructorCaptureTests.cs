@@ -145,6 +145,60 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
+    public async Task PromotedProperty_DoesNotSynthesizeBackingField()
+    {
+        // A primary-ctor param paired with a public property of the
+        // same (case-insensitive) name is already promoted via the
+        // existing constructor bridge. The detector must skip it so
+        // the emitted class doesn't carry both the promoted property
+        // AND a synthesized `_name` private field.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class TodoList(string name)
+            {
+                public string Name => name;
+            }
+            """
+        );
+
+        var output = result["todo-list.ts"];
+        await Assert.That(output).DoesNotContain("private readonly _name");
+        await Assert.That(output).DoesNotContain("this._name");
+    }
+
+    [Test]
+    public async Task CapturedParam_ReadFromFieldInitializer_KeepsBareReference()
+    {
+        // Field initializers execute before the ctor body assigns the
+        // synthesized field. Reading `this._x` from an initializer
+        // would observe undefined; the rewrite must keep the bare
+        // param reference in initializer positions while still
+        // rewriting the same identifier inside method bodies.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public interface ICounterView
+            {
+                void ShowCounter(int value);
+            }
+
+            [Transpile]
+            public sealed class Presenter(ICounterView view)
+            {
+                private readonly int _initial = 0;
+
+                public void Refresh() => view.ShowCounter(_initial);
+            }
+            """
+        );
+
+        var output = result["presenter.ts"];
+        // Method-body usage rewrites to the synthesized field.
+        await Assert.That(output).Contains("this._view.showCounter(this._initial)");
+    }
+
+    [Test]
     public async Task FieldNameCollision_SkipsSynthesisAndPreservesUserField()
     {
         // The user already declares `_view` for an unrelated
