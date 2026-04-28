@@ -176,4 +176,12 @@ public static class DiagnosticCodes
     /// expansion) are enforced in a follow-up slice; this code does
     /// not yet surface them.</summary>
     public const string InvalidErasable = "MS0015";
+
+    /// <summary>MS0019 — instantiating a generic type parameter via the
+    /// <c>new()</c> constraint produces invalid TypeScript because TS
+    /// erases generics at runtime, so the parameter is not a callable
+    /// constructor. Refactor the API to take an instance or a factory
+    /// (<c>Func&lt;T&gt;</c>) instead, then call the factory at the use
+    /// site.</summary>
+    public const string GenericNewConstraint = "MS0019";
 }

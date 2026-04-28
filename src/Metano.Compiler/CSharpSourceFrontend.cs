@@ -143,6 +143,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateConstantAttribute(compilation, assemblyWideTranspile, diagnostics);
             ValidateInlineAttribute(compilation, diagnostics);
             ValidateThisAttribute(compilation, diagnostics);
+            ValidateGenericNewConstraint(compilation, assemblyWideTranspile, diagnostics);
         }
 
         return new IrCompilation(
@@ -542,6 +543,58 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// active backend — ignoring it under Dart would let a broken
     /// attribute ship to the TS consumer later.
     /// </summary>
+    /// <summary>
+    /// Walks every transpilable type's syntax and emits MS0019 for each
+    /// <c>new T()</c> where <c>T</c> resolves to a generic type parameter.
+    /// TypeScript erases generics at runtime, so the parameter is not a
+    /// callable constructor — the emitted code would reference an
+    /// undefined identifier. The diagnostic surfaces the misuse early
+    /// and points users at the factory / instance pattern.
+    /// </summary>
+    private static void ValidateGenericNewConstraint(
+        Compilation compilation,
+        bool assemblyWideTranspile,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type =>
+            {
+                if (!SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly))
+                    return;
+                foreach (var syntaxRef in type.DeclaringSyntaxReferences)
+                {
+                    var syntax = syntaxRef.GetSyntax();
+                    var model = compilation.GetSemanticModel(syntax.SyntaxTree);
+                    foreach (
+                        var creation in syntax
+                            .DescendantNodes()
+                            .OfType<ObjectCreationExpressionSyntax>()
+                    )
+                    {
+                        if (model.GetTypeInfo(creation.Type).Type is ITypeParameterSymbol param)
+                        {
+                            diagnostics.Add(
+                                new MetanoDiagnostic(
+                                    MetanoDiagnosticSeverity.Error,
+                                    DiagnosticCodes.GenericNewConstraint,
+                                    $"'new {param.Name}()' is not transpilable: TypeScript erases "
+                                        + $"generic parameters at runtime, so the constructor is "
+                                        + $"not callable. Refactor the API to take an instance or "
+                                        + $"a 'Func<{param.Name}>' factory and invoke it at the "
+                                        + $"use site.",
+                                    creation.GetLocation()
+                                )
+                            );
+                        }
+                    }
+                }
+            }
+        );
+    }
+
     private static void ValidateOptionalAttribute(
         Compilation compilation,
         bool assemblyWideTranspile,
