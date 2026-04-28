@@ -1,6 +1,6 @@
-import 'package:metano_runtime/metano_runtime.dart' show HashCode;
+import 'package:metano_runtime/metano_runtime.dart' show HashCode, MetanoObject;
 
-class Counter {
+class Counter extends MetanoObject {
   Counter(this.count);
 
   final int count;
@@ -15,7 +15,7 @@ class Counter {
   bool operator ==(Object other) => other is Counter && other.runtimeType == this.runtimeType && other.count == this.count;
 
   @override
-  int get hashCode => Object.hash(this.count);
+  int get hashCode => HashCode.combine(this.count);
 
   Counter copyWith({int? count}) => Counter(count ?? this.count);
 }
