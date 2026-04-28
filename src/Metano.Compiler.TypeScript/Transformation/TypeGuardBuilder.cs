@@ -61,7 +61,15 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         var valueParam = new TsParameter("value", new TsNamedType("unknown"));
 
         TsFunction? guard = null;
-        if (type.TypeKind == TypeKind.Enum)
+        TsType predicateType = new TsNamedType(tsName);
+
+        var unionVariants = TryFindDiscriminatedVariants(type);
+        if (unionVariants is { Count: > 0 })
+        {
+            predicateType = BuildVariantUnionType(unionVariants);
+            guard = GenerateUnionGuard(type, guardName, predicateType, valueParam, unionVariants);
+        }
+        else if (type.TypeKind == TypeKind.Enum)
             guard = GenerateEnumGuard(type, guardName, tsName, valueParam);
         else if (type.TypeKind == TypeKind.Interface)
             guard = GenerateShapeGuard(type, guardName, tsName, valueParam, useInstanceof: false);
@@ -80,19 +88,178 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         if (guard is null)
             return [];
 
-        return [guard, GenerateAssert(tsName, guardName)];
+        return [guard, GenerateAssert(tsName, guardName, predicateType)];
     }
 
-    /// <summary>
-    /// Builds the throwing <c>assertT</c> companion for the predicate
-    /// <c>isT</c> generated on the same type. The body is a thin wrapper
-    /// that negates <c>isT</c> and throws <see cref="TypeError"/> with
-    /// either the caller-supplied <paramref name="message"/> parameter
-    /// or a default <c>"Value is not a TName"</c> fallback. Kept inline
-    /// (no <c>metano-runtime</c> helper) so the guard stays zero-dep
-    /// and tree-shakable, matching ADR-0009's accepted trade-off.
-    /// </summary>
-    private static TsFunction GenerateAssert(string tsName, string guardName)
+    private IReadOnlyList<INamedTypeSymbol>? TryFindDiscriminatedVariants(INamedTypeSymbol baseType)
+    {
+        if (baseType.TypeKind is not (TypeKind.Class or TypeKind.Interface))
+            return null;
+        var baseField = SymbolHelper.GetDiscriminatorFieldName(baseType);
+        if (baseField is null)
+            return null;
+        if (baseType.TypeKind == TypeKind.Class && !baseType.IsAbstract)
+            return null;
+
+        var variants = new List<INamedTypeSymbol>();
+        foreach (var candidate in EnumerateAssemblyTypes(_context.CurrentAssembly))
+        {
+            if (SymbolEqualityComparer.Default.Equals(candidate, baseType))
+                continue;
+            if (!IsDerivedFrom(candidate, baseType))
+                continue;
+            if (!SymbolHelper.HasGenerateGuard(candidate))
+                continue;
+            if (
+                !SymbolHelper.IsTranspilable(
+                    candidate,
+                    _context.AssemblyWideTranspile,
+                    _context.CurrentAssembly
+                )
+            )
+                continue;
+            var variantField = SymbolHelper.GetDiscriminatorFieldName(candidate);
+            if (
+                variantField is not null
+                && !string.Equals(variantField, baseField, StringComparison.Ordinal)
+            )
+                continue;
+            variants.Add(candidate);
+        }
+
+        if (variants.Count == 0)
+            return null;
+        variants.Sort(
+            (a, b) =>
+                string.Compare(
+                    _context.ResolveTsName(a),
+                    _context.ResolveTsName(b),
+                    StringComparison.Ordinal
+                )
+        );
+        return variants;
+    }
+
+    private static IEnumerable<INamedTypeSymbol> EnumerateAssemblyTypes(IAssemblySymbol? assembly)
+    {
+        if (assembly is null)
+            yield break;
+        var stack = new Stack<INamespaceOrTypeSymbol>();
+        stack.Push(assembly.GlobalNamespace);
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+            if (current is INamespaceSymbol ns)
+            {
+                foreach (var member in ns.GetMembers())
+                    stack.Push(member);
+            }
+            else if (current is INamedTypeSymbol type)
+            {
+                yield return type;
+                foreach (var nested in type.GetTypeMembers())
+                    stack.Push(nested);
+            }
+        }
+    }
+
+    private static bool IsDerivedFrom(INamedTypeSymbol candidate, INamedTypeSymbol baseType)
+    {
+        if (baseType.TypeKind == TypeKind.Interface)
+        {
+            foreach (var i in candidate.AllInterfaces)
+                if (
+                    SymbolEqualityComparer.Default.Equals(
+                        i.OriginalDefinition,
+                        baseType.OriginalDefinition
+                    )
+                )
+                    return true;
+            return false;
+        }
+        var current = candidate.BaseType;
+        while (current is not null)
+        {
+            if (
+                SymbolEqualityComparer.Default.Equals(
+                    current.OriginalDefinition,
+                    baseType.OriginalDefinition
+                )
+            )
+                return true;
+            current = current.BaseType;
+        }
+        return false;
+    }
+
+    private TsType BuildVariantUnionType(IReadOnlyList<INamedTypeSymbol> variants) =>
+        new TsUnionType(
+            variants.Select(v => (TsType)new TsNamedType(_context.ResolveTsName(v))).ToList()
+        );
+
+    private TsFunction GenerateUnionGuard(
+        INamedTypeSymbol baseType,
+        string guardName,
+        TsType predicateType,
+        TsParameter valueParam,
+        IReadOnlyList<INamedTypeSymbol> variants
+    )
+    {
+        var body = new List<TsStatement>
+        {
+            new TsIfStatement(
+                new TsBinaryExpression(
+                    new TsBinaryExpression(new TsIdentifier("value"), "==", new TsLiteral("null")),
+                    "||",
+                    new TsBinaryExpression(
+                        new TsUnaryExpression("typeof ", new TsIdentifier("value")),
+                        "!==",
+                        new TsStringLiteral("object")
+                    )
+                ),
+                [new TsReturnStatement(new TsLiteral("false"))]
+            ),
+            new TsVariableDeclaration(
+                "v",
+                new TsCastExpression(new TsIdentifier("value"), new TsAnyType())
+            ),
+        };
+
+        var discriminatorField = SymbolHelper.GetDiscriminatorFieldName(baseType)!;
+        var discriminatorMember = baseType
+            .GetMembers(discriminatorField)
+            .OfType<IPropertySymbol>()
+            .FirstOrDefault();
+        var discriminatorTsName =
+            (
+                discriminatorMember is not null
+                    ? SymbolHelper.GetNameOverride(discriminatorMember, TargetLanguage.TypeScript)
+                    : null
+            ) ?? TypeScriptNaming.ToCamelCase(discriminatorField);
+
+        var discriminatorMatch = variants
+            .Select<INamedTypeSymbol, TsExpression>(v => new TsBinaryExpression(
+                new TsPropertyAccess(new TsIdentifier("v"), discriminatorTsName),
+                "===",
+                new TsStringLiteral(_context.ResolveTsName(v))
+            ))
+            .Aggregate((a, b) => new TsBinaryExpression(a, "||", b));
+
+        body.Add(new TsReturnStatement(discriminatorMatch));
+
+        return new TsFunction(
+            guardName,
+            [valueParam],
+            new TsTypePredicateType("value", predicateType),
+            body
+        );
+    }
+
+    private static TsFunction GenerateAssert(
+        string tsName,
+        string guardName,
+        TsType? predicateType = null
+    )
     {
         var valueParam = new TsParameter("value", new TsNamedType("unknown"));
         var messageParam = new TsParameter("message", new TsNamedType("string"), Optional: true);
@@ -121,7 +288,11 @@ public sealed class TypeGuardBuilder(TypeScriptTransformContext context)
         return new TsFunction(
             $"assert{tsName}",
             [valueParam, messageParam],
-            new TsTypePredicateType("value", new TsNamedType(tsName), IsAsserts: true),
+            new TsTypePredicateType(
+                "value",
+                predicateType ?? new TsNamedType(tsName),
+                IsAsserts: true
+            ),
             body
         );
     }

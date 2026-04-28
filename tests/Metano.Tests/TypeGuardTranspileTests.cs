@@ -574,4 +574,217 @@ public class TypeGuardTranspileTests
         await Assert.That(ms0011).IsNotNull();
         await Assert.That(ms0011!.Message).Contains("nullable");
     }
+
+    // ─── Sealed-hierarchy union guard ────────────────────────
+
+    [Test]
+    public async Task SealedHierarchy_BaseEmitsUnionGuardOnDiscriminatorMatch()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            """
+        );
+
+        var output = result["shape.ts"];
+        await Assert.That(output).Contains("export function isShape(value: unknown): value is");
+        await Assert.That(output).Contains("Circle | Square");
+        await Assert.That(output).Contains("v.kind === \"Circle\" || v.kind === \"Square\"");
+    }
+
+    [Test]
+    public async Task SealedHierarchy_BaseDoesNotImportPerVariantGuards()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            """
+        );
+
+        var output = result["shape.ts"];
+        await Assert.That(output).DoesNotContain("isCircle(v)");
+        await Assert.That(output).DoesNotContain("isSquare(v)");
+        await Assert.That(output).DoesNotContain("import { isCircle");
+        await Assert.That(output).DoesNotContain("import { isSquare");
+    }
+
+    [Test]
+    public async Task SealedHierarchy_AssertEmitsAlongsideUnionGuard()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            """
+        );
+
+        var output = result["shape.ts"];
+        await Assert.That(output).Contains("export function assertShape(value: unknown");
+        await Assert.That(output).Contains("asserts value is");
+        await Assert.That(output).Contains("if (!isShape(value))");
+    }
+
+    [Test]
+    public async Task SealedHierarchy_PerVariantGuardsStillWork()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            """
+        );
+
+        var circle = result["circle.ts"];
+        await Assert
+            .That(circle)
+            .Contains("export function isCircle(value: unknown): value is Circle");
+        await Assert.That(circle).Contains("if (v.kind !== \"Circle\")");
+        var square = result["square.ts"];
+        await Assert
+            .That(square)
+            .Contains("export function isSquare(value: unknown): value is Square");
+        await Assert.That(square).Contains("if (v.kind !== \"Square\")");
+    }
+
+    [Test]
+    public async Task SealedHierarchy_HonorsNameOverrideOnVariants()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { [Name("Round")] Round, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            [Name(TargetLanguage.TypeScript, "Round")]
+            [Discriminator("Kind")]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            """
+        );
+
+        var output = result["shape.ts"];
+        await Assert.That(output).Contains("Round | Square");
+        await Assert.That(output).Contains("v.kind === \"Round\"");
+    }
+
+    [Test]
+    public async Task SealedHierarchy_VariantsWithoutOwnDiscriminator_StillJoinUnion()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum ShapeKind { Circle, Square }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public abstract record Shape(ShapeKind Kind);
+
+            [Transpile, GenerateGuard]
+            public sealed record Circle(ShapeKind Kind, double Radius) : Shape(Kind);
+
+            [Transpile, GenerateGuard]
+            public sealed record Square(ShapeKind Kind, double Side) : Shape(Kind);
+            """
+        );
+
+        var output = result["shape.ts"];
+        await Assert.That(output).Contains("Circle | Square");
+        await Assert.That(output).Contains("v.kind === \"Circle\"");
+        await Assert.That(output).Contains("v.kind === \"Square\"");
+    }
+
+    [Test]
+    public async Task SealedHierarchy_ConcreteBaseSkipsUnionRouting()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+
+            [Transpile, StringEnum]
+            public enum NodeKind { Branch, Leaf }
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public record Node(NodeKind Kind);
+
+            [Transpile, GenerateGuard]
+            [Discriminator("Kind")]
+            public sealed record Leaf(NodeKind Kind, int Value) : Node(Kind);
+            """
+        );
+
+        var output = result["node.ts"];
+        await Assert.That(output).Contains("export function isNode(value: unknown): value is Node");
+        await Assert.That(output).DoesNotContain("Node | Leaf");
+        await Assert.That(output).DoesNotContain("Leaf | Node");
+    }
 }
