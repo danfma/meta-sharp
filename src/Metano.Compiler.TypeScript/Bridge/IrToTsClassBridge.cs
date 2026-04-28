@@ -699,7 +699,7 @@ internal static class IrToTsClassBridge
     /// literal form matches the legacy convention and avoids the property
     /// access at the call site.
     /// </summary>
-    private static TsExpression? ResolveCtorParamDefault(
+    public static TsExpression? ResolveCtorParamDefault(
         IrConstructorParameter p,
         DeclarativeMappingRegistry? bclRegistry
     )
@@ -847,8 +847,13 @@ internal static class IrToTsClassBridge
         // `false`, `null`, …). TypeScript leaves a no-initializer
         // field as `undefined`, which would silently shift behavior
         // — fall back to the matching default so the generated
-        // class keeps the C# semantics.
-        initializer ??= ComputeDefaultInitializer(field.Type);
+        // class keeps the C# semantics. Captured-by-ctor fields are
+        // unconditionally assigned in the ctor body, so the leading
+        // default would be dead code that fires before the assignment
+        // and pulls in a TDZ-like hazard if a sibling initializer
+        // ever read the field while it still held the default.
+        if (!field.IsCapturedByCtor)
+            initializer ??= ComputeDefaultInitializer(field.Type);
 
         return new TsFieldMember(
             name,

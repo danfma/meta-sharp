@@ -117,6 +117,10 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                     IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
                     IrToTsTypeMapper.Map(p.Parameter.Type, BclOverrides),
                     Accessibility: TsAccessibility.None,
+                    DefaultValue: IrToTsClassBridge.ResolveCtorParamDefault(
+                        p,
+                        _context.DeclarativeMappings
+                    ),
                     Rest: p.Parameter.IsParams
                 ))
                 .ToList();
