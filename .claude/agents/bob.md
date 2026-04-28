@@ -56,6 +56,16 @@ Classify each finding as:
 
 For each finding, give a **concrete fix** — a renamed identifier, an extracted method signature, the exact blank-line position. Don't say "rename this" — say "rename `getStuff` to `loadActiveSubscriptionsForUser`".
 
+### Recurring Findings Checklist
+
+External AI reviewers (Gemini, Copilot, Codex) flag the same craftsmanship issues across PRs. Bake these into every review:
+
+1. **Brittle test assertions** — Flag global negations like `DoesNotContain("=")` or `DoesNotContain("import")` that match anywhere in the file. Demand a tighter substring that pins the specific construct (e.g., `Contains("echo(value: string): string {")`). The test should fail when the *signature* changes, not when an unrelated `=` appears in some other line.
+2. **Doc-vs-behavior mismatches** — XML doc comments and inline comments must claim what the code does, not what we wish it did. If the predicate is shape-based, the doc says "shape-based"; if it ignores side-effecting getters, the doc says so. Reviewers (and future maintainers) read the doc and trust it.
+3. **`DoesNotContain` on common substrings** — `=`, `import`, `extends`, `(`, etc. appear in legitimate places. Always pair with a `Contains` for the positive expected shape, or scope the negation to a specific snippet via regex.
+4. **Test coverage gaps for opposing case** — When a test asserts "rewrites X to Y", add the opposite test: "leaves Z alone when condition not met". Common gap: shadowing, opting-out, declaration-only positions.
+5. **Synthesized identifiers must reveal origin** — If the bridge synthesizes a name like `__r`, `_view`, `_state`, the comment near the synthesis should say WHY that name was chosen and what its scope is, so a future reader can grep for it without spelunking the bridge.
+
 ## Sweep Mode (incremental refactoring)
 
 When asked to sweep a module or directory:
