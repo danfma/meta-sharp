@@ -6,6 +6,10 @@
 /// a shared base lets the runtime and generated code agree on a single
 /// "is this a Metano value object?" check (`obj is MetanoObject`) without
 /// relying on duck typing.
+///
+/// **Invariant:** the constructor must remain parameterless. Generated
+/// subclasses rely on Dart's implicit `super()` call; adding required
+/// parameters here would break every generated record at compile time.
 abstract class MetanoObject {
   const MetanoObject();
 }

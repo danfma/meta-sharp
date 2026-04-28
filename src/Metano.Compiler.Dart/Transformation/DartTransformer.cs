@@ -98,7 +98,10 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                     break;
 
                 case TypeKind.Interface:
-                    var interfaceIr = IrInterfaceExtractor.Extract(type, target: TargetLanguage.Dart);
+                    var interfaceIr = IrInterfaceExtractor.Extract(
+                        type,
+                        target: TargetLanguage.Dart
+                    );
                     IrToDartInterfaceBridge.Convert(interfaceIr, statements);
                     ScanInto(runtimeRequirements, interfaceIr);
                     break;
@@ -247,10 +250,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
 
     // ── Runtime requirements ──────────────────────────────────────────────
 
-    private static void ScanInto(
-        HashSet<IrRuntimeRequirement> sink,
-        IrTypeDeclaration declaration
-    )
+    private static void ScanInto(HashSet<IrRuntimeRequirement> sink, IrTypeDeclaration declaration)
     {
         foreach (var req in IrRuntimeRequirementScanner.Scan(declaration))
             sink.Add(req);

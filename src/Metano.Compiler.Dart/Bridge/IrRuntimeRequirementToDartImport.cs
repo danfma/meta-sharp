@@ -14,9 +14,7 @@ public static class IrRuntimeRequirementToDartImport
 {
     private const string MetanoRuntimePath = "package:metano_runtime/metano_runtime.dart";
 
-    public static IReadOnlyList<DartImport> Convert(
-        IReadOnlySet<IrRuntimeRequirement> requirements
-    )
+    public static IReadOnlyList<DartImport> Convert(IReadOnlySet<IrRuntimeRequirement> requirements)
     {
         if (requirements.Count == 0)
             return [];
@@ -28,16 +26,15 @@ public static class IrRuntimeRequirementToDartImport
         var byPath = new Dictionary<string, SortedSet<string>>(StringComparer.Ordinal);
         foreach (var req in requirements)
         {
-            var mapping = Map(req);
-            if (mapping is null)
-                continue;
-
-            if (!byPath.TryGetValue(mapping.Value.ImportPath, out var names))
+            foreach (var (importPath, symbol) in Map(req))
             {
-                names = new SortedSet<string>(StringComparer.Ordinal);
-                byPath[mapping.Value.ImportPath] = names;
+                if (!byPath.TryGetValue(importPath, out var names))
+                {
+                    names = new SortedSet<string>(StringComparer.Ordinal);
+                    byPath[importPath] = names;
+                }
+                names.Add(symbol);
             }
-            names.Add(mapping.Value.Symbol);
         }
 
         return byPath
@@ -47,20 +44,28 @@ public static class IrRuntimeRequirementToDartImport
     }
 
     /// <summary>
-    /// Maps a semantic runtime helper to its concrete Dart import. Returning
-    /// <c>null</c> means "no import needed" — either the helper is satisfied by
-    /// a Dart built-in (e.g., <c>DateTime</c>, <c>Set&lt;T&gt;</c>, the <c>is</c>
-    /// operator) or the helper isn't yet ported to <c>metano_runtime</c>.
+    /// Maps a semantic runtime helper to one or more Dart import symbols.
+    /// Returning an empty array means "no import needed" — either the helper
+    /// is satisfied by a Dart built-in (<c>DateTime</c>, <c>Set&lt;T&gt;</c>,
+    /// the <c>is</c> operator) or the helper isn't yet ported to
+    /// <c>metano_runtime</c>.
+    /// <para>
+    /// <c>HashCode</c> bundles the <c>MetanoObject</c> base class into the same
+    /// import line because the Dart class bridge always pairs the two: every
+    /// non-PlainObject record both extends <c>MetanoObject</c> and uses
+    /// <c>HashCode</c> for its synthesized <c>hashCode</c> getter.
+    /// </para>
     /// </summary>
-    private static (string ImportPath, string Symbol)? Map(IrRuntimeRequirement req) =>
+    private static IReadOnlyList<(string ImportPath, string Symbol)> Map(
+        IrRuntimeRequirement req
+    ) =>
         req.HelperName switch
         {
-            "HashCode" => (MetanoRuntimePath, "HashCode"),
-            // Built-in or deferred:
-            //   Temporal     → Dart `DateTime` (built-in)
-            //   HashSet      → Dart `Set<T>`   (built-in)
-            //   isInt32, isString, …  → Dart `is` operator (built-in)
-            //   UUID, Grouping, Enumerable, delegateAdd/Remove → not yet ported
-            _ => null,
+            "HashCode" =>
+            [
+                (MetanoRuntimePath, "HashCode"),
+                (MetanoRuntimePath, "MetanoObject"),
+            ],
+            _ => Array.Empty<(string, string)>(),
         };
 }

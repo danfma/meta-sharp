@@ -21,7 +21,7 @@ public static class IrToDartClassBridge
         var modifier = ResolveClassModifier(ir);
         var typeParameters = ConvertTypeParameters(ir.TypeParameters);
 
-        var extendsType = ir.BaseType is not null ? IrToDartTypeMapper.Map(ir.BaseType) : null;
+        var extendsType = ResolveExtendsType(ir);
         // Filter out C# BCL interfaces (IEquatable, IComparable, ...) that records and
         // structs implicitly implement — they have no Dart equivalent and would produce
         // unresolvable references. User-defined interfaces pass through untouched.
@@ -79,6 +79,23 @@ public static class IrToDartClassBridge
                 Members: members.Count > 0 ? members : null
             )
         );
+    }
+
+    /// <summary>
+    /// Resolves the Dart <c>extends</c> clause. C# records lower into Dart classes
+    /// that extend <see cref="MetanoObject"/> from the runtime — that gives every
+    /// generated value type a shared marker base for runtime checks (e.g., overload
+    /// dispatchers that need to distinguish Metano values from arbitrary objects).
+    /// Plain classes, <c>[PlainObject]</c> records, and any class that already names
+    /// a C# base keep their original behavior.
+    /// </summary>
+    private static DartType? ResolveExtendsType(IrClassDeclaration ir)
+    {
+        if (ir.BaseType is not null)
+            return IrToDartTypeMapper.Map(ir.BaseType);
+        if (ir.Semantics.IsRecord && !ir.Semantics.IsPlainObject)
+            return new DartNamedType("MetanoObject");
+        return null;
     }
 
     // ── Record synthesis ───────────────────────────────────────────────────
@@ -164,51 +181,88 @@ public static class IrToDartClassBridge
         );
     }
 
-    // Dart's Object.hash caps at 20 positional arguments; wider records must fall
-    // back to Object.hashAll(Iterable) instead. Source:
-    // https://api.dart.dev/stable/dart-core/Object/hash.html
-    private const int DartObjectHashMaxArity = 20;
-
     /// <summary>
-    /// Emits a <c>hashCode</c> getter that combines every field. For zero-field
-    /// records we fall back to a stable <c>0</c>; for up to 20 fields we use
-    /// <c>Object.hash(a, b, …)</c>; beyond that we switch to
-    /// <c>Object.hashAll([…])</c> because <c>Object.hash</c> only exposes
-    /// positional arity up to 20.
+    /// Emits a <c>hashCode</c> getter that combines every field through the
+    /// runtime <c>HashCode</c> helper:
+    /// <list type="bullet">
+    ///   <item>0 fields → literal <c>0</c>.</item>
+    ///   <item>1-4 fields → <c>HashCode.combine[N](this.a, …)</c>.</item>
+    ///   <item>5+ fields → <c>var hc = HashCode(); hc.add(this.a); …; return hc.toHashCode();</c>.</item>
+    /// </list>
+    /// Going through <c>HashCode</c> instead of Dart's built-in <c>Object.hash</c>
+    /// keeps the hash deterministic and bit-identical to the TypeScript runtime,
+    /// so values sharing a record type across stacks share a hash.
     /// </summary>
     private static DartClassMember BuildHashCodeGetter(
         IReadOnlyList<(string Name, DartType Type)> fields
     )
     {
-        IrExpression body;
-        if (fields.Count == 0)
-        {
-            body = new IrLiteral(0, IrLiteralKind.Int32);
-        }
-        else
-        {
-            var args = fields
-                .Select(f => new IrArgument(new IrMemberAccess(new IrThisExpression(), f.Name)))
-                .ToList();
-            body =
-                fields.Count <= DartObjectHashMaxArity
-                    ? new IrCallExpression(
-                        new IrMemberAccess(new IrTypeReference("Object"), "hash"),
-                        args
-                    )
-                    : new IrCallExpression(
-                        new IrMemberAccess(new IrTypeReference("Object"), "hashAll"),
-                        [new IrArgument(new IrArrayLiteral(args.Select(a => a.Value).ToList()))]
-                    );
-        }
+        IReadOnlyList<IrStatement> body =
+            fields.Count == 0
+                ? [new IrReturnStatement(new IrLiteral(0, IrLiteralKind.Int32))]
+            : fields.Count <= HashCodeMaxCombineArity
+                ? [new IrReturnStatement(BuildCombineExpression(fields))]
+            : BuildHashCodeBuilderBody(fields);
+
         return new DartGetter(
             Name: "hashCode",
             ReturnType: new DartNamedType("int"),
-            Body: [new IrReturnStatement(body)],
-            // Object.hashCode is already defined, so this is an override — the
-            // analyzer complains without the annotation.
+            Body: body,
             IsOverride: true
         );
+    }
+
+    // The metano_runtime HashCode helper exposes static `combine`, `combine2`,
+    // `combine3`, and `combine4` for narrow records; anything wider goes through
+    // the builder API (`HashCode()..add(...)`...`toHashCode()`).
+    private const int HashCodeMaxCombineArity = 4;
+
+    private static IrCallExpression BuildCombineExpression(
+        IReadOnlyList<(string Name, DartType Type)> fields
+    )
+    {
+        var combineMethod = fields.Count == 1 ? "combine" : $"combine{fields.Count}";
+        var args = fields
+            .Select(f => new IrArgument(new IrMemberAccess(new IrThisExpression(), f.Name)))
+            .ToList();
+        return new IrCallExpression(
+            new IrMemberAccess(new IrTypeReference("HashCode"), combineMethod),
+            args
+        );
+    }
+
+    private static IReadOnlyList<IrStatement> BuildHashCodeBuilderBody(
+        IReadOnlyList<(string Name, DartType Type)> fields
+    )
+    {
+        var statements = new List<IrStatement>(fields.Count + 2)
+        {
+            new IrVariableDeclaration(
+                Name: "hc",
+                Type: null,
+                Initializer: new IrNewExpression(new IrNamedTypeRef("HashCode"), [])
+            ),
+        };
+        foreach (var (name, _) in fields)
+        {
+            statements.Add(
+                new IrExpressionStatement(
+                    new IrCallExpression(
+                        new IrMemberAccess(new IrIdentifier("hc"), "add"),
+                        [new IrArgument(new IrMemberAccess(new IrThisExpression(), name))]
+                    )
+                )
+            );
+        }
+        statements.Add(
+            new IrReturnStatement(
+                new IrCallExpression(
+                    new IrMemberAccess(new IrIdentifier("hc"), "toHashCode"),
+                    []
+                )
+            )
+        );
+        return statements;
     }
 
     /// <summary>
