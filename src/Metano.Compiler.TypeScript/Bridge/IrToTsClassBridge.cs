@@ -6,7 +6,7 @@ namespace Metano.TypeScript.Bridge;
 
 /// <summary>
 /// Lowers a generic <see cref="IrClassDeclaration"/> (record / class / struct
-/// that isn't <c>[PlainObject]</c>, <c>[InlineWrapper]</c>, an exception, or a
+/// that isn't <c>[PlainObject]</c>, <c>[Branded]</c>, an exception, or a
 /// static module) into a TypeScript <see cref="TsClass"/>.
 /// <para>
 /// Used as a library of lowering helpers — member emission (fields,

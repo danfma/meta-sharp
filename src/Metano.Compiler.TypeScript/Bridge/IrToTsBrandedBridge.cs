@@ -6,7 +6,7 @@ namespace Metano.TypeScript.Bridge;
 
 /// <summary>
 /// Lowers an <see cref="IrClassDeclaration"/> whose
-/// <see cref="IrTypeSemantics.IsInlineWrapper"/> is set into the canonical
+/// <see cref="IrTypeSemantics.IsBranded"/> is set into the canonical
 /// TypeScript brand-type + companion-namespace shape:
 /// <code>
 /// export type UserId = string &amp; { readonly __brand: "UserId" };
@@ -17,10 +17,10 @@ namespace Metano.TypeScript.Bridge;
 /// }
 /// </code>
 /// Returns <c>false</c> when the IR doesn't describe a wrapper (no
-/// <c>IsInlineWrapper</c> flag, or a missing <c>InlineWrappedType</c>),
+/// <c>IsBranded</c> flag, or a missing <c>BrandedUnderlyingType</c>),
 /// so the caller can fall through to the next per-shape handler.
 /// </summary>
-public static class IrToTsInlineWrapperBridge
+public static class IrToTsBrandedBridge
 {
     public static bool Convert(
         IrClassDeclaration ir,
@@ -28,11 +28,11 @@ public static class IrToTsInlineWrapperBridge
         DeclarativeMappingRegistry? bclRegistry = null
     )
     {
-        if (!ir.Semantics.IsInlineWrapper || ir.Semantics.InlineWrappedType is null)
+        if (!ir.Semantics.IsBranded || ir.Semantics.BrandedUnderlyingType is null)
             return false;
 
         var tsTypeName = IrToTsNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
-        var primitiveType = IrToTsTypeMapper.Map(ir.Semantics.InlineWrappedType);
+        var primitiveType = IrToTsTypeMapper.Map(ir.Semantics.BrandedUnderlyingType);
         // The brand-type pattern only makes sense over a TS primitive — anything
         // else can't be intersected with `{ readonly __brand: … }` and stay
         // assignable. Bail to the regular class/record path in that case.
@@ -117,7 +117,7 @@ public static class IrToTsInlineWrapperBridge
         // function methodName() { … } }`. Function declarations inside a TS
         // namespace can NOT use reserved words (`function new() {}` is illegal
         // even though `obj.new` is fine), so this stays on the escaping
-        // ToCamelCase variant. The call-site bridge detects [InlineWrapper]
+        // ToCamelCase variant. The call-site bridge detects [Branded]
         // receivers and matches the escape so the two halves stay in sync.
         var name = IrToTsNamingPolicy.ToFunctionName(method.Name, method.Attributes);
 

@@ -216,7 +216,7 @@ public static class IrToTsExpressionBridge
         // keyed by the original PascalCase; camelCasing here would produce
         // `X.backlog` that doesn't exist at runtime.
         //
-        // `[InlineWrapper]` methods surface as namespace functions
+        // `[Branded]` methods surface as namespace functions
         // (`namespace UserId { export function new_() {} }`), and namespace
         // function declarations DO require reserved-word escapes — so the
         // call site has to match by using the escaping camelCase variant.
@@ -237,7 +237,7 @@ public static class IrToTsExpressionBridge
         // ordinary members — the emitted name comes through verbatim.
         else if (ma.Origin?.EmittedName is { } overridden)
             memberName = overridden;
-        else if (ma.Origin?.IsInlineWrapperMember == true)
+        else if (ma.Origin?.IsBrandedMember == true)
             memberName = TypeScriptNaming.ToCamelCase(ma.MemberName);
         else
             memberName = TypeScriptNaming.ToCamelCaseMember(ma.MemberName);
@@ -828,10 +828,10 @@ public static class IrToTsExpressionBridge
             if (s.Kind is IrNamedTypeKind.Exception && !s.IsTranspilable)
                 return new TsNewExpression(new TsIdentifier("Error"), args);
 
-            // [InlineWrapper] structs compile to companion objects with a
+            // [Branded] structs compile to companion objects with a
             // `create` factory, not a runtime class. `new UserId(v)` therefore
             // lowers to `UserId.create(v)` on the TS side.
-            if (s.Kind is IrNamedTypeKind.InlineWrapper)
+            if (s.Kind is IrNamedTypeKind.Branded)
                 return new TsCallExpression(
                     new TsPropertyAccess(new TsIdentifier(named.Name), "create"),
                     args

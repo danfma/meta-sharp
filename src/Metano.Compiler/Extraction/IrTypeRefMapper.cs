@@ -330,12 +330,12 @@ public static class IrTypeRefMapper
 
         // Inline wrappers collapse to a branded primitive at runtime. The
         // underlying primitive comes from the first real field / property.
-        if (SymbolHelper.HasInlineWrapper(named))
+        if (SymbolHelper.HasBranded(named))
         {
-            var primitive = DetectInlineWrapperPrimitive(named);
+            var primitive = DetectBrandedUnderlyingPrimitive(named);
             return new IrNamedTypeSemantics(
-                IrNamedTypeKind.InlineWrapper,
-                InlineWrappedPrimitive: primitive,
+                IrNamedTypeKind.Branded,
+                BrandedUnderlyingPrimitive: primitive,
                 IsTranspilable: IsTranspilableType(named),
                 IsNoEmit: SymbolHelper.HasNoEmit(named)
             );
@@ -405,7 +405,7 @@ public static class IrTypeRefMapper
         return new IrEnumMemberInfo(first.Name, emittedName);
     }
 
-    private static IrPrimitive? DetectInlineWrapperPrimitive(INamedTypeSymbol wrapper)
+    private static IrPrimitive? DetectBrandedUnderlyingPrimitive(INamedTypeSymbol wrapper)
     {
         var field = wrapper
             .GetMembers()

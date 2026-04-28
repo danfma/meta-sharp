@@ -105,7 +105,7 @@ public static class BarrelFileGenerator
                 var moduleName = Path.GetFileNameWithoutExtension(file.FileName);
 
                 // Collect all exported names from this file. If a name has BOTH a value and a
-                // type form (e.g., StringEnum: const + type alias, InlineWrapper: namespace + type),
+                // type form (e.g., StringEnum: const + type alias, Branded: namespace + type),
                 // re-export as value (declaration merging on the import side).
                 var valueNames = new HashSet<string>(StringComparer.Ordinal);
                 var typeOnlyNames = new HashSet<string>(StringComparer.Ordinal);

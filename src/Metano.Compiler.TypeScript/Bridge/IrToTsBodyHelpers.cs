@@ -6,7 +6,7 @@ namespace Metano.TypeScript.Bridge;
 
 /// <summary>
 /// Small helpers shared by the function-shaped bridges
-/// (<see cref="IrToTsModuleBridge"/>, <see cref="IrToTsInlineWrapperBridge"/>) that
+/// (<see cref="IrToTsModuleBridge"/>, <see cref="IrToTsBrandedBridge"/>) that
 /// turn an <see cref="IrMethodDeclaration"/> body into the TS statement list a
 /// <see cref="TsFunction"/> can consume.
 /// </summary>

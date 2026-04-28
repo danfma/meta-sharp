@@ -81,7 +81,7 @@ Metano is split into four `.NET` assemblies with strict dependencies:
 ### `Metano` (assembly / NuGet: `Metano`)
 
 The **attributes** (`[Transpile]`, `[Name]`, `[StringEnum]`, `[EmitPackage]`,
-`[PlainObject]`, `[InlineWrapper]`, `[NoEmit]`, `[ModuleEntryPoint]`,
+`[PlainObject]`, `[Branded]`, `[NoEmit]`, `[ModuleEntryPoint]`,
 `[ExportVarFromBody]`, `[GenerateGuard]`, …) and the **declarative BCL
 runtime mappings** (`[MapMethod]`, `[MapProperty]` assembly-level attributes
 that define how `List<T>.Add` → `push`, etc.).
@@ -219,8 +219,7 @@ Each shape has a dedicated IR → TS lowering, named consistently:
 - **`IrToTsInterfaceBridge`** — C# `interface` → TS `interface`.
 - **`IrToTsPlainObjectBridge`** — `[PlainObject]` records → TS interface
   without a class wrapper.
-- **`IrToTsInlineWrapperBridge`** — `[InlineWrapper]` structs → branded
-  primitive types.
+- **`IrToTsBrandedBridge`** — `[Branded]` structs → branded primitive types.
 - **`IrToTsExceptionBridge`** — anything inheriting `System.Exception` →
   `class extends Error`.
 - **`IrToTsModuleBridge`** — `[ExportedAsModule]` static classes + top-level

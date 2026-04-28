@@ -78,7 +78,7 @@ public sealed record IrMemberOrigin(
     string MemberName,
     bool IsStatic = false,
     bool IsEnumMember = false,
-    bool IsInlineWrapperMember = false,
+    bool IsBrandedMember = false,
     string? EmittedName = null,
     bool IsPlainObjectInstanceMethod = false,
     bool IsStringEnumMember = false,

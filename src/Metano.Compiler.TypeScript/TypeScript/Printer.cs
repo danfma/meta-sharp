@@ -424,7 +424,7 @@ public sealed class Printer(string indent = "  ")
         _sb.Write(ns.Name);
         _sb.WriteBlock(() =>
         {
-            // Functions (used by InlineWrapper companions)
+            // Functions (used by Branded companions)
             for (var i = 0; i < ns.Functions.Count; i++)
             {
                 if (i > 0)

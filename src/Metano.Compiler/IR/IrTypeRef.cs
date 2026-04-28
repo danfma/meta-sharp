@@ -43,7 +43,7 @@ public sealed record IrNamedTypeRef(
 /// <see cref="IrNamedTypeKind.StringEnum"/>, carries the set of string
 /// values the enum can take so the TS backend can emit an exhaustive
 /// equality check instead of an impossible-to-evaluate <c>instanceof</c>.</param>
-/// <param name="InlineWrappedPrimitive">When the type is an inline
+/// <param name="BrandedUnderlyingPrimitive">When the type is a branded
 /// wrapper, the underlying primitive the runtime value is actually
 /// typed as.</param>
 /// <param name="IsTranspilable">Whether the type is emitted to the
@@ -52,7 +52,7 @@ public sealed record IrNamedTypeRef(
 public sealed record IrNamedTypeSemantics(
     IrNamedTypeKind Kind,
     IReadOnlyList<string>? StringEnumValues = null,
-    IrPrimitive? InlineWrappedPrimitive = null,
+    IrPrimitive? BrandedUnderlyingPrimitive = null,
     bool IsTranspilable = false,
     bool IsNoEmit = false,
     IrEnumMemberInfo? EnumDefaultMember = null
@@ -88,7 +88,7 @@ public enum IrNamedTypeKind
     NumericEnum,
     StringEnum,
     Delegate,
-    InlineWrapper,
+    Branded,
     Exception,
     Unknown,
 }

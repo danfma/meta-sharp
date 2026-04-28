@@ -383,7 +383,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             TryEmitModuleViaIr(type, sink);
         }
-        else if (TryEmitInlineWrapperViaIr(type, sink, irCache)) { }
+        else if (TryEmitBrandedViaIr(type, sink, irCache)) { }
         else if (type.IsRecord || type.TypeKind is TypeKind.Struct or TypeKind.Class)
         {
             if (TryEmitPlainObjectViaIr(type, sink, irCache))
@@ -960,23 +960,23 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
-    /// Routes <c>[InlineWrapper]</c> structs through
-    /// <see cref="IrToTsInlineWrapperBridge"/>. The IR class extractor already
-    /// records <see cref="IrTypeSemantics.IsInlineWrapper"/> +
-    /// <see cref="IrTypeSemantics.InlineWrappedType"/>, so the bridge has
+    /// Routes <c>[Branded]</c> structs through
+    /// <see cref="IrToTsBrandedBridge"/>. The IR class extractor already
+    /// records <see cref="IrTypeSemantics.IsBranded"/> +
+    /// <see cref="IrTypeSemantics.BrandedUnderlyingType"/>, so the bridge has
     /// every piece it needs to emit the brand alias + companion namespace.
     /// </summary>
-    private bool TryEmitInlineWrapperViaIr(
+    private bool TryEmitBrandedViaIr(
         INamedTypeSymbol type,
         List<TsTopLevel> sink,
         IDictionary<INamedTypeSymbol, IrTypeDeclaration>? irCache
     )
     {
-        if (!SymbolHelper.HasInlineWrapper(type) || type.TypeKind != TypeKind.Struct)
+        if (!SymbolHelper.HasBranded(type) || type.TypeKind != TypeKind.Struct)
             return false;
 
         var ir = (IrClassDeclaration)GetOrExtractIr(type, irCache)!;
-        return IrToTsInlineWrapperBridge.Convert(ir, sink, Context.DeclarativeMappings);
+        return IrToTsBrandedBridge.Convert(ir, sink, Context.DeclarativeMappings);
     }
 
     /// <summary>

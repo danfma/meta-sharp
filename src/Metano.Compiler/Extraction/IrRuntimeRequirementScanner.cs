@@ -197,7 +197,7 @@ public static class IrRuntimeRequirementScanner
             IrNamedTypeRef { Semantics.Kind: IrNamedTypeKind.StringEnum } => "isString",
             IrNamedTypeRef
             {
-                Semantics: { Kind: IrNamedTypeKind.InlineWrapper, InlineWrappedPrimitive: var pr },
+                Semantics: { Kind: IrNamedTypeKind.Branded, BrandedUnderlyingPrimitive: var pr },
             } => pr is null ? null : PrimitiveTypeCheckHelper(pr.Value),
             _ => null,
         };

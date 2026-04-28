@@ -448,8 +448,8 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             if (named.TypeKind == TypeKind.Enum)
                 return SymbolHelper.HasAttribute(named, "StringEnum") ? "enum" : "numericEnum";
 
-            // [InlineWrapper] → branded
-            if (SymbolHelper.HasAttribute(named, "InlineWrapper"))
+            // [Branded] (and its predecessor [InlineWrapper]) → branded
+            if (SymbolHelper.HasBranded(named))
                 return "branded";
         }
 
@@ -568,7 +568,7 @@ public sealed class JsonSerializerContextTransformer(TypeScriptTransformContext 
             case "branded":
             {
                 // System.Guid maps to the UUID branded type from metano-runtime.
-                // Other branded types come from user-defined [InlineWrapper] structs
+                // Other branded types come from user-defined [Branded] structs
                 // and use their TS type name directly.
                 var named = (INamedTypeSymbol)type;
                 var tsTypeName =

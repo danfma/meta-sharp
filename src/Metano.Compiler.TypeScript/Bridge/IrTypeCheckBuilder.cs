@@ -62,7 +62,7 @@ internal static class IrTypeCheckBuilder
             IrNamedTypeKind.StringEnum => StringEnumCheck(named, value),
             IrNamedTypeKind.NumericEnum => RuntimeIs("isInt32", value),
             IrNamedTypeKind.Interface => TypeofObject(value),
-            IrNamedTypeKind.InlineWrapper => InlineWrapperCheck(named, value),
+            IrNamedTypeKind.Branded => BrandedCheck(named, value),
             // Classes / records / structs / exceptions — use instanceof when
             // the type is in our compilation (and thus has a runtime class);
             // otherwise fall back to typeof object so we don't reference an
@@ -92,8 +92,8 @@ internal static class IrTypeCheckBuilder
         return new TsParenthesized(check);
     }
 
-    private static TsExpression InlineWrapperCheck(IrNamedTypeRef named, TsExpression value) =>
-        named.Semantics?.InlineWrappedPrimitive switch
+    private static TsExpression BrandedCheck(IrNamedTypeRef named, TsExpression value) =>
+        named.Semantics?.BrandedUnderlyingPrimitive switch
         {
             IrPrimitive.String or IrPrimitive.Char or IrPrimitive.Guid => new TsBinaryExpression(
                 new TsUnaryExpression("typeof ", value),

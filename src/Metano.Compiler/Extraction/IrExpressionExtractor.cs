@@ -1886,8 +1886,8 @@ public sealed class IrExpressionExtractor
         var isEnumMember =
             symbol.ContainingType.TypeKind == TypeKind.Enum && symbol is IFieldSymbol;
         var isStringEnumMember = isEnumMember && SymbolHelper.HasStringEnum(symbol.ContainingType);
-        var isInlineWrapperMember =
-            symbol is IMethodSymbol && SymbolHelper.HasInlineWrapper(symbol.ContainingType);
+        var isBrandedMember =
+            symbol is IMethodSymbol && SymbolHelper.HasBranded(symbol.ContainingType);
         var isPlainObjectInstanceMethod =
             symbol is IMethodSymbol { IsStatic: false, MethodKind: MethodKind.Ordinary }
             && SymbolHelper.HasPlainObject(symbol.ContainingType);
@@ -1908,7 +1908,7 @@ public sealed class IrExpressionExtractor
             symbol.Name,
             symbol.IsStatic,
             isEnumMember,
-            isInlineWrapperMember,
+            isBrandedMember,
             EmittedName: emittedName,
             IsPlainObjectInstanceMethod: isPlainObjectInstanceMethod,
             IsStringEnumMember: isStringEnumMember,

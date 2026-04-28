@@ -13,8 +13,8 @@ namespace Metano.Compiler.IR;
 /// <param name="IsSealed">Cannot be extended/inherited.</param>
 /// <param name="IsPlainObject">Data shape only — no class wrapper needed (C# <c>[PlainObject]</c>).</param>
 /// <param name="IsException">Extends the exception hierarchy.</param>
-/// <param name="IsInlineWrapper">Single-field branded type (C# <c>[InlineWrapper]</c>).</param>
-/// <param name="InlineWrappedType">The underlying primitive when <see cref="IsInlineWrapper"/> is true.</param>
+/// <param name="IsBranded">Single-field branded type (C# <c>[Branded]</c>, formerly <c>[InlineWrapper]</c>).</param>
+/// <param name="BrandedUnderlyingType">The underlying primitive when <see cref="IsBranded"/> is true.</param>
 public sealed record IrTypeSemantics(
     bool IsRecord = false,
     bool IsValueType = false,
@@ -23,6 +23,6 @@ public sealed record IrTypeSemantics(
     bool IsSealed = false,
     bool IsPlainObject = false,
     bool IsException = false,
-    bool IsInlineWrapper = false,
-    IrTypeRef? InlineWrappedType = null
+    bool IsBranded = false,
+    IrTypeRef? BrandedUnderlyingType = null
 );

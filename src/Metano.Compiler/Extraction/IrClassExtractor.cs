@@ -218,12 +218,12 @@ public static class IrClassExtractor
             IsSealed: type.IsSealed && !type.IsStatic && !type.IsValueType,
             IsPlainObject: SymbolHelper.HasPlainObject(type),
             IsException: IsException(type),
-            IsInlineWrapper: SymbolHelper.HasInlineWrapper(type),
-            InlineWrappedType: ExtractInlineWrappedType(type, originResolver)
+            IsBranded: SymbolHelper.HasBranded(type),
+            BrandedUnderlyingType: ExtractBrandedUnderlyingType(type, originResolver)
         );
 
     /// <summary>
-    /// Extracts the underlying primitive of an <c>[InlineWrapper]</c> struct.
+    /// Extracts the underlying primitive of an <c>[Branded]</c> struct.
     /// The wrapper shape requires exactly one public non-static value member
     /// (a field or a getter-shaped property); anything else — multiple
     /// members, parameterized properties, ignored members — disqualifies the
@@ -231,12 +231,12 @@ public static class IrClassExtractor
     /// type isn't a real wrapper and should fall through to the regular
     /// class/record path.
     /// </summary>
-    private static IrTypeRef? ExtractInlineWrappedType(
+    private static IrTypeRef? ExtractBrandedUnderlyingType(
         INamedTypeSymbol type,
         IrTypeOriginResolver? originResolver
     )
     {
-        if (!SymbolHelper.HasInlineWrapper(type))
+        if (!SymbolHelper.HasBranded(type))
             return null;
 
         ITypeSymbol? wrapped = null;
