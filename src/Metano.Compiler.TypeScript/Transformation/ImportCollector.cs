@@ -712,6 +712,19 @@ public sealed class ImportCollector(
                 foreach (var t in intersection.Types)
                     CollectFromType(t, names, crossPackageOrigins);
                 break;
+            case TsFunctionType function:
+                CollectFromType(function.ThisType, names, crossPackageOrigins);
+                foreach (var p in function.Parameters)
+                    CollectFromType(p.Type, names, crossPackageOrigins);
+                CollectFromType(function.ReturnType, names, crossPackageOrigins);
+                break;
+            case TsTupleType tuple:
+                foreach (var t in tuple.Elements)
+                    CollectFromType(t, names, crossPackageOrigins);
+                break;
+            case TsTypePredicateType predicate:
+                CollectFromType(predicate.Type, names, crossPackageOrigins);
+                break;
         }
     }
 

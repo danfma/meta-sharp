@@ -514,6 +514,85 @@ public class DelegateEventTests
     }
 
     [Test]
+    public async Task FunctionTypedParam_ImportsTypesFromSignature()
+    {
+        // Types named inside a function-typed parameter (or its return) must
+        // still appear in the file's import list. `Func<IWidget>` carries
+        // IWidget in the return position. Regression for #148.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public interface IWidget { }
+
+            [Transpile]
+            public static class App
+            {
+                public static void Mount(Func<IWidget> view) { }
+            }
+            """
+        );
+
+        await AssertImports(result["app.ts"], "IWidget", "./i-widget");
+        await Assert.That(result["app.ts"]).Contains("() => IWidget");
+    }
+
+    [Test]
+    public async Task FunctionTypedParam_ImportsTypesFromNestedFunctionTypes()
+    {
+        // Deeper nesting: IWidget hides inside the return of a function type
+        // that is itself the parameter of another function type. Recursion
+        // must reach through both layers. Regression for #148.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public interface IWidget { }
+
+            [Transpile]
+            public static class App
+            {
+                public static void Mount(Action<Func<IWidget>> register) { }
+            }
+            """
+        );
+
+        await AssertImports(result["app.ts"], "IWidget", "./i-widget");
+    }
+
+    [Test]
+    public async Task TupleTypedProperty_ImportsTypesFromElements()
+    {
+        // Same root cause as #148 but through TsTupleType: the element type
+        // sits inside a `[K, V]` tuple (here produced by `Dictionary<,>`'s
+        // KeyValuePair lowering) and must still flow into the import list.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            [Transpile]
+            public interface IWidget { }
+
+            [Transpile]
+            public class Catalog
+            {
+                public Dictionary<string, IWidget> Items { get; } = new();
+            }
+            """
+        );
+
+        await AssertImports(result["catalog.ts"], "IWidget", "./i-widget");
+    }
+
+    // Asserts that `output` contains a single import line that names `name` and
+    // resolves to `path`, regardless of whether the import is value or type-only.
+    private static async Task AssertImports(string output, string name, string path)
+    {
+        var importLine = output
+            .Split('\n')
+            .FirstOrDefault(line => line.Contains($"{{ {name} }}") && line.Contains($"\"{path}\""));
+        await Assert.That(importLine).IsNotNull();
+    }
+
+    [Test]
     public async Task DartTarget_DoesNotEmitBind()
     {
         // Dart tear-offs auto-bind, so the JS-only `.bind(this)`
