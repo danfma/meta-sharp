@@ -54,7 +54,10 @@ namespace Metano.Annotations;
 /// </para>
 /// </summary>
 [AttributeUsage(
-    AttributeTargets.Field | AttributeTargets.Property | AttributeTargets.Method,
+    AttributeTargets.Field
+        | AttributeTargets.Property
+        | AttributeTargets.Method
+        | AttributeTargets.Class,
     Inherited = false
 )]
 public sealed class InlineAttribute : Attribute;

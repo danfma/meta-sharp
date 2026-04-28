@@ -1446,7 +1446,7 @@ public sealed class IrExpressionExtractor
     /// </summary>
     private IrExpression? TryExpandInlineAccess(ISymbol? symbol)
     {
-        if (symbol is null || !SymbolHelper.HasInline(symbol))
+        if (symbol is null || !SymbolHelper.IsInlineMember(symbol))
             return null;
         if (!_inlineExpanding.Add(symbol))
             return null;
@@ -1597,7 +1597,7 @@ public sealed class IrExpressionExtractor
         // emits as if it had been written inline at the call site. A
         // cross-assembly body resolves through the referenced
         // compilation's semantic model, matching field/property inline.
-        if (symbol is not null && SymbolHelper.HasInline(symbol))
+        if (symbol is not null && SymbolHelper.IsInlineMember(symbol))
         {
             if (TryExpandInlineMethod(inv, symbol) is { } inlinedBody)
                 return inlinedBody;

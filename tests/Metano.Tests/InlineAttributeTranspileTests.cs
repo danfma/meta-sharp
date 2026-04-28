@@ -468,4 +468,143 @@ public class InlineAttributeTranspileTests
         var output = result["calc.ts"];
         await Assert.That(output).Contains("return 7 + 5;");
     }
+
+    // ─── Static-class [Inline] propagation ───────────────────
+
+    [Test]
+    public async Task Inline_StaticClass_PropagatesToEveryStaticMember()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Erasable, Inline]
+            public static class Catalog
+            {
+                public static readonly int Pi = 3;
+
+                public static int Doubled => Pi * 2;
+
+                public static int Add(int a, int b) => a + b;
+            }
+
+            public class Calc
+            {
+                public int Run() => Catalog.Add(Catalog.Pi, Catalog.Doubled);
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return 3 + 3 * 2;");
+    }
+
+    [Test]
+    public async Task Inline_StaticClass_PerMemberInlineStillWorks()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Erasable, Inline]
+            public static class Catalog
+            {
+                public static readonly int Pi = 3;
+            }
+
+            public class Calc
+            {
+                public int Run() => Catalog.Pi;
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return 3;");
+    }
+
+    [Test]
+    public async Task Inline_OnNonStaticClass_EmitsMs0016()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Inline]
+            public class Catalog
+            {
+                public int Pi => 3;
+            }
+            """
+        );
+
+        var error = diagnostics.FirstOrDefault(d =>
+            d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.InvalidInline
+            && d.Severity == Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Error
+        );
+        await Assert.That(error).IsNotNull();
+        await Assert.That(error!.Message).Contains("Catalog");
+        await Assert.That(error.Message).Contains("static");
+    }
+
+    [Test]
+    public async Task Inline_StaticClass_DoesNotPropagateToMutableStaticField()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Erasable, Inline]
+            public static class Counters
+            {
+                public static int Value = 1;
+
+                public static int Read() => Value;
+            }
+
+            public class Calc
+            {
+                public int Run() => Counters.Read();
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return value;");
+        await Assert.That(output).DoesNotContain("return 1;");
+    }
+
+    [Test]
+    public async Task Inline_StaticClass_NonPropagatableMember_EmitsWarning()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Erasable, Inline]
+            public static class Catalog
+            {
+                public static readonly int Pi = 3;
+
+                public static int Compute()
+                {
+                    var x = 1;
+                    return x + 1;
+                }
+            }
+            """
+        );
+
+        var warning = diagnostics.FirstOrDefault(d =>
+            d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.InvalidInline
+            && d.Severity == Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Warning
+        );
+        await Assert.That(warning).IsNotNull();
+        await Assert.That(warning!.Message).Contains("Compute");
+    }
 }

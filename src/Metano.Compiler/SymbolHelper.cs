@@ -283,6 +283,114 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// True when the member is effectively inline-marked — either
+    /// directly via <c>[Inline]</c> or because its containing static
+    /// class carries <c>[Inline]</c> as a propagation directive
+    /// (catalog-style classes whose entries all inline). Only static
+    /// fields, properties, and methods qualify; the propagation
+    /// silently skips members that cannot satisfy <c>[Inline]</c>
+    /// (instance members, void methods, multi-statement bodies) and
+    /// the validator surfaces those as MS0016 separately.
+    /// </summary>
+    public static bool IsInlineMember(this ISymbol symbol) =>
+        symbol.HasInline() || HasInheritedInlineFromStaticClass(symbol);
+
+    private static bool HasInheritedInlineFromStaticClass(ISymbol symbol)
+    {
+        // Reduced extension calls (`value.Method()`) surface a non-static
+        // method symbol whose `ReducedFrom` points back at the actual
+        // static declaration. Unreduce so propagation lookups see the
+        // same member identity regardless of call syntax.
+        var canonical = symbol is IMethodSymbol method
+            ? (ISymbol)(method.ReducedFrom ?? method)
+            : symbol;
+        if (!canonical.IsStatic)
+            return false;
+        var containing = canonical.ContainingType;
+        if (containing is null || !containing.IsStatic || !containing.HasInline())
+            return false;
+        return canonical switch
+        {
+            IFieldSymbol field => field.IsReadOnly && HasFieldInitializerSyntax(field),
+            IPropertySymbol property => HasExpressionBodiedGetterSyntax(property),
+            IMethodSymbol m
+                when m.MethodKind
+                    is not (
+                        MethodKind.Constructor
+                        or MethodKind.StaticConstructor
+                        or MethodKind.PropertyGet
+                        or MethodKind.PropertySet
+                    ) => HasInlinableMethodBodySyntax(m),
+            _ => false,
+        };
+    }
+
+    private static bool HasFieldInitializerSyntax(IFieldSymbol field)
+    {
+        foreach (var reference in field.DeclaringSyntaxReferences)
+        {
+            if (
+                reference.GetSyntax()
+                    is Microsoft.CodeAnalysis.CSharp.Syntax.VariableDeclaratorSyntax declarator
+                && declarator.Initializer is not null
+            )
+                return true;
+        }
+        return false;
+    }
+
+    private static bool HasExpressionBodiedGetterSyntax(IPropertySymbol property)
+    {
+        foreach (var reference in property.DeclaringSyntaxReferences)
+        {
+            if (
+                reference.GetSyntax()
+                is not Microsoft.CodeAnalysis.CSharp.Syntax.PropertyDeclarationSyntax decl
+            )
+                continue;
+            if (decl.ExpressionBody is not null)
+                return true;
+            if (decl.AccessorList is { } accessorList)
+            {
+                foreach (var accessor in accessorList.Accessors)
+                {
+                    if (
+                        accessor.IsKind(
+                            Microsoft.CodeAnalysis.CSharp.SyntaxKind.GetAccessorDeclaration
+                        ) && accessor.ExpressionBody is not null
+                    )
+                        return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static bool HasInlinableMethodBodySyntax(IMethodSymbol method)
+    {
+        foreach (var reference in method.DeclaringSyntaxReferences)
+        {
+            if (
+                reference.GetSyntax()
+                is not Microsoft.CodeAnalysis.CSharp.Syntax.MethodDeclarationSyntax decl
+            )
+                continue;
+            if (decl.ExpressionBody is not null)
+                return true;
+            if (
+                decl.Body is { Statements: { Count: 1 } statements }
+                && statements[0]
+                    is Microsoft.CodeAnalysis.CSharp.Syntax.ReturnStatementSyntax
+                    {
+                        Expression: not null,
+                    }
+            )
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
     /// Reads <c>[Constant]</c> from <c>Metano.Annotations</c>. Marks
     /// a parameter or field whose value must be a compile-time
     /// constant literal. Used by downstream lowering

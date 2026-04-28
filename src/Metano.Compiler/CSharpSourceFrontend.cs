@@ -921,7 +921,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     {
         foreach (var member in type.GetMembers())
         {
-            if (!SymbolHelper.HasInline(member))
+            if (!SymbolHelper.IsInlineMember(member))
                 continue;
             if (member is IFieldSymbol or IPropertySymbol or IMethodSymbol)
                 sink.Add(member);
@@ -953,7 +953,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             foreach (var identifier in initializer.DescendantNodesAndSelf().OfType<NameSyntax>())
             {
                 var referenced = semanticModel.GetSymbolInfo(identifier).Symbol;
-                if (referenced is null || !SymbolHelper.HasInline(referenced))
+                if (referenced is null || !SymbolHelper.IsInlineMember(referenced))
                     continue;
                 if (DetectCycle(referenced, compilation, visiting))
                     return true;
@@ -1006,6 +1006,24 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         List<MetanoDiagnostic> diagnostics
     )
     {
+        if (SymbolHelper.HasInline(type))
+        {
+            if (type.IsStatic)
+                ReportNonPropagatableMembers(type, diagnostics);
+            else
+                diagnostics.Add(
+                    new MetanoDiagnostic(
+                        MetanoDiagnosticSeverity.Error,
+                        DiagnosticCodes.InvalidInline,
+                        $"[Inline] on {FormatMemberPath(type)} only applies to "
+                            + $"'static class' declarations as a propagation directive. "
+                            + $"Drop the attribute or convert the class to 'static' so "
+                            + $"its members can inline at the call site.",
+                        type.Locations.FirstOrDefault()
+                    )
+                );
+        }
+
         foreach (var member in type.GetMembers())
         {
             if (!SymbolHelper.HasInline(member))
@@ -1123,6 +1141,83 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         foreach (var nested in type.GetTypeMembers())
             VisitTypeForInline(nested, diagnostics);
+    }
+
+    /// <summary>
+    /// When a static class carries <c>[Inline]</c> as a propagation
+    /// directive, every static field/property/method member is
+    /// promoted to inline. Members that cannot satisfy the inline
+    /// substitution shape (instance, mutable fields, multi-statement
+    /// bodies, void returns) silently opt out of propagation and
+    /// surface as a warning so the author knows the class-level hint
+    /// did not cover them.
+    /// </summary>
+    private static void ReportNonPropagatableMembers(
+        INamedTypeSymbol type,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        foreach (var member in type.GetMembers())
+        {
+            if (member.IsImplicitlyDeclared)
+                continue;
+            if (SymbolHelper.HasInline(member))
+                continue;
+            if (member is INamedTypeSymbol)
+                continue;
+            if (member.DeclaredAccessibility != Accessibility.Public)
+                continue;
+            var ineligibleReason = GetInlinePropagationIneligibleReason(member);
+            if (ineligibleReason is null)
+                continue;
+            diagnostics.Add(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Warning,
+                    DiagnosticCodes.InvalidInline,
+                    $"[Inline] on static class {FormatMemberPath(type)} does not "
+                        + $"propagate to {FormatMemberPath(member)}: {ineligibleReason}.",
+                    member.Locations.FirstOrDefault()
+                )
+            );
+        }
+    }
+
+    private static string? GetInlinePropagationIneligibleReason(ISymbol member) =>
+        member switch
+        {
+            IFieldSymbol f when !f.IsStatic || !f.IsReadOnly || !HasFieldInitializer(f) =>
+                "field is not 'static readonly' with an initializer",
+            IPropertySymbol p when !p.IsStatic || !HasInlinablePropertyGetter(p) =>
+                "property is not a 'static' getter with an expression body",
+            IMethodSymbol { MethodKind: MethodKind.Constructor or MethodKind.StaticConstructor } =>
+                "constructors cannot inline",
+            IMethodSymbol m when !m.IsStatic || !HasInlinableMethodBody(m) =>
+                "method is not 'static' with an expression body or single 'return'",
+            IFieldSymbol or IPropertySymbol or IMethodSymbol => null,
+            _ => "member kind is not eligible for inline substitution",
+        };
+
+    private static bool HasInlinablePropertyGetter(IPropertySymbol prop)
+    {
+        foreach (var reference in prop.DeclaringSyntaxReferences)
+        {
+            if (reference.GetSyntax() is not PropertyDeclarationSyntax decl)
+                continue;
+            if (decl.ExpressionBody is not null)
+                return true;
+            if (decl.AccessorList?.Accessors is { } accessors)
+            {
+                foreach (var accessor in accessors)
+                {
+                    if (
+                        accessor.IsKind(SyntaxKind.GetAccessorDeclaration)
+                        && accessor.ExpressionBody is not null
+                    )
+                        return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static bool HasFieldInitializer(IFieldSymbol field)
