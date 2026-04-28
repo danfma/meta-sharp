@@ -11,6 +11,9 @@ public abstract class Element : Node
     [Name("innerHTML")]
     public string? InnerHtml { get; set; }
 
+    [Name("textContent")]
+    public string? TextContent { get; set; }
+
     [Name("onclick")]
     public MouseEventListener? OnClick { get; set; }
 

@@ -1455,7 +1455,10 @@ public sealed class IrExpressionExtractor
             if (initializer is null)
                 return null;
 
-            var semanticModel = SymbolHelper.TryGetSemanticModel(_semantic.Compilation,initializer.SyntaxTree);
+            var semanticModel = SymbolHelper.TryGetSemanticModel(
+                _semantic.Compilation,
+                initializer.SyntaxTree
+            );
             if (semanticModel is null)
                 return null;
 
@@ -1721,7 +1724,10 @@ public sealed class IrExpressionExtractor
             if (bodyExpr is null)
                 return null;
 
-            var semanticModel = SymbolHelper.TryGetSemanticModel(_semantic.Compilation,bodyExpr.SyntaxTree);
+            var semanticModel = SymbolHelper.TryGetSemanticModel(
+                _semantic.Compilation,
+                bodyExpr.SyntaxTree
+            );
             if (semanticModel is null)
                 return null;
 
@@ -1764,9 +1770,10 @@ public sealed class IrExpressionExtractor
             {
                 var parameter = parameters[i];
                 var syntaxIndex = i - argIndex;
-                ArgumentSyntax? matched = syntaxIndex < positionalArgs.Count
-                    ? positionalArgs[syntaxIndex]
-                    : namedArgs.GetValueOrDefault(parameter.Name);
+                ArgumentSyntax? matched =
+                    syntaxIndex < positionalArgs.Count
+                        ? positionalArgs[syntaxIndex]
+                        : namedArgs.GetValueOrDefault(parameter.Name);
 
                 if (matched is not null)
                 {

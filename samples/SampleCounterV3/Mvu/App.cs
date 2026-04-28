@@ -10,9 +10,16 @@ public static class App
     {
         var container = ResolveContainer(containerId);
         var holder = new StateHolder<TState>(initialState);
+        // Bind the setState delegate once. Each `holder.Set` method-group
+        // conversion would otherwise allocate a fresh closure on every
+        // render — captured into a local, both the initial and every
+        // subsequent render reuse the same instance and keep a stable
+        // identity for callers that compare delegates.
+        Action<TState> setState = holder.Set;
 
-        Apply(view(holder.State, holder.Set), container);
-        holder.OnChange = () => Apply(view(holder.State, holder.Set), container);
+        Action render = () => Apply(view(holder.State, setState), container);
+        holder.OnChange = render;
+        render();
     }
 
     private static void Apply(IWidget root, HtmlElement container)
