@@ -7,7 +7,7 @@ public sealed class Text(string content) : IWidget
     public HtmlElement Build()
     {
         var span = Js.Document.CreateElement(HtmlElementType.Span);
-        span.InnerHtml = content;
+        span.TextContent = content;
         return span;
     }
 }

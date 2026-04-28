@@ -658,10 +658,7 @@ public static class SymbolHelper
     /// outer compilation throws. Returns <c>null</c> when no compilation in
     /// the graph owns the tree.
     /// </summary>
-    public static SemanticModel? TryGetSemanticModel(
-        Compilation compilation,
-        SyntaxTree syntaxTree
-    )
+    public static SemanticModel? TryGetSemanticModel(Compilation compilation, SyntaxTree syntaxTree)
     {
         if (compilation.ContainsSyntaxTree(syntaxTree))
             return compilation.GetSemanticModel(syntaxTree);

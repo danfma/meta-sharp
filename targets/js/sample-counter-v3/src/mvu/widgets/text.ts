@@ -9,7 +9,7 @@ export class Text implements IWidget {
 
   build(): HTMLElement {
     const span = document.createElement("span");
-    span.innerHTML = this._content;
+    span.textContent = this._content;
 
     return span;
   }

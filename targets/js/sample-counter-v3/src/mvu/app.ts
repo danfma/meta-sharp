@@ -7,8 +7,10 @@ export class App {
   static mount<TState>(containerId: string, initialState: TState, view: (state: TState, setState: (obj: TState) => void) => IWidget): void {
     const container = App.resolveContainer(containerId);
     const holder = new StateHolder(initialState);
-    App.apply(view(holder.state, holder.set.bind(holder)), container);
-    holder.onChange = () => App.apply(view(holder.state, holder.set.bind(holder)), container);
+    const setState = holder.set.bind(holder);
+    const render = () => App.apply(view(holder.state, setState), container);
+    holder.onChange = render;
+    render();
   }
 
   private static apply(root: IWidget, container: HTMLElement): void {
