@@ -756,18 +756,27 @@ public sealed class IrExpressionExtractor
     {
         for (var current = node.Parent; current is not null; current = current.Parent)
         {
+            // A method body, lambda body, accessor body, or arrow expression
+            // means the identifier lives inside executable code; the
+            // primary-ctor rewrite must apply there. Crucially, this check
+            // runs before the `EqualsValueClauseSyntax` test so a local
+            // declaration such as `var sizeEm = level switch { … }` is not
+            // misclassified as a field initializer.
+            if (current is BlockSyntax or ArrowExpressionClauseSyntax or AccessorDeclarationSyntax)
+                return false;
             if (current is EqualsValueClauseSyntax equalsValue)
             {
                 var owner = equalsValue.Parent;
-                if (owner is VariableDeclaratorSyntax or PropertyDeclarationSyntax)
+                if (
+                    owner is PropertyDeclarationSyntax
+                    || (
+                        owner is VariableDeclaratorSyntax declarator
+                        && declarator.Parent is VariableDeclarationSyntax declaration
+                        && declaration.Parent is FieldDeclarationSyntax
+                    )
+                )
                     return true;
             }
-            // Descending past method/ctor bodies means the
-            // identifier lives inside ordinary executable code, not
-            // an initializer — short-circuit so we do not climb
-            // beyond the surrounding member.
-            if (current is BlockSyntax or ArrowExpressionClauseSyntax or AccessorDeclarationSyntax)
-                return false;
         }
         return false;
     }
