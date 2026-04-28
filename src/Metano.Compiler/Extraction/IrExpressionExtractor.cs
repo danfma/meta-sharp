@@ -1266,10 +1266,7 @@ public sealed class IrExpressionExtractor
         var hasThisDelegate = HasThisParameter(invoke);
 
         var boundReference = ShouldBindInstanceReceiver(method, reference, out var instanceAccess)
-            ? new IrCallExpression(
-                new IrMemberAccess(instanceAccess, "bind"),
-                [new IrArgument(BindArgumentFor(instanceAccess.Target))]
-            )
+            ? BuildBoundReference(instanceAccess)
             : reference;
 
         return hasThisDelegate
@@ -1295,6 +1292,46 @@ public sealed class IrExpressionExtractor
     /// </summary>
     private static IrExpression BindArgumentFor(IrExpression receiver) =>
         receiver is IrBaseExpression ? new IrThisExpression() : receiver;
+
+    /// <summary>
+    /// Builds the <c>.bind(receiver)</c> expression for an instance
+    /// method group. When the receiver chain is pure (identifier,
+    /// <c>this</c>, <c>base</c>, or a member-access tower over those)
+    /// emits the simple <c>obj.method.bind(obj)</c> shape. Otherwise
+    /// the receiver has observable side effects (call expressions,
+    /// indexers, getters that mutate) and duplicating it would run
+    /// the side effect twice — wrap the bind site in an IIFE arrow
+    /// that captures the receiver in a temporary so the chain is
+    /// evaluated exactly once:
+    /// <c>((__r) => __r.method.bind(__r))(originalReceiver)</c>.
+    /// </summary>
+    private static IrExpression BuildBoundReference(IrMemberAccess instanceAccess)
+    {
+        var receiver = instanceAccess.Target;
+        if (IsSimpleReceiver(receiver))
+            return new IrCallExpression(
+                new IrMemberAccess(instanceAccess, "bind"),
+                [new IrArgument(BindArgumentFor(receiver))]
+            );
+
+        const string TempName = "__r";
+        var tempRef = new IrIdentifier(TempName);
+        var rebound = instanceAccess with { Target = tempRef };
+        var lambda = new IrLambdaExpression(
+            Parameters: [new IrParameter(TempName, new IrUnknownTypeRef(), HasExplicitType: false)],
+            ReturnType: null,
+            Body:
+            [
+                new IrReturnStatement(
+                    new IrCallExpression(
+                        new IrMemberAccess(rebound, "bind"),
+                        [new IrArgument(tempRef)]
+                    )
+                ),
+            ]
+        );
+        return new IrCallExpression(lambda, [new IrArgument(receiver)]);
+    }
 
     /// <summary>
     /// True when an instance method-group reference must

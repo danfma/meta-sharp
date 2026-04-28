@@ -207,6 +207,57 @@ public class DelegateEventTests
     }
 
     [Test]
+    public async Task MethodGroupAssignment_ImpureReceiver_EvaluatesChainOnce()
+    {
+        // The receiver chain has observable side effects (a method
+        // call). Duplicating it in `chain.method.bind(chain)` would
+        // run the call twice. Wrap the bind site in an IIFE arrow
+        // that captures the receiver in a temporary so the chain is
+        // evaluated exactly once.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Service
+            {
+                public Action OnTick { get; set; } = () => { };
+                public void Tick() { }
+            }
+
+            [Transpile]
+            public class Cache
+            {
+                public Service Service { get; } = new();
+            }
+
+            [Transpile]
+            public class Worker
+            {
+                private Cache GetCache() => new();
+
+                public void Wire(Service target)
+                {
+                    target.OnTick = GetCache().Service.Tick;
+                }
+            }
+            """
+        );
+
+        var output = result["worker.ts"];
+        // The IIFE captures the receiver once; the bind argument
+        // reads from the captured temporary instead of re-running
+        // the chain. The receiver expression itself appears exactly
+        // once in the emitted text.
+        await Assert.That(output).Contains("__r.tick.bind(__r)");
+        await Assert.That(output).Contains(")(this.getCache().service)");
+        var occurrences = System
+            .Text.RegularExpressions.Regex.Matches(output, @"this\.getCache\(\)")
+            .Count;
+        await Assert.That(occurrences).IsEqualTo(1);
+    }
+
+    [Test]
     public async Task MethodGroupAsArgument_InstanceMethod_BindsThis()
     {
         // Method group passed as a delegate-typed argument flows
