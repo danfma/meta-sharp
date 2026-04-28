@@ -185,7 +185,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                     deferredOperators.Add(irMethod);
                     break;
 
-                case IrMethodDeclaration irMethod when irMethod.Visibility != IrVisibility.Internal:
+                case IrMethodDeclaration irMethod
+                    when irMethod.Visibility is not IrVisibility.PrivateProtected:
                     deferredMethods.Add(irMethod);
                     break;
 

@@ -190,7 +190,7 @@ internal static class IrToTsClassBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        if (prop.Visibility is IrVisibility.Internal or IrVisibility.PrivateProtected)
+        if (prop.Visibility is IrVisibility.PrivateProtected)
             return [];
 
         var name = IrToTsNamingPolicy.ToInterfaceMemberName(prop.Name, prop.Attributes);
@@ -829,7 +829,7 @@ internal static class IrToTsClassBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        if (field.Visibility is IrVisibility.Internal or IrVisibility.PrivateProtected)
+        if (field.Visibility is IrVisibility.PrivateProtected)
             return null;
 
         var name = IrToTsNamingPolicy.ToInterfaceMemberName(field.Name, field.Attributes);
