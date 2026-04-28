@@ -1641,6 +1641,9 @@ public sealed class IrExpressionExtractor
             }
         }
 
+        if (symbol is not null && args.Any(a => a.Name is not null))
+            args = NormalizeArguments(args, symbol).ToList();
+
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol));
     }
 
