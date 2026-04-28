@@ -1278,7 +1278,11 @@ public sealed class Printer(string indent = "  ")
             p =>
             {
                 _sb.Write(p.Name);
-                if (p.Optional)
+                // `?` and `= expr` both convey optionality, but TS
+                // forbids combining them — bias toward the default
+                // expression when both are set so the call site sees
+                // the seeded value instead of `undefined`.
+                if (p.Optional && p.DefaultValue is null)
                     _sb.Write("?");
                 // Null Type → skip the annotation entirely (used by lambdas whose source
                 // parameter is a [NoEmit] type, so TypeScript can infer from context).
@@ -1286,6 +1290,11 @@ public sealed class Printer(string indent = "  ")
                 {
                     _sb.Write(": ");
                     PrintType(p.Type);
+                }
+                if (p.DefaultValue is not null)
+                {
+                    _sb.Write(" = ");
+                    PrintExpression(p.DefaultValue);
                 }
             }
         );

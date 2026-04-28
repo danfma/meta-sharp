@@ -12,4 +12,16 @@ namespace Metano.TypeScript.AST;
 /// form that lets the TS caller omit it. Set by
 /// <c>[Optional]</c>-tagged parameters on <c>[PlainObject]</c> instance
 /// methods (and any future emission site that honors the attribute).</param>
-public sealed record TsParameter(string Name, TsType? Type, bool Optional = false);
+/// <param name="DefaultValue">When non-null the parameter renders as
+/// <c>name: Type = expr</c>. The <c>= expr</c> form already implies
+/// optionality at the call site, so it is mutually exclusive with the
+/// <c>?</c> suffix — declaration-only positions (interface members,
+/// abstract method signatures, overload signatures) must keep using
+/// <see cref="Optional"/> instead because TypeScript forbids
+/// initializers there.</param>
+public sealed record TsParameter(
+    string Name,
+    TsType? Type,
+    bool Optional = false,
+    TsExpression? DefaultValue = null
+);

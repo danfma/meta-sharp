@@ -402,7 +402,9 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         var parameters = irMethod
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
-                IrToTsTypeMapper.Map(p.Type, BclOverrides)
+                IrToTsTypeMapper.Map(p.Type, BclOverrides),
+                Optional: p.IsOptional,
+                DefaultValue: LowerDefaultValue(p)
             ))
             .ToList();
         var returnType = IrToTsTypeMapper.Map(irMethod.ReturnType, BclOverrides);
@@ -619,6 +621,18 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         IrToTsTypeMapper.Map(irType, BclOverrides);
 
     private BclExportTypeOverrides BclOverrides => _context.BclOverrides;
+
+    /// <summary>
+    /// Lowers an <see cref="IrParameter"/>'s default-value expression
+    /// into the TS form, or returns <c>null</c> when the parameter
+    /// has no explicit default. Routes through the standard
+    /// expression bridge so BCL-mapped initializers (decimal
+    /// literals, enum members, etc.) get their target form.
+    /// </summary>
+    private TsExpression? LowerDefaultValue(IrParameter parameter) =>
+        parameter.HasDefaultValue && parameter.DefaultValue is not null
+            ? IrToTsExpressionBridge.Map(parameter.DefaultValue, _context.DeclarativeMappings)
+            : null;
 
     /// <summary>
     /// Resolves the <c>super(...)</c> argument list for the bridge. Returns
