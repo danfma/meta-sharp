@@ -253,7 +253,12 @@ internal static class IrToTsClassBridge
     )
     {
         var name = IrToTsNamingPolicy.ToMethodName(method.Name, method.Attributes);
-        var body = IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry);
+        // Abstract methods carry no body in C#; the printer emits the
+        // signature followed by `;` and skips the not-implemented stub
+        // that would otherwise replace a missing body.
+        IReadOnlyList<TsStatement> body = method.Semantics.IsAbstract
+            ? []
+            : IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry);
         return new TsMethodMember(
             name,
             parameters,
@@ -263,7 +268,8 @@ internal static class IrToTsClassBridge
             Async: method.Semantics.IsAsync,
             Generator: method.Semantics.IsGenerator,
             Accessibility: MapAccessibility(method.Visibility),
-            TypeParameters: typeParameters
+            TypeParameters: typeParameters,
+            Abstract: method.Semantics.IsAbstract
         );
     }
 
@@ -767,7 +773,13 @@ internal static class IrToTsClassBridge
     )
     {
         var body = new List<TsStatement>();
-        if (superArgs is not null && superArgs.Count > 0)
+        // `superArgs is not null` signals that the class extends a
+        // base — TypeScript requires every derived constructor to
+        // call `super(...)` before reading `this`, even when the
+        // base constructor takes no arguments. An empty list lowers
+        // to a bare `super()` call rather than skipping the
+        // statement.
+        if (superArgs is not null)
         {
             body.Add(
                 new TsExpressionStatement(

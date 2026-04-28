@@ -218,7 +218,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 classMembers,
                 Extends: extendsType,
                 Implements: IrToTsClassBridge.BuildImplements(ir),
-                TypeParameters: IrToTsClassBridge.BuildTypeParameters(ir)
+                TypeParameters: IrToTsClassBridge.BuildTypeParameters(ir),
+                Abstract: ir.Semantics.IsAbstract
             )
         );
     }
