@@ -553,32 +553,33 @@ public class DelegateEventTests
     }
 
     [Test]
-    public async Task DictionaryTypedProperty_ImportsTypesFromTupleElements()
+    public async Task ValueTupleTypedProperty_ImportsTypesFromTupleElements()
     {
         var result = TranspileHelper.Transpile(
             """
-            using System.Collections.Generic;
-
             [Transpile]
             public interface IWidget { }
 
             [Transpile]
-            public class Catalog
+            public class Slot
             {
-                public Dictionary<string, IWidget> Items { get; } = new();
+                public (string Key, IWidget Value) Entry { get; set; }
             }
             """
         );
 
-        await AssertImportsName(result["catalog.ts"], "IWidget", "./i-widget");
+        var output = result["slot.ts"];
+        await AssertImportsName(output, "IWidget", "./i-widget");
+        await Assert.That(output).Contains("[string, IWidget]");
     }
 
     private static async Task AssertImportsName(string output, string name, string path)
     {
-        var importLine = output
+        var importLines = output
             .Split('\n')
-            .FirstOrDefault(line => line.Contains($"{{ {name} }}") && line.Contains($"\"{path}\""));
-        await Assert.That(importLine).IsNotNull();
+            .Where(line => line.Contains($"{{ {name} }}") && line.Contains($"\"{path}\""))
+            .ToList();
+        await Assert.That(importLines.Count).IsEqualTo(1);
     }
 
     [Test]
