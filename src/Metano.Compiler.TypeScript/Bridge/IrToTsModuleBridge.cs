@@ -44,7 +44,11 @@ public static class IrToTsModuleBridge
         var parameters = fn
             .Parameters.Select(p => new TsParameter(
                 TypeScriptNaming.ToCamelCase(p.Name),
-                IrToTsTypeMapper.Map(p.Type)
+                IrToTsTypeMapper.Map(p.Type),
+                Optional: p.IsOptional,
+                DefaultValue: p.HasDefaultValue && p.DefaultValue is not null
+                    ? IrToTsExpressionBridge.Map(p.DefaultValue, bclRegistry)
+                    : null
             ))
             .ToList();
         var body = IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, bclRegistry);
