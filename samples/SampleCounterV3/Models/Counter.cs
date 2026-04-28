@@ -1,4 +1,4 @@
-namespace SampleCounterV2.Models;
+namespace SampleCounterV3.Models;
 
 public sealed record Counter(int Count)
 {
