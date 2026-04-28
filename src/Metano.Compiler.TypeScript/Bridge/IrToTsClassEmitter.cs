@@ -399,12 +399,17 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         IReadOnlyList<TsTypeParameter> TypeParameters
     ) LowerMethodSignature(IrMethodDeclaration irMethod, IrClassDeclaration owner)
     {
+        // TypeScript forbids parameter initializers in declaration-
+        // only positions (abstract / overload / interface signatures).
+        // For abstract methods drop the default expression but keep
+        // the parameter optional so callers may still omit it.
+        var emitDefaults = !irMethod.Semantics.IsAbstract;
         var parameters = irMethod
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.Map(p.Type, BclOverrides),
-                Optional: p.IsOptional,
-                DefaultValue: LowerDefaultValue(p)
+                Optional: p.IsOptional || (!emitDefaults && p.HasDefaultValue),
+                DefaultValue: emitDefaults ? LowerDefaultValue(p) : null
             ))
             .ToList();
         var returnType = IrToTsTypeMapper.Map(irMethod.ReturnType, BclOverrides);
