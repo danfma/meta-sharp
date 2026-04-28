@@ -1,3 +1,5 @@
+import 'package:metano_runtime/metano_runtime.dart' show HashCode;
+
 class Counter {
   Counter(this.count);
 
