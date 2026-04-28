@@ -279,6 +279,62 @@ public class PrimaryConstructorCaptureTests
     }
 
     [Test]
+    public async Task PrimaryCtorWithBaseCall_AssignsCapturedFieldsAfterSuper()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Animal(string name)
+            {
+                public string Name => name;
+            }
+
+            [Transpile]
+            public sealed class Dog(string name, string breed) : Animal(name)
+            {
+                public string Describe() => $"{breed} named {name}";
+            }
+            """
+        );
+
+        var output = result["dog.ts"];
+        var superIndex = output.IndexOf("super(", StringComparison.Ordinal);
+        await Assert.That(superIndex).IsGreaterThan(-1);
+
+        var assignments = System
+            .Text.RegularExpressions.Regex.Matches(output, @"this\._\w+\s*=")
+            .Cast<System.Text.RegularExpressions.Match>()
+            .ToList();
+
+        await Assert.That(assignments.Count).IsGreaterThanOrEqualTo(2);
+        foreach (var m in assignments)
+            await Assert.That(m.Index).IsGreaterThan(superIndex);
+    }
+
+    [Test]
+    public async Task StructPrimaryCtor_PromotesCapturedParam()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public readonly struct Point(int x, int y)
+            {
+                public int Magnitude() => x * x + y * y;
+            }
+            """
+        );
+
+        var output = result["point.ts"];
+        await Assert.That(output).Contains("private readonly _x: number");
+        await Assert.That(output).Contains("private readonly _y: number");
+        await Assert.That(output).Contains("this._x * this._x + this._y * this._y");
+    }
+
+    [Test]
     public async Task MultipleMethods_CapturingSameParam_ShareSyntheticField()
     {
         var result = TranspileHelper.Transpile(
