@@ -49,23 +49,13 @@ public static class IrRuntimeRequirementToDartImport
     /// is satisfied by a Dart built-in (<c>DateTime</c>, <c>Set&lt;T&gt;</c>,
     /// the <c>is</c> operator) or the helper isn't yet ported to
     /// <c>metano_runtime</c>.
-    /// <para>
-    /// <c>HashCode</c> bundles the <c>MetanoObject</c> base class into the same
-    /// import line because the Dart class bridge always pairs the two: every
-    /// non-PlainObject record both extends <c>MetanoObject</c> and uses
-    /// <c>HashCode</c> for its synthesized <c>hashCode</c> getter.
-    /// </para>
     /// </summary>
     private static IReadOnlyList<(string ImportPath, string Symbol)> Map(
         IrRuntimeRequirement req
     ) =>
         req.HelperName switch
         {
-            "HashCode" =>
-            [
-                (MetanoRuntimePath, "HashCode"),
-                (MetanoRuntimePath, "MetanoObject"),
-            ],
+            "HashCode" => [(MetanoRuntimePath, "HashCode")],
             _ => Array.Empty<(string, string)>(),
         };
 }

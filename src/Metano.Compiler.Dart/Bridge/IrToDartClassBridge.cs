@@ -21,7 +21,7 @@ public static class IrToDartClassBridge
         var modifier = ResolveClassModifier(ir);
         var typeParameters = ConvertTypeParameters(ir.TypeParameters);
 
-        var extendsType = ResolveExtendsType(ir);
+        var extendsType = ir.BaseType is not null ? IrToDartTypeMapper.Map(ir.BaseType) : null;
         // Filter out C# BCL interfaces (IEquatable, IComparable, ...) that records and
         // structs implicitly implement — they have no Dart equivalent and would produce
         // unresolvable references. User-defined interfaces pass through untouched.
@@ -79,23 +79,6 @@ public static class IrToDartClassBridge
                 Members: members.Count > 0 ? members : null
             )
         );
-    }
-
-    /// <summary>
-    /// Resolves the Dart <c>extends</c> clause. C# records lower into Dart classes
-    /// that extend <see cref="MetanoObject"/> from the runtime — that gives every
-    /// generated value type a shared marker base for runtime checks (e.g., overload
-    /// dispatchers that need to distinguish Metano values from arbitrary objects).
-    /// Plain classes, <c>[PlainObject]</c> records, and any class that already names
-    /// a C# base keep their original behavior.
-    /// </summary>
-    private static DartType? ResolveExtendsType(IrClassDeclaration ir)
-    {
-        if (ir.BaseType is not null)
-            return IrToDartTypeMapper.Map(ir.BaseType);
-        if (ir.Semantics.IsRecord && !ir.Semantics.IsPlainObject)
-            return new DartNamedType("MetanoObject");
-        return null;
     }
 
     // ── Record synthesis ───────────────────────────────────────────────────
@@ -198,8 +181,7 @@ public static class IrToDartClassBridge
     )
     {
         IReadOnlyList<IrStatement> body =
-            fields.Count == 0
-                ? [new IrReturnStatement(new IrLiteral(0, IrLiteralKind.Int32))]
+            fields.Count == 0 ? [new IrReturnStatement(new IrLiteral(0, IrLiteralKind.Int32))]
             : fields.Count <= HashCodeMaxCombineArity
                 ? [new IrReturnStatement(BuildCombineExpression(fields))]
             : BuildHashCodeBuilderBody(fields);
@@ -256,10 +238,7 @@ public static class IrToDartClassBridge
         }
         statements.Add(
             new IrReturnStatement(
-                new IrCallExpression(
-                    new IrMemberAccess(new IrIdentifier("hc"), "toHashCode"),
-                    []
-                )
+                new IrCallExpression(new IrMemberAccess(new IrIdentifier("hc"), "toHashCode"), [])
             )
         );
         return statements;
