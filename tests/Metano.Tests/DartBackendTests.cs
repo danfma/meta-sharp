@@ -527,6 +527,95 @@ public class DartBackendTests
         await Assert.That(dart).DoesNotContain("compare");
     }
 
+    [Test]
+    public async Task RecordType_EmitsMetanoRuntimeHashCodeImport()
+    {
+        // Records lower to a class with synthesized `==`/`hashCode`. The
+        // IrRuntimeRequirementScanner reports a `HashCode` requirement for
+        // every non-PlainObject record, and the Dart import collector must
+        // turn that into a `show HashCode` import from `metano_runtime`.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public record Money(int Amount);
+            """
+        );
+
+        var dart = files["money.dart"];
+        await Assert
+            .That(dart)
+            .Contains("import 'package:metano_runtime/metano_runtime.dart' show HashCode;");
+    }
+
+    [Test]
+    public async Task PlainClass_DoesNotImportMetanoRuntime()
+    {
+        // Non-record classes don't synthesize value equality, so the scanner
+        // must not surface a HashCode requirement and the file should stay
+        // free of any metano_runtime import.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public class Plain
+            {
+                public int X { get; }
+                public Plain(int x) { X = x; }
+            }
+            """
+        );
+
+        var dart = files["plain.dart"];
+        await Assert.That(dart).DoesNotContain("import 'package:metano_runtime");
+    }
+
+    [Test]
+    public async Task ExportedAsModule_DoesNotInheritRecordRuntimeRequirements()
+    {
+        // Module-level functions emitted for [ExportedAsModule] go through the
+        // ScanFunctionsInto path, which only walks return-type / parameter type
+        // references. The record's HashCode requirement belongs to the record's
+        // OWN file, not to consumers — so the Treasury module must stay free of
+        // the `metano_runtime` import even though it returns a `Money` record.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public record Money(int Amount);
+
+            [Transpile, ExportedAsModule]
+            public static class Treasury
+            {
+                public static Money Empty() => new Money(0);
+            }
+            """
+        );
+
+        var module = files["treasury.dart"];
+        await Assert.That(module).DoesNotContain("import 'package:metano_runtime");
+        // The relative import to the record's file is still emitted — that is
+        // how the consumer reaches Money's transitively-correct hashCode.
+        await Assert.That(module).Contains("import 'money.dart';");
+        // And the record file itself carries the HashCode import.
+        await Assert
+            .That(files["money.dart"])
+            .Contains("import 'package:metano_runtime/metano_runtime.dart' show HashCode;");
+    }
+
+    [Test]
+    public async Task PlainObjectRecord_DoesNotImportMetanoRuntime()
+    {
+        // [PlainObject] records emit as data carriers without value-equality
+        // synthesis, so the scanner must skip the HashCode requirement.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile, PlainObject]
+            public record Dto(int Id, string Name);
+            """
+        );
+
+        var dart = files["dto.dart"];
+        await Assert.That(dart).DoesNotContain("import 'package:metano_runtime");
+    }
+
     // ── helpers ──────────────────────────────────────────────────────────
 
     private static (

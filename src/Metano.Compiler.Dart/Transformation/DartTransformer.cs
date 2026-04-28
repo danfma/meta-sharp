@@ -87,18 +87,20 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
 
             var fileName = IrToDartNamingPolicy.ToFileName(GetEmittedTypeName(type));
             var statements = new List<DartTopLevel>();
+            var runtimeRequirements = new HashSet<IrRuntimeRequirement>();
 
             switch (type.TypeKind)
             {
                 case TypeKind.Enum:
-                    IrToDartEnumBridge.Convert(IrEnumExtractor.Extract(type), statements);
+                    var enumIr = IrEnumExtractor.Extract(type);
+                    IrToDartEnumBridge.Convert(enumIr, statements);
+                    ScanInto(runtimeRequirements, enumIr);
                     break;
 
                 case TypeKind.Interface:
-                    IrToDartInterfaceBridge.Convert(
-                        IrInterfaceExtractor.Extract(type, target: TargetLanguage.Dart),
-                        statements
-                    );
+                    var interfaceIr = IrInterfaceExtractor.Extract(type, target: TargetLanguage.Dart);
+                    IrToDartInterfaceBridge.Convert(interfaceIr, statements);
+                    ScanInto(runtimeRequirements, interfaceIr);
                     break;
 
                 case TypeKind.Class:
@@ -115,6 +117,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                             target: TargetLanguage.Dart
                         );
                         IrToDartModuleBridge.Convert(functions, statements);
+                        ScanFunctionsInto(runtimeRequirements, functions);
                         break;
                     }
                     var classIr = IrClassExtractor.Extract(
@@ -125,6 +128,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                     );
                     ReportOverloadDiagnostics(classIr, type.Name);
                     IrToDartClassBridge.Convert(classIr, statements);
+                    ScanInto(runtimeRequirements, classIr);
                     break;
 
                 default:
@@ -145,7 +149,12 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                     continue;
             }
 
-            var imports = CollectImports(statements, fileName, localTypeFiles);
+            var imports = DartImportCollector.Collect(
+                statements,
+                fileName,
+                localTypeFiles,
+                runtimeRequirements
+            );
             statements.InsertRange(0, imports);
             files.Add(new DartSourceFile(fileName, statements));
         }
@@ -236,148 +245,36 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     private static string GetEmittedTypeName(INamedTypeSymbol type) =>
         SymbolHelper.GetNameOverride(type, TargetLanguage.Dart) ?? type.Name;
 
-    // ── Imports ────────────────────────────────────────────────────────────
+    // ── Runtime requirements ──────────────────────────────────────────────
+
+    private static void ScanInto(
+        HashSet<IrRuntimeRequirement> sink,
+        IrTypeDeclaration declaration
+    )
+    {
+        foreach (var req in IrRuntimeRequirementScanner.Scan(declaration))
+            sink.Add(req);
+    }
 
     /// <summary>
-    /// Walks the generated Dart AST and produces:
-    /// <list type="bullet">
-    ///   <item>Cross-package imports (<c>import 'package:name/path.dart';</c>) from every
-    ///   <see cref="DartTypeOrigin"/> attached to a named type.</item>
-    ///   <item>Relative imports (<c>import 'other.dart';</c>) for references to other
-    ///   types declared in the same package (and thus in sibling files).</item>
-    /// </list>
+    /// Scans module-level functions for runtime requirements. Wraps the function
+    /// list in a synthetic <see cref="IrModule"/> so the shared scanner — which
+    /// only operates on type declarations or whole modules — can walk them.
+    /// Tracking issue: add an <c>IrRuntimeRequirementScanner.Scan(IReadOnlyList&lt;IrModuleFunction&gt;)</c>
+    /// overload so callers don't fabricate IR shells just to satisfy the entry point.
     /// </summary>
-    private static List<DartTopLevel> CollectImports(
-        IReadOnlyList<DartTopLevel> statements,
-        string currentFileName,
-        IReadOnlyDictionary<string, string> localTypeFiles
+    private static void ScanFunctionsInto(
+        HashSet<IrRuntimeRequirement> sink,
+        IReadOnlyList<IrModuleFunction> functions
     )
     {
-        var origins = new Dictionary<string, DartTypeOrigin>();
-        var relativeImports = new HashSet<string>(StringComparer.Ordinal);
-
-        foreach (var stmt in statements)
-            WalkTopLevel(stmt, origins, localTypeFiles, currentFileName, relativeImports);
-
-        var imports = new List<DartTopLevel>();
-
-        foreach (var relativeFile in relativeImports.OrderBy(s => s, StringComparer.Ordinal))
-            imports.Add(new DartImport(relativeFile));
-
-        foreach (var origin in origins.Values.OrderBy(o => o.Package).ThenBy(o => o.Path))
-            imports.Add(new DartImport($"package:{origin.Package}/{origin.Path}.dart"));
-
-        return imports;
-    }
-
-    private static void WalkTopLevel(
-        DartTopLevel stmt,
-        Dictionary<string, DartTypeOrigin> origins,
-        IReadOnlyDictionary<string, string> localTypeFiles,
-        string currentFile,
-        HashSet<string> relativeImports
-    )
-    {
-        switch (stmt)
-        {
-            case DartClass cls:
-                WalkClass(cls, origins, localTypeFiles, currentFile, relativeImports);
-                break;
-            case DartFunction fn:
-                // [ExportedAsModule] static classes lower to top-level DartFunctions;
-                // their parameter + return types still need to contribute imports.
-                WalkType(fn.ReturnType, origins, localTypeFiles, currentFile, relativeImports);
-                foreach (var p in fn.Parameters)
-                    WalkType(p.Type, origins, localTypeFiles, currentFile, relativeImports);
-                break;
-        }
-    }
-
-    private static void WalkClass(
-        DartClass cls,
-        Dictionary<string, DartTypeOrigin> origins,
-        IReadOnlyDictionary<string, string> localTypeFiles,
-        string currentFile,
-        HashSet<string> relativeImports
-    )
-    {
-        if (cls.ExtendsType is not null)
-            WalkType(cls.ExtendsType, origins, localTypeFiles, currentFile, relativeImports);
-        if (cls.Implements is not null)
-            foreach (var i in cls.Implements)
-                WalkType(i, origins, localTypeFiles, currentFile, relativeImports);
-        if (cls.Members is not null)
-            foreach (var m in cls.Members)
-                WalkMember(m, origins, localTypeFiles, currentFile, relativeImports);
-        if (cls.Constructor is not null)
-            foreach (var p in cls.Constructor.Parameters)
-                if (p.Type is not null)
-                    WalkType(p.Type, origins, localTypeFiles, currentFile, relativeImports);
-    }
-
-    private static void WalkMember(
-        DartClassMember member,
-        Dictionary<string, DartTypeOrigin> origins,
-        IReadOnlyDictionary<string, string> localTypeFiles,
-        string currentFile,
-        HashSet<string> relativeImports
-    )
-    {
-        switch (member)
-        {
-            case DartField f:
-                WalkType(f.Type, origins, localTypeFiles, currentFile, relativeImports);
-                break;
-            case DartGetter g:
-                WalkType(g.ReturnType, origins, localTypeFiles, currentFile, relativeImports);
-                break;
-            case DartMethodSignature m:
-                WalkType(m.ReturnType, origins, localTypeFiles, currentFile, relativeImports);
-                foreach (var p in m.Parameters)
-                    WalkType(p.Type, origins, localTypeFiles, currentFile, relativeImports);
-                break;
-        }
-    }
-
-    private static void WalkType(
-        DartType type,
-        Dictionary<string, DartTypeOrigin> origins,
-        IReadOnlyDictionary<string, string> localTypeFiles,
-        string currentFile,
-        HashSet<string> relativeImports
-    )
-    {
-        switch (type)
-        {
-            case DartNamedType named:
-                if (named.Origin is not null)
-                {
-                    var key = $"{named.Origin.Package}/{named.Origin.Path}";
-                    origins[key] = named.Origin;
-                }
-                else if (
-                    localTypeFiles.TryGetValue(named.Name, out var otherFile)
-                    && otherFile != currentFile
-                )
-                {
-                    relativeImports.Add(otherFile);
-                }
-                if (named.TypeArguments is not null)
-                    foreach (var a in named.TypeArguments)
-                        WalkType(a, origins, localTypeFiles, currentFile, relativeImports);
-                break;
-            case DartNullableType n:
-                WalkType(n.Inner, origins, localTypeFiles, currentFile, relativeImports);
-                break;
-            case DartFunctionType f:
-                WalkType(f.ReturnType, origins, localTypeFiles, currentFile, relativeImports);
-                foreach (var p in f.Parameters)
-                    WalkType(p.Type, origins, localTypeFiles, currentFile, relativeImports);
-                break;
-            case DartRecordType r:
-                foreach (var e in r.Elements)
-                    WalkType(e, origins, localTypeFiles, currentFile, relativeImports);
-                break;
-        }
+        var module = new IrModule(
+            Name: string.Empty,
+            Namespace: null,
+            Types: Array.Empty<IrTypeDeclaration>(),
+            Functions: functions
+        );
+        foreach (var req in IrRuntimeRequirementScanner.Scan(module))
+            sink.Add(req);
     }
 }
