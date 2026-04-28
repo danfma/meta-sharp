@@ -70,7 +70,12 @@ public static class IrToTsExpressionBridge
                 ye.Value is not null ? $"yield {FormatInner(ye.Value)}" : "yield"
             ),
             IrOptionalChain chain => MapOptionalChain(chain, bclRegistry),
-            IrThrowExpression th => new TsIdentifier($"/* throw */ {FormatInner(th.Expression)}"),
+            IrThrowExpression th => new TsCallExpression(
+                new TsParenthesized(
+                    new TsArrowFunction([], [new TsThrowStatement(Map(th.Expression, bclRegistry))])
+                ),
+                Array.Empty<TsExpression>()
+            ),
             IrUnsupportedExpression u => new TsIdentifier(
                 $"/* TODO: unsupported IR expression {u.Kind} */"
             ),
