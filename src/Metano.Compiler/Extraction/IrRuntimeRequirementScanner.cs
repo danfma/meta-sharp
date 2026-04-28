@@ -45,10 +45,27 @@ public static class IrRuntimeRequirementScanner
             case IrInterfaceDeclaration i:
                 ScanInterface(i, acc);
                 break;
+            case IrDelegateDeclaration d:
+                ScanDelegate(d, acc);
+                break;
             case IrEnumDeclaration:
                 // enums have no runtime helper surface
                 break;
         }
+    }
+
+    private static void ScanDelegate(IrDelegateDeclaration d, HashSet<IrRuntimeRequirement> acc)
+    {
+        if (d.ThisType is not null)
+            ScanTypeRef(d.ThisType, acc);
+        foreach (var p in d.Parameters)
+            ScanTypeRef(p.Type, acc);
+        ScanTypeRef(d.ReturnType, acc);
+        if (d.TypeParameters is not null)
+            foreach (var tp in d.TypeParameters)
+                if (tp.Constraints is not null)
+                    foreach (var c in tp.Constraints)
+                        ScanTypeRef(c, acc);
     }
 
     private static void ScanClass(IrClassDeclaration c, HashSet<IrRuntimeRequirement> acc)

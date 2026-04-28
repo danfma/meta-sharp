@@ -14,7 +14,7 @@ namespace Metano.Tests;
 public class ThisAttributeTranspileTests
 {
     [Test]
-    public async Task This_OnDelegateFirstParameter_EmitsThisAnnotationInFunctionType()
+    public async Task This_OnDelegateFirstParameter_EmitsThisAnnotationInTypeAlias()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -35,12 +35,15 @@ public class ThisAttributeTranspileTests
             """
         );
 
-        // The delegate-typed property on `Widget` lowers to the
-        // TypeScript function type; the emitted signature carries the
-        // synthetic `this: Element` slot and the remaining
+        // The delegate emits as its own TS type alias; the alias body
+        // carries the synthetic `this: Element` slot and the remaining
         // parameters after the one dropped by the attribute.
-        var output = result["widget.ts"];
-        await Assert.That(output).Contains("(this: Element, arg: string) => void");
+        var alias = result["mouse-event-listener.ts"];
+        await Assert
+            .That(alias)
+            .Contains("export type MouseEventListener = (this: Element, arg: string) => void;");
+        var widget = result["widget.ts"];
+        await Assert.That(widget).Contains("onClick: MouseEventListener | null");
     }
 
     [Test]
@@ -637,8 +640,8 @@ public class ThisAttributeTranspileTests
     [Test]
     public async Task This_OnSingleParameterDelegate_EmitsEmptyParameterList()
     {
-        // `[This]` on the only parameter leaves the delegate with no
-        // positional arguments; the emitted signature reads
+        // `[This]` on the only parameter leaves the delegate alias with
+        // no positional arguments; the emitted signature reads
         // `(this: T) => R` with no trailing comma.
         var result = TranspileHelper.Transpile(
             """
@@ -656,8 +659,10 @@ public class ThisAttributeTranspileTests
             """
         );
 
-        var output = result["host.ts"];
-        await Assert.That(output).Contains("(this: Element) => void");
-        await Assert.That(output).DoesNotContain("(this: Element, ");
+        var alias = result["listener.ts"];
+        await Assert.That(alias).Contains("export type Listener = (this: Element) => void;");
+        await Assert.That(alias).DoesNotContain("(this: Element, ");
+        var host = result["host.ts"];
+        await Assert.That(host).Contains("handler: Listener | null");
     }
 }

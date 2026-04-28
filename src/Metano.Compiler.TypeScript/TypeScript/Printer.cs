@@ -326,6 +326,7 @@ public sealed class Printer(string indent = "  ")
             _sb.Write("export ");
         _sb.Write("type ");
         _sb.Write(alias.Name);
+        PrintTypeParameters(alias.TypeParameters);
         _sb.Write(" = ");
         PrintType(alias.Type);
         _sb.Write(";");

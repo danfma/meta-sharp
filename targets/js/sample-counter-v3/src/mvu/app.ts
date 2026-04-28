@@ -1,10 +1,11 @@
 import type { IWidget } from "./i-widget";
 import { StateHolder } from "./state-holder";
+import type { ViewFn } from "./view-fn";
 
 export class App {
   constructor() { }
 
-  static mount<TState>(containerId: string, initialState: TState, view: (state: TState, setState: (obj: TState) => void) => IWidget): void {
+  static mount<TState>(containerId: string, initialState: TState, view: ViewFn<TState>): void {
     const container = App.resolveContainer(containerId);
     const holder = new StateHolder(initialState);
     const setState = holder.set.bind(holder);

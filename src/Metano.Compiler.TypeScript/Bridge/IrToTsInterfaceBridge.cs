@@ -92,27 +92,7 @@ public static class IrToTsInterfaceBridge
         return new TsInterfaceMethod(name, parameters, returnType, typeParams);
     }
 
-    /// <summary>
-    /// Converts IR type parameters to TS. Matches legacy behavior of keeping only the
-    /// first constraint (<c>where T : IFoo, IBar</c> → <c>T extends IFoo</c>) — the
-    /// TypeScript target can only express a single constraint as an <c>extends</c> clause
-    /// without resorting to intersection types.
-    /// </summary>
     private static IReadOnlyList<TsTypeParameter>? ConvertTypeParameters(
         IReadOnlyList<IrTypeParameter>? typeParameters
-    )
-    {
-        if (typeParameters is null || typeParameters.Count == 0)
-            return null;
-
-        return typeParameters
-            .Select(tp =>
-            {
-                TsType? constraint = tp.Constraints is { Count: > 0 } c
-                    ? IrToTsTypeMapper.Map(c[0])
-                    : null;
-                return new TsTypeParameter(tp.Name, constraint);
-            })
-            .ToList();
-    }
+    ) => IrToTsTypeParameterMapper.Convert(typeParameters);
 }

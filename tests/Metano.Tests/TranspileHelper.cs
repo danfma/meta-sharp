@@ -329,4 +329,40 @@ public static class TranspileHelper
             throw new FileNotFoundException($"Expected file not found: {path}");
         return File.ReadAllText(path);
     }
+
+    public static (
+        Dictionary<string, string> Files,
+        IReadOnlyList<Metano.Compiler.Diagnostics.MetanoDiagnostic> Diagnostics
+    ) TranspileDart(string csharpSource, string assemblyName = "DartTestAssembly")
+    {
+        var syntaxTree = CSharpSyntaxTree.ParseText(
+            csharpSource,
+            new CSharpParseOptions(LanguageVersion.Preview)
+        );
+        var compilation = CSharpCompilation.Create(
+            assemblyName,
+            [syntaxTree],
+            BaseReferences,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
+        );
+        var errors = compilation
+            .GetDiagnostics()
+            .Where(d => d.Severity == DiagnosticSeverity.Error)
+            .ToList();
+        if (errors.Count > 0)
+            throw new InvalidOperationException(
+                "C# compilation failed:\n" + string.Join("\n", errors.Select(e => e.ToString()))
+            );
+        var ir = new CSharpSourceFrontend().ExtractFromCompilation(
+            compilation,
+            TargetLanguage.Dart
+        );
+        var transformer = new Metano.Dart.Transformation.DartTransformer(ir, compilation);
+        var files = transformer.TransformAll();
+        var printer = new Metano.Dart.Printer();
+        var result = new Dictionary<string, string>();
+        foreach (var file in files)
+            result[file.FileName] = printer.Print(file);
+        return (result, transformer.Diagnostics);
+    }
 }

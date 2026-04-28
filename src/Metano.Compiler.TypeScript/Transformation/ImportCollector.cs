@@ -496,6 +496,10 @@ public sealed class ImportCollector(
     {
         switch (node)
         {
+            case TsTypeAlias alias:
+                CollectFromTypeParameters(alias.TypeParameters, names, crossPackageOrigins);
+                CollectFromType(alias.Type, names, crossPackageOrigins);
+                break;
             case TsInterface iface:
                 CollectFromTypeParameters(iface.TypeParameters, names, crossPackageOrigins);
                 if (iface.Extends is not null)

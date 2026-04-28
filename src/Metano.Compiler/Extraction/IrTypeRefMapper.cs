@@ -17,6 +17,20 @@ namespace Metano.Compiler.Extraction;
 public static class IrTypeRefMapper
 {
     /// <summary>
+    /// Backends opt into named-alias delegate emission by setting this
+    /// predicate; <c>null</c> keeps the mapper on the inline-function
+    /// fallback path.
+    /// </summary>
+    private static readonly AsyncLocal<Func<INamedTypeSymbol, bool>?> _namedDelegatePredicate =
+        new();
+
+    public static Func<INamedTypeSymbol, bool>? NamedDelegatePredicate
+    {
+        get => _namedDelegatePredicate.Value;
+        set => _namedDelegatePredicate.Value = value;
+    }
+
+    /// <summary>
     /// Maps a C# type to a semantic <see cref="IrTypeRef"/>. When
     /// <paramref name="originResolver"/> is provided, named-type references
     /// carry an <see cref="IrTypeOrigin"/> pointing at the producing package.
@@ -184,9 +198,24 @@ public static class IrTypeRefMapper
             if (named.IsCollectionLike() && named.TypeArguments.Length > 0)
                 return new IrArrayTypeRef(Map(named.TypeArguments[0], originResolver, target));
 
-            // Delegate types → function type
             if (named.TypeKind == TypeKind.Delegate)
+            {
+                if (NamedDelegatePredicate?.Invoke(named) == true)
+                {
+                    return new IrNamedTypeRef(
+                        BuildQualifiedName(named, target),
+                        GetNamespace(named),
+                        named.TypeArguments.Length > 0
+                            ? named
+                                .TypeArguments.Select(a => Map(a, originResolver, target))
+                                .ToList()
+                            : null,
+                        originResolver?.Invoke(named),
+                        BuildNamedTypeSemantics(named, target)
+                    );
+                }
                 return MapDelegateType(named, originResolver);
+            }
 
             // User-defined named types: may carry a cross-package origin.
             var origin = originResolver?.Invoke(named);

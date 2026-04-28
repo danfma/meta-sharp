@@ -50,3 +50,18 @@ public sealed record IrEnumDeclaration(
     IrEnumStyle Style = IrEnumStyle.Numeric,
     IReadOnlyList<IrAttribute>? Attributes = null
 ) : IrTypeDeclaration(Name, Visibility, Attributes: Attributes);
+
+/// <summary>
+/// A delegate declaration — its signature lowers to a TS type alias
+/// (<c>export type Name = (…) =&gt; R;</c>) on backends that support
+/// named function aliases.
+/// </summary>
+public sealed record IrDelegateDeclaration(
+    string Name,
+    IrVisibility Visibility,
+    IReadOnlyList<IrParameter> Parameters,
+    IrTypeRef ReturnType,
+    IrTypeRef? ThisType = null,
+    IReadOnlyList<IrTypeParameter>? TypeParameters = null,
+    IReadOnlyList<IrAttribute>? Attributes = null
+) : IrTypeDeclaration(Name, Visibility, TypeParameters, Attributes);

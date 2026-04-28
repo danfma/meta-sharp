@@ -223,9 +223,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // guarantees the static slot is cleared even when a bridge
         // throws, keeping subsequent TransformAll runs clean.
         var previousRenames = IrToTsTypeMapper.NamedTypeRenames;
-        IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
+        var previousDelegatePredicate = IrTypeRefMapper.NamedDelegatePredicate;
         try
         {
+            IrToTsTypeMapper.NamedTypeRenames = nameRenames.Count > 0 ? nameRenames : null;
+            IrTypeRefMapper.NamedDelegatePredicate = sym =>
+                SymbolHelper.IsTranspilable(sym, _assemblyWideTranspile, _currentAssembly)
+                || Context.OriginResolver?.Invoke(sym) is not null;
+
             // Group types by output file. Types decorated with
             // [EmitInFile("name")] share the same file; everything else gets
             // its own file (legacy 1:1 default). The grouping is keyed by
@@ -242,6 +247,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         finally
         {
             IrToTsTypeMapper.NamedTypeRenames = previousRenames;
+            IrTypeRefMapper.NamedDelegatePredicate = previousDelegatePredicate;
         }
 
         // Generate index.ts barrel files per namespace folder
@@ -344,6 +350,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             var ifaceIr = (IrInterfaceDeclaration)GetOrExtractIr(type, irCache)!;
             IrToTsInterfaceBridge.Convert(ifaceIr, sink, Context.ResolveTsName(type));
+        }
+        else if (type.TypeKind == TypeKind.Delegate)
+        {
+            var delegateIr = (IrDelegateDeclaration)GetOrExtractIr(type, irCache)!;
+            IrToTsDelegateBridge.Convert(delegateIr, sink, Context.ResolveTsName(type));
         }
         else if (IsExceptionType(type))
         {
@@ -993,6 +1004,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 type,
                 Context.OriginResolver,
                 Context.Compilation,
+                TargetLanguage.TypeScript
+            ),
+            TypeKind.Delegate => IrDelegateExtractor.Extract(
+                type,
+                Context.OriginResolver,
                 TargetLanguage.TypeScript
             ),
             _ => null,
