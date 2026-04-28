@@ -65,6 +65,24 @@ When reviewing code (assume recent changes / the PR diff, not the whole codebase
 6. **Conventions check.** Commit message style (conventional commits, infinitive verbs), no AI attribution, FR references, C# formatting via CSharpier.
 7. **Severity-tagged findings.** Classify each finding as **Blocker**, **Major**, **Minor**, or **Nit**. Give concrete fix suggestions, ideally with code snippets.
 
+### Recurring Findings Checklist
+
+External AI reviewers (Gemini, Copilot, Codex) flag the same families of bugs across PRs. Apply this checklist on EVERY review so the issues are caught pre-commit instead of in PR threads:
+
+1. **Sample regen verification** — When extraction or emission paths change, regenerate every sample (`SampleTodo`, `SampleIssueTracker`, `SampleTodo.Service`, `SampleCounter`) locally and `git diff targets/js/`. CI's `Verify samples are regenerated cleanly` step is a hard fail; catch it before pushing.
+2. **Symbol identity, not name match** — Any code that compares C#/Roslyn symbols (capture detection, member matching, scope resolution) must use `SemanticModel.GetSymbolInfo` + `SymbolEqualityComparer`, not `string.Equals(symbol.Name, …)`. Name match flags false positives whenever a static / base / shadowed member shares the parameter name.
+3. **String-prefix boundary** — Any path-prefix or namespace-prefix check via `StartsWith` must end the prefix with the directory separator (`./dist/`, not `./dist`) so siblings (`./dist-cjs/`, `./dist2/`) are not silently matched.
+4. **Empty / zero-element edge case** — When a feature uses `Count > 0` to guard work, ask: what should happen when the input is empty but a previous run left state on disk? Often the merge / cleanup pass must still run with an empty input (e.g., empty `exports` regen still prunes stale entries).
+5. **Recursive substitution in chains** — Any rewrite that swaps a symbol (e.g., `super → this`, captured-param → field access) must walk through `IrMemberAccess` towers, not just the immediate node. `base.Property.Method` ends a tower rooted in `base`.
+6. **Declaration-only TS positions forbid initializers** — Abstract method signatures, overload signatures, and interface methods cannot carry `= expr`. When propagating defaults, gate on `IsAbstract` / overload-position and emit `?` instead.
+7. **Record + abstract / record + new combos** — Synthesized helpers (`with(...) { return new T(...) }`, `equals`, `hashCode`) call constructors. Combining them with abstract or sealed-with-private-ctor breaks the synthesis; suppress the synthesis or the marker.
+8. **Defensive read at hand-edited inputs** — `JsonValue.GetValue<T>()` and similar throw on type mismatch. Any code that reads from a user-edited `package.json`, `.csproj`, or other hand-curated file must `TryGetValue` / null-check the shape before consuming.
+9. **Cross-assembly / cross-package paths** — When extraction uses syntax (`DeclaringSyntaxReferences.GetSyntax()`), the syntax may be unreachable for referenced-assembly symbols. Default values, attribute arguments, and member bodies all hit this. Either symbol-source the value (`IParameterSymbol.ExplicitDefaultValue`) or document the limitation.
+10. **Synthesized-name collision** — Anything that synthesizes a class member name (backing field, helper method, dispatcher) must check `type.GetMembers().Select(m => m.Name)` for collisions across ALL member kinds (TS shares one namespace), not just fields.
+11. **Multi-file partial types** — `TextSpan` comparisons only make sense inside a single `SyntaxTree`. Match on `SyntaxTree` identity too when iterating partial-type member syntax.
+12. **Field-initializer execution order** — Class field initializers run BEFORE the constructor body. Code that synthesizes a backing field assigned in the ctor body must NOT rewrite identifier references inside other field initializers — they execute too early and read `undefined`.
+13. **Doc accuracy** — XML doc comments must describe what the code actually does, not what we wish it did. If the predicate is shape-based, say "shape-based"; if it ignores side-effecting getters, say so. Reviewers cite doc-vs-behavior mismatches frequently.
+
 ## Output Format
 
 For **plans**, structure as:
