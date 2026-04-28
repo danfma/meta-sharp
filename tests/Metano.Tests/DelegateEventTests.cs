@@ -428,6 +428,44 @@ public class DelegateEventTests
     }
 
     [Test]
+    public async Task BaseMemberAccessChain_MethodGroup_RecursivelySubstitutesSuper()
+    {
+        // `base.Forwarder.Handle` ends a member-access chain rooted
+        // in `base`. The bind argument must walk the chain and
+        // substitute `this` for the `super` root — `super.forwarder`
+        // is fine on the LHS (super property access is valid JS),
+        // but the bind argument cannot keep `super` because it is
+        // not a value expression.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Inner
+            {
+                public void Handle() { }
+            }
+
+            [Transpile]
+            public class BaseHandler
+            {
+                protected Inner Forwarder { get; } = new();
+            }
+
+            [Transpile]
+            public class DerivedHandler : BaseHandler
+            {
+                public Action GetBaseHandler() => base.Forwarder.Handle;
+            }
+            """
+        );
+
+        var output = result["derived-handler.ts"];
+        await Assert.That(output).Contains(".bind(this.forwarder)");
+        await Assert.That(output).DoesNotContain(".bind(super.forwarder)");
+    }
+
+    [Test]
     public async Task ThisDelegate_InstanceMethodGroup_StacksBindAndBindReceiver()
     {
         // `[This]`-bearing delegate assigned an instance method

@@ -1288,21 +1288,34 @@ public sealed class IrExpressionExtractor
     /// method's body still runs against the current instance, which
     /// matches the C# semantics of <c>base</c>-qualified method
     /// groups (the dispatch is non-virtual but the receiver is
-    /// still <c>this</c>).
+    /// still <c>this</c>). The substitution recurses through
+    /// <see cref="IrMemberAccess"/> towers so a chain rooted in
+    /// <c>base</c> (<c>base.Property.Method</c>) becomes
+    /// <c>this.property.method.bind(this.property)</c> instead of
+    /// the invalid <c>super.property</c>.
     /// </summary>
     private static IrExpression BindArgumentFor(IrExpression receiver) =>
-        receiver is IrBaseExpression ? new IrThisExpression() : receiver;
+        receiver switch
+        {
+            IrBaseExpression => new IrThisExpression(),
+            IrMemberAccess access => access with { Target = BindArgumentFor(access.Target) },
+            _ => receiver,
+        };
 
     /// <summary>
     /// Builds the <c>.bind(receiver)</c> expression for an instance
-    /// method group. When the receiver chain is pure (identifier,
-    /// <c>this</c>, <c>base</c>, or a member-access tower over those)
-    /// emits the simple <c>obj.method.bind(obj)</c> shape. Otherwise
-    /// the receiver has observable side effects (call expressions,
-    /// indexers, getters that mutate) and duplicating it would run
-    /// the side effect twice — wrap the bind site in an IIFE arrow
-    /// that captures the receiver in a temporary so the chain is
-    /// evaluated exactly once:
+    /// method group. When the receiver chain reduces to a pure IR
+    /// shape (identifier, <c>this</c>, <c>base</c>, or a chain of
+    /// <see cref="IrMemberAccess"/> nodes rooted at one of those)
+    /// emits the simple <c>obj.method.bind(obj)</c>. The shape
+    /// predicate matches what <see cref="IsSimpleReceiver"/>
+    /// already accepts elsewhere in the extractor, so a property
+    /// getter that observably mutates state is treated as pure
+    /// here too — symbol-aware purity tracking is a separate
+    /// follow-up. Receivers whose IR shape includes a call
+    /// expression, indexer, or other non-member node are wrapped
+    /// in an IIFE arrow that captures the receiver in a temporary
+    /// so the chain is evaluated exactly once:
     /// <c>((__r) => __r.method.bind(__r))(originalReceiver)</c>.
     /// </summary>
     private static IrExpression BuildBoundReference(IrMemberAccess instanceAccess)
