@@ -943,7 +943,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             var initializer = TryFindInlineInitializerExpression(start);
             if (initializer is null)
                 return false;
-            var semanticModel = TryGetSemanticModel(compilation, initializer.SyntaxTree);
+            var semanticModel = SymbolHelper.TryGetSemanticModel(
+                compilation,
+                initializer.SyntaxTree
+            );
             if (semanticModel is null)
                 return false;
 
@@ -961,23 +964,6 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         {
             visiting.Remove(start);
         }
-    }
-
-    private static SemanticModel? TryGetSemanticModel(
-        Compilation compilation,
-        SyntaxTree syntaxTree
-    )
-    {
-        if (compilation.ContainsSyntaxTree(syntaxTree))
-            return compilation.GetSemanticModel(syntaxTree);
-
-        foreach (var reference in compilation.References.OfType<CompilationReference>())
-        {
-            if (reference.Compilation.ContainsSyntaxTree(syntaxTree))
-                return reference.Compilation.GetSemanticModel(syntaxTree);
-        }
-
-        return null;
     }
 
     private static ExpressionSyntax? TryFindInlineInitializerExpression(ISymbol symbol)
@@ -1088,6 +1074,21 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     }
                     break;
                 case IMethodSymbol method:
+                    if (!method.IsStatic)
+                    {
+                        diagnostics.Add(
+                            new MetanoDiagnostic(
+                                MetanoDiagnosticSeverity.Error,
+                                DiagnosticCodes.InvalidInline,
+                                $"[Inline] on method {FormatMemberPath(method)} requires "
+                                    + $"a 'static' method (extension members count). Instance "
+                                    + $"methods cannot be substituted at the call site without "
+                                    + $"binding the receiver to 'this'.",
+                                method.Locations.FirstOrDefault()
+                            )
+                        );
+                        break;
+                    }
                     if (!HasInlinableMethodBody(method))
                     {
                         diagnostics.Add(

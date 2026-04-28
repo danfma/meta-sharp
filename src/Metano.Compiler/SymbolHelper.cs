@@ -646,4 +646,32 @@ public static class SymbolHelper
         }
         return sb.ToString();
     }
+
+    /// <summary>
+    /// Resolves the <see cref="SemanticModel"/> for <paramref name="syntaxTree"/>
+    /// against <paramref name="compilation"/>, walking referenced
+    /// <see cref="CompilationReference"/>s when the tree belongs to a
+    /// dependency's compilation. Cross-project <c>[Inline]</c> initializers
+    /// and method bodies live in the referenced project's compilation, not
+    /// the consumer's, so a plain
+    /// <see cref="Compilation.GetSemanticModel(SyntaxTree, bool)"/> on the
+    /// outer compilation throws. Returns <c>null</c> when no compilation in
+    /// the graph owns the tree.
+    /// </summary>
+    public static SemanticModel? TryGetSemanticModel(
+        Compilation compilation,
+        SyntaxTree syntaxTree
+    )
+    {
+        if (compilation.ContainsSyntaxTree(syntaxTree))
+            return compilation.GetSemanticModel(syntaxTree);
+
+        foreach (var reference in compilation.References.OfType<CompilationReference>())
+        {
+            if (reference.Compilation.ContainsSyntaxTree(syntaxTree))
+                return reference.Compilation.GetSemanticModel(syntaxTree);
+        }
+
+        return null;
+    }
 }

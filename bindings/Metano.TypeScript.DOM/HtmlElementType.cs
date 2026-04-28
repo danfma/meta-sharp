@@ -13,8 +13,8 @@ public static class HtmlElementType
     public static Of<HtmlDivElement> Div => new("div");
 
     [Inline]
-    public static Of<HtmlSpanElement> Span = new("span");
+    public static readonly Of<HtmlSpanElement> Span = new("span");
 
     [Inline]
-    public static Of<HtmlButtonElement> Button = new("button");
+    public static readonly Of<HtmlButtonElement> Button = new("button");
 }
