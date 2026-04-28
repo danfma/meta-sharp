@@ -211,6 +211,14 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         if (ir.Semantics.IsRecord && !ir.Semantics.IsPlainObject)
             classMembers.AddRange(IrToTsRecordSynthesisBridge.Generate(ir, allParams));
 
+        // Records get synthesized `with(...)` / `equals(...)` / `hashCode(...)`
+        // helpers via `IrToTsRecordSynthesisBridge`. The `with` helper
+        // calls `new TypeName(...)`, which TypeScript rejects on
+        // `abstract class`. Suppress the abstract modifier for records
+        // until the synthesis path emits a constructor-aware shape;
+        // tracked as a follow-up to issue #118.
+        var emitAbstract = ir.Semantics.IsAbstract && !ir.Semantics.IsRecord;
+
         statements.Add(
             new TsClass(
                 _context.ResolveTsName(type),
@@ -219,7 +227,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 Extends: extendsType,
                 Implements: IrToTsClassBridge.BuildImplements(ir),
                 TypeParameters: IrToTsClassBridge.BuildTypeParameters(ir),
-                Abstract: ir.Semantics.IsAbstract
+                Abstract: emitAbstract
             )
         );
     }

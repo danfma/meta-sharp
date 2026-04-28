@@ -33,8 +33,9 @@ public class ClassInheritanceTests
         var output = result["dog.ts"];
         await Assert.That(output).Contains("extends Animal");
         // Synthesized derived ctor (no explicit ctor in C#) must still
-        // forward to super so TS does not raise the "must call super"
-        // error at runtime.
+        // forward to super so the emitted TS satisfies the type
+        // checker's "derived class must call super before reading
+        // this" rule.
         await Assert.That(output).Contains("super(");
     }
 
@@ -145,6 +146,30 @@ public class ClassInheritanceTests
 
         var output = result["wrapper.ts"];
         await Assert.That(output).DoesNotContain("extends");
+    }
+
+    [Test]
+    public async Task AbstractRecord_SuppressesAbstractModifier()
+    {
+        // Records get synthesized `with(...)` that calls `new
+        // TypeName(...)`, which TypeScript rejects on abstract
+        // classes. Skip the abstract modifier on records until
+        // record synthesis grows a constructor-aware shape.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public abstract record Animal(string Name);
+
+            [Transpile]
+            public sealed record Dog(string Name, string Breed) : Animal(Name);
+            """
+        );
+
+        var animal = result["animal.ts"];
+        await Assert.That(animal).Contains("export class Animal");
+        await Assert.That(animal).DoesNotContain("abstract class Animal");
     }
 
     [Test]
