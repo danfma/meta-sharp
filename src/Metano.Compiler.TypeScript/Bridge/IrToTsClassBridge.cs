@@ -412,7 +412,7 @@ internal static class IrToTsClassBridge
         members.Add(
             new TsMethodMember(
                 staticName,
-                [new TsParameter("...args", new TsNamedType("unknown[]"))],
+                [new TsParameter("args", new TsNamedType("unknown[]"), Rest: true)],
                 sharedReturnType,
                 staticDispatchBody,
                 Static: true,
@@ -443,7 +443,7 @@ internal static class IrToTsClassBridge
         members.Add(
             new TsMethodMember(
                 $"${operatorName}",
-                [new TsParameter("...args", new TsNamedType("unknown[]"))],
+                [new TsParameter("args", new TsNamedType("unknown[]"), Rest: true)],
                 sharedReturnType,
                 instanceDispatchBody,
                 Overloads: instanceOverloadSigs
@@ -743,7 +743,12 @@ internal static class IrToTsClassBridge
             if (existingNames.Contains(name))
                 continue;
             result.Add(
-                new TsConstructorParam(name, resolveType(p), Accessibility: TsAccessibility.None)
+                new TsConstructorParam(
+                    name,
+                    resolveType(p),
+                    Accessibility: TsAccessibility.None,
+                    Rest: p.Parameter.IsParams
+                )
             );
         }
         return result;

@@ -48,7 +48,8 @@ public static class IrToTsModuleBridge
                 Optional: p.IsOptional,
                 DefaultValue: p.HasDefaultValue && p.DefaultValue is not null
                     ? IrToTsExpressionBridge.Map(p.DefaultValue, bclRegistry)
-                    : null
+                    : null,
+                Rest: p.IsParams
             ))
             .ToList();
         var body = IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, bclRegistry);

@@ -597,6 +597,8 @@ public sealed class Printer(string indent = "  ")
             PrintAccessibility(p.Accessibility);
         if (p.Readonly)
             _sb.Write("readonly ");
+        if (p.Rest)
+            _sb.Write("...");
         _sb.Write(p.Name);
         _sb.Write(": ");
         PrintType(p.Type);
@@ -1277,6 +1279,8 @@ public sealed class Printer(string indent = "  ")
             parameters,
             p =>
             {
+                if (p.Rest)
+                    _sb.Write("...");
                 _sb.Write(p.Name);
                 // `?` and `= expr` both convey optionality, but TS
                 // forbids combining them — bias toward the default

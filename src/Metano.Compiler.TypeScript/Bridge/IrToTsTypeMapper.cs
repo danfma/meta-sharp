@@ -122,7 +122,11 @@ public static class IrToTsTypeMapper
         };
 
     private static TsParameter MapParameter(IrParameter param, IrToTsTypeOverrides? overrides) =>
-        new(IrToTsNamingPolicy.ToParameterName(param.Name), Map(param.Type, overrides));
+        new(
+            IrToTsNamingPolicy.ToParameterName(param.Name),
+            Map(param.Type, overrides),
+            Rest: param.IsParams
+        );
 
     private static TsType MakeNullable(TsType inner)
     {

@@ -70,7 +70,7 @@ public static class IrToTsOverloadDispatcherBridge
         members.Add(
             new TsMethodMember(
                 primaryName,
-                [new TsParameter("...args", new TsNamedType("unknown[]"))],
+                [new TsParameter("args", new TsNamedType("unknown[]"), Rest: true)],
                 commonReturn,
                 body,
                 Static: isStatic,
@@ -110,7 +110,8 @@ public static class IrToTsOverloadDispatcherBridge
             method
                 .Parameters.Select(p => new TsParameter(
                     TypeScriptNaming.ToCamelCase(p.Name),
-                    IrToTsTypeMapper.Map(p.Type)
+                    IrToTsTypeMapper.Map(p.Type),
+                    Rest: p.IsParams
                 ))
                 .ToList(),
             IrToTsTypeMapper.Map(method.ReturnType)
@@ -128,7 +129,8 @@ public static class IrToTsOverloadDispatcherBridge
         var parameters = method
             .Parameters.Select(p => new TsParameter(
                 TypeScriptNaming.ToCamelCase(p.Name),
-                IrToTsTypeMapper.Map(p.Type)
+                IrToTsTypeMapper.Map(p.Type),
+                Rest: p.IsParams
             ))
             .ToList();
         return new TsMethodMember(

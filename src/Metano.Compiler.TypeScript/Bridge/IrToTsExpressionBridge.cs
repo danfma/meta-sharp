@@ -269,7 +269,7 @@ public static class IrToTsExpressionBridge
         // argument names and lower each value; reordering / default-filling
         // for call sites using `Name: value` is handled earlier (at the
         // dispatcher or object-literal pass).
-        var loweredArgs = call.Arguments.Select(a => Map(a.Value, bclRegistry)).ToList();
+        var loweredArgs = call.Arguments.Select(a => MapArgument(a, bclRegistry)).ToList();
 
         // `[PlainObject]` instance method call: rewrite `obj.Method(args)` to
         // `methodName(obj, args)` — the plain-object shape has no class
@@ -318,6 +318,12 @@ public static class IrToTsExpressionBridge
 
     private static string? TsTypeArgName(IrTypeRef type) =>
         IrToTsTypeMapper.Map(type) is TsNamedType n ? n.Name : null;
+
+    public static TsExpression MapArgument(IrArgument arg, DeclarativeMappingRegistry? bclRegistry)
+    {
+        var value = Map(arg.Value, bclRegistry);
+        return arg.IsSpread ? new TsSpreadExpression(value) : value;
+    }
 
     /// <summary>
     /// `value?.member` becomes the TS optional chaining `value?.member` —
@@ -800,7 +806,7 @@ public static class IrToTsExpressionBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        var args = ne.Arguments.Select(a => Map(a.Value, bclRegistry)).ToList();
+        var args = ne.Arguments.Select(a => MapArgument(a, bclRegistry)).ToList();
         if (ne.IsPlainObject)
         {
             var properties = new List<TsObjectProperty>(args.Count);

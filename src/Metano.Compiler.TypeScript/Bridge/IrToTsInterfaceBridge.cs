@@ -84,7 +84,8 @@ public static class IrToTsInterfaceBridge
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.Map(p.Type),
-                Optional: p.IsOptional
+                Optional: p.IsOptional,
+                Rest: p.IsParams
             ))
             .ToList();
         var typeParams = ConvertTypeParameters(method.TypeParameters);

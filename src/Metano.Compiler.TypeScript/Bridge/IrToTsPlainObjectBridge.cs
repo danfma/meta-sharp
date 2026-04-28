@@ -165,7 +165,8 @@ public static class IrToTsPlainObjectBridge
             method.Parameters.Select(p => new TsParameter(
                 TypeScriptNaming.ToCamelCase(p.Name),
                 IrToTsTypeMapper.Map(p.Type),
-                Optional: p.IsOptional
+                Optional: p.IsOptional,
+                Rest: p.IsParams
             ))
         );
 

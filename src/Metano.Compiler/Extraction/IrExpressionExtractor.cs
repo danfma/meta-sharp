@@ -189,6 +189,7 @@ public sealed class IrExpressionExtractor
                 when inv.Expression is MemberBindingExpressionSyntax mbCall:
                 var methodSymbol = _semantic.GetSymbolInfo(inv).Symbol;
                 var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+                ApplyParamsSpread(args, methodSymbol as IMethodSymbol, inv.ArgumentList.Arguments);
 
                 // `handler?.Invoke(args)` lowers to a delegate
                 // optional call. The `.Invoke` member binding has no
@@ -1539,6 +1540,7 @@ public sealed class IrExpressionExtractor
         {
             var receiver = Extract(invokeMember.Expression);
             var invokeArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+            ApplyParamsSpread(invokeArgs, symbol, inv.ArgumentList.Arguments);
             return new IrCallExpression(receiver, invokeArgs, Origin: BuildOrigin(symbol));
         }
 
@@ -1603,6 +1605,7 @@ public sealed class IrExpressionExtractor
 
         var target = Extract(inv.Expression);
         var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+        ApplyParamsSpread(args, symbol, inv.ArgumentList.Arguments);
         IReadOnlyList<IrTypeRef>? typeArguments = null;
         if (symbol is { TypeArguments.Length: > 0 })
             typeArguments = symbol
@@ -2070,9 +2073,52 @@ public sealed class IrExpressionExtractor
     private IrArgument ExtractArgument(ArgumentSyntax argument) =>
         new(Extract(argument.Expression), argument.NameColon?.Name.Identifier.ValueText);
 
+    /// <summary>
+    /// Marks the trailing argument as a spread when the C# call passes a
+    /// single value into a <c>params</c> slot (the value is the array
+    /// itself). Discrete element calls (<c>Foo("x", "a", 42)</c>) leave the
+    /// arguments untouched — they already line up with the rest parameter
+    /// at the TypeScript surface.
+    /// </summary>
+    private void ApplyParamsSpread(
+        List<IrArgument> args,
+        IMethodSymbol? symbol,
+        SeparatedSyntaxList<ArgumentSyntax> syntaxArgs
+    )
+    {
+        if (symbol is null || symbol.Parameters.Length == 0)
+            return;
+        var lastParam = symbol.Parameters[^1];
+        if (!lastParam.IsParams)
+            return;
+        if (syntaxArgs.Count != symbol.Parameters.Length)
+            return;
+        if (TargetsPromotedRecordParams(symbol))
+            return;
+        var lastSyntax = syntaxArgs[^1];
+        var lastType = _semantic.GetTypeInfo(lastSyntax.Expression).ConvertedType;
+        if (lastType is null)
+            return;
+        if (!SymbolEqualityComparer.Default.Equals(lastType, lastParam.Type))
+            return;
+        args[^1] = args[^1] with { IsSpread = true };
+    }
+
+    /// <summary>
+    /// Records lower positional <c>params</c> through TS parameter-property
+    /// syntax, which forbids the rest-parameter prefix; emit-side falls
+    /// back to a regular array slot, so the call site must also keep the
+    /// array argument unspread to match the emitted signature.
+    /// </summary>
+    private static bool TargetsPromotedRecordParams(IMethodSymbol symbol) =>
+        symbol.MethodKind == MethodKind.Constructor && symbol.ContainingType is { IsRecord: true };
+
     private IrExpression ExtractObjectCreation(ObjectCreationExpressionSyntax oc)
     {
         var args = oc.ArgumentList?.Arguments.Select(ExtractArgument).ToList() ?? [];
+        var ctorSymbol = _semantic.GetSymbolInfo(oc).Symbol as IMethodSymbol;
+        if (oc.ArgumentList is { } argList)
+            ApplyParamsSpread(args, ctorSymbol, argList.Arguments);
         var typeSymbol = _semantic.GetTypeInfo(oc).Type;
         var type = typeSymbol is not null
             ? IrTypeRefMapper.Map(typeSymbol, _originResolver, _target)
@@ -2082,8 +2128,9 @@ public sealed class IrExpressionExtractor
 
     private IrExpression ExtractImplicitObjectCreation(ImplicitObjectCreationExpressionSyntax ioc)
     {
-        // `new(args)` — type comes from the target context; Roslyn resolves it for us.
         var args = ioc.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+        var ctorSymbol = _semantic.GetSymbolInfo(ioc).Symbol as IMethodSymbol;
+        ApplyParamsSpread(args, ctorSymbol, ioc.ArgumentList.Arguments);
         var typeSymbol = _semantic.GetTypeInfo(ioc).Type;
         var type = typeSymbol is not null
             ? IrTypeRefMapper.Map(typeSymbol, _originResolver, _target)

@@ -139,8 +139,13 @@ public sealed record IrCallExpression(
 /// method's parameter list to reorder and fill in skipped defaults —
 /// matching the legacy lowering the pipeline already produces.
 /// </para>
+/// <para>
+/// <see cref="IsSpread"/> tags arguments that flow directly into a rest /
+/// <c>params</c> slot as a single array, so backends emit them with the
+/// spread prefix.
+/// </para>
 /// </summary>
-public sealed record IrArgument(IrExpression Value, string? Name = null);
+public sealed record IrArgument(IrExpression Value, string? Name = null, bool IsSpread = false);
 
 /// <summary>
 /// Object creation: <c>new T(args)</c>.

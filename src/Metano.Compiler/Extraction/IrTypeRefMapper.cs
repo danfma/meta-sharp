@@ -464,7 +464,7 @@ public static class IrTypeRefMapper
         }
 
         var parameters = sourceParameters
-            .Select(p => new IrParameter(p.Name, Map(p.Type, originResolver)))
+            .Select(p => new IrParameter(p.Name, Map(p.Type, originResolver), IsParams: p.IsParams))
             .ToList();
 
         var returnType = invoke.ReturnsVoid

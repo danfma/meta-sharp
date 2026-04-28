@@ -243,6 +243,7 @@ public static class IrModuleFunctionExtractor
                 IrTypeRefMapper.Map(p.Type, originResolver),
                 HasDefaultValue: p.HasExplicitDefaultValue,
                 DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                IsParams: p.IsParams,
                 IsConstant: p.HasConstant()
             ))
         );
@@ -341,6 +342,7 @@ public static class IrModuleFunctionExtractor
                 IrTypeRefMapper.Map(p.Type, originResolver),
                 HasDefaultValue: p.HasExplicitDefaultValue,
                 DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
+                IsParams: p.IsParams,
                 IsConstant: p.HasConstant()
             ))
             .ToList();

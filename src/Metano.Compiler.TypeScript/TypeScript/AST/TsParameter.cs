@@ -19,9 +19,14 @@ namespace Metano.TypeScript.AST;
 /// abstract method signatures, overload signatures) must keep using
 /// <see cref="Optional"/> instead because TypeScript forbids
 /// initializers there.</param>
+/// <param name="Rest">When <c>true</c> the parameter renders with a
+/// <c>...</c> prefix (<c>...name: T[]</c>) — the TS rest-parameter form
+/// that maps to a C# <c>params</c> argument. Must be the last parameter
+/// of the signature; the type is expected to be an array type.</param>
 public sealed record TsParameter(
     string Name,
     TsType? Type,
     bool Optional = false,
-    TsExpression? DefaultValue = null
+    TsExpression? DefaultValue = null,
+    bool Rest = false
 );

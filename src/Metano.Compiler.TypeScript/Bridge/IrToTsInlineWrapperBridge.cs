@@ -107,7 +107,8 @@ public static class IrToTsInlineWrapperBridge
         var parameters = method
             .Parameters.Select(p => new TsParameter(
                 TypeScriptNaming.ToCamelCase(p.Name),
-                IrToTsTypeMapper.Map(p.Type)
+                IrToTsTypeMapper.Map(p.Type),
+                Rest: p.IsParams
             ))
             .ToList();
         var body = IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry);

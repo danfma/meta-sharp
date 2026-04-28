@@ -116,7 +116,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 .Select(p => new TsConstructorParam(
                     IrToTsNamingPolicy.ToParameterName(p.Parameter.Name),
                     IrToTsTypeMapper.Map(p.Parameter.Type, BclOverrides),
-                    Accessibility: TsAccessibility.None
+                    Accessibility: TsAccessibility.None,
+                    Rest: p.Parameter.IsParams
                 ))
                 .ToList();
             constructor = IrToTsClassBridge.BuildSimpleConstructor(
@@ -334,7 +335,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 .Select<IrMethodDeclaration, IReadOnlyList<TsParameter>>(o =>
                     o.Parameters.Select(p => new TsParameter(
                             IrToTsNamingPolicy.ToParameterName(p.Name),
-                            IrToTsTypeMapper.Map(p.Type, BclOverrides)
+                            IrToTsTypeMapper.Map(p.Type, BclOverrides),
+                            Rest: p.IsParams
                         ))
                         .ToList()
                 )
@@ -362,7 +364,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         var parameters = irOp
             .Parameters.Select(p => new TsParameter(
                 IrToTsNamingPolicy.ToParameterName(p.Name),
-                IrToTsTypeMapper.Map(p.Type, BclOverrides)
+                IrToTsTypeMapper.Map(p.Type, BclOverrides),
+                Rest: p.IsParams
             ))
             .ToList();
         var returnType = IrToTsTypeMapper.Map(irOp.ReturnType, BclOverrides);
@@ -409,7 +412,8 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 IrToTsNamingPolicy.ToParameterName(p.Name),
                 IrToTsTypeMapper.Map(p.Type, BclOverrides),
                 Optional: p.IsOptional || (!emitDefaults && p.HasDefaultValue),
-                DefaultValue: emitDefaults ? LowerDefaultValue(p) : null
+                DefaultValue: emitDefaults ? LowerDefaultValue(p) : null,
+                Rest: p.IsParams
             ))
             .ToList();
         var returnType = IrToTsTypeMapper.Map(irMethod.ReturnType, BclOverrides);
@@ -660,7 +664,7 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         if (ir.Constructor?.BaseArguments is { Count: > 0 } baseArgs)
         {
             return baseArgs
-                .Select(a => IrToTsExpressionBridge.Map(a.Value, _context.DeclarativeMappings))
+                .Select(a => IrToTsExpressionBridge.MapArgument(a, _context.DeclarativeMappings))
                 .ToList();
         }
         return baseParams

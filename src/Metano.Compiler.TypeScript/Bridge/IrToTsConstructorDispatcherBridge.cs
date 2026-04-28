@@ -47,7 +47,8 @@ public static class IrToTsConstructorDispatcherBridge
             .Select(c => new TsConstructorOverload(
                 c.Parameters.Select(p => new TsConstructorParam(
                         TypeScriptNaming.ToCamelCase(p.Parameter.Name),
-                        IrToTsTypeMapper.Map(p.Parameter.Type)
+                        IrToTsTypeMapper.Map(p.Parameter.Type),
+                        Rest: p.Parameter.IsParams
                     ))
                     .ToList()
             ))
@@ -69,7 +70,7 @@ public static class IrToTsConstructorDispatcherBridge
         );
 
         return new TsConstructor(
-            [new TsConstructorParam("...args", new TsNamedType("unknown[]"))],
+            [new TsConstructorParam("args", new TsNamedType("unknown[]"), Rest: true)],
             body,
             overloads
         );
@@ -123,7 +124,7 @@ public static class IrToTsConstructorDispatcherBridge
         if (ctor.BaseArguments is { Count: > 0 } baseArgs)
         {
             var superArgs = baseArgs
-                .Select(a => IrToTsExpressionBridge.Map(a.Value, bclRegistry))
+                .Select(a => IrToTsExpressionBridge.MapArgument(a, bclRegistry))
                 .ToList();
             branch.Add(
                 new TsExpressionStatement(
