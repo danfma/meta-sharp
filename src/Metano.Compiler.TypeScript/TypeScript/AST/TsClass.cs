@@ -7,5 +7,6 @@ public sealed record TsClass(
     bool Exported = true,
     TsType? Extends = null,
     IReadOnlyList<TsType>? Implements = null,
-    IReadOnlyList<TsTypeParameter>? TypeParameters = null
+    IReadOnlyList<TsTypeParameter>? TypeParameters = null,
+    bool Abstract = false
 ) : TsTopLevel;

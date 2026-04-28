@@ -474,6 +474,8 @@ public sealed class Printer(string indent = "  ")
     {
         if (tsClass.Exported)
             _sb.Write("export ");
+        if (tsClass.Abstract)
+            _sb.Write("abstract ");
         _sb.Write("class ");
         _sb.Write(tsClass.Name);
         PrintTypeParameters(tsClass.TypeParameters);
@@ -671,8 +673,12 @@ public sealed class Printer(string indent = "  ")
                     }
                 }
 
-                // Print the implementation (or single method)
+                // Print the implementation (or single method).
+                // Abstract methods carry no body — emit the signature
+                // followed by `;` and skip the block.
                 PrintAccessibility(method.Accessibility);
+                if (method.Abstract)
+                    _sb.Write("abstract ");
                 if (method.Static)
                     _sb.Write("static ");
                 if (method.Async)
@@ -685,8 +691,16 @@ public sealed class Printer(string indent = "  ")
                 PrintParameters(method.Parameters);
                 _sb.Write("): ");
                 PrintType(method.ReturnType);
-                PrintBody(method.Body);
-                _sb.WriteLn();
+                if (method.Abstract)
+                {
+                    _sb.Write(";");
+                    _sb.WriteLn();
+                }
+                else
+                {
+                    PrintBody(method.Body);
+                    _sb.WriteLn();
+                }
                 break;
         }
     }

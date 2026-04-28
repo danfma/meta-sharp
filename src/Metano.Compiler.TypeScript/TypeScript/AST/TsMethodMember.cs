@@ -10,7 +10,8 @@ public sealed record TsMethodMember(
     bool Generator = false,
     TsAccessibility Accessibility = TsAccessibility.Public,
     IReadOnlyList<TsTypeParameter>? TypeParameters = null,
-    IReadOnlyList<TsMethodOverload>? Overloads = null
+    IReadOnlyList<TsMethodOverload>? Overloads = null,
+    bool Abstract = false
 ) : TsClassMember;
 
 /// <summary>
