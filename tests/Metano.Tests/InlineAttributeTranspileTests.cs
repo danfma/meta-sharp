@@ -381,4 +381,91 @@ public class InlineAttributeTranspileTests
         await Assert.That(output).Contains("return \"#112233\";");
         await Assert.That(output).DoesNotContain("Colors.");
     }
+
+    [Test]
+    public async Task Inline_OnInstanceMethod_EmitsMs0016()
+    {
+        // Instance methods cannot be inlined: the body's `this`
+        // references would have to be rewritten to the call-site
+        // receiver, which is outside the supported substitution
+        // surface. The validator rejects non-static `[Inline]` methods
+        // up front so users get a diagnostic instead of broken output.
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public class Counter
+            {
+                public int Count { get; init; }
+
+                [Inline]
+                public int Doubled() => Count * 2;
+            }
+            """
+        );
+
+        var ms0016 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidInline);
+        await Assert.That(ms0016).IsNotNull();
+        await Assert.That(ms0016!.Message).Contains("static");
+    }
+
+    [Test]
+    public async Task Inline_Method_NamedArguments_BindsByParameterName()
+    {
+        // Caller uses named arguments in reverse order. The expander
+        // must resolve each argument to its target parameter rather
+        // than substituting positionally — otherwise `a` would receive
+        // 1 and `b` would receive 2, swapping the operands.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Erasable]
+            public static class Math2
+            {
+                [Inline]
+                public static int Sub(int a, int b) => a - b;
+            }
+
+            public class Calc
+            {
+                public int Compute() => Math2.Sub(b: 1, a: 10);
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return 10 - 1;");
+    }
+
+    [Test]
+    public async Task Inline_Method_OmittedOptional_FillsExplicitDefault()
+    {
+        // The caller skips the optional `b`. The expander pulls the
+        // parameter's explicit default value into the substitution so
+        // the inlined body stays self-contained.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Erasable]
+            public static class Math2
+            {
+                [Inline]
+                public static int Bump(int a, int b = 5) => a + b;
+            }
+
+            public class Calc
+            {
+                public int Compute() => Math2.Bump(7);
+            }
+            """
+        );
+
+        var output = result["calc.ts"];
+        await Assert.That(output).Contains("return 7 + 5;");
+    }
 }

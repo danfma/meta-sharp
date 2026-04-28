@@ -1455,7 +1455,7 @@ public sealed class IrExpressionExtractor
             if (initializer is null)
                 return null;
 
-            var semanticModel = TryGetSemanticModelForInlineInitializer(initializer.SyntaxTree);
+            var semanticModel = SymbolHelper.TryGetSemanticModel(_semantic.Compilation,initializer.SyntaxTree);
             if (semanticModel is null)
                 return null;
 
@@ -1480,20 +1480,6 @@ public sealed class IrExpressionExtractor
         {
             _inlineExpanding.Remove(symbol);
         }
-    }
-
-    private SemanticModel? TryGetSemanticModelForInlineInitializer(SyntaxTree syntaxTree)
-    {
-        if (_semantic.Compilation.ContainsSyntaxTree(syntaxTree))
-            return _semantic.Compilation.GetSemanticModel(syntaxTree);
-
-        foreach (var reference in _semantic.Compilation.References.OfType<CompilationReference>())
-        {
-            if (reference.Compilation.ContainsSyntaxTree(syntaxTree))
-                return reference.Compilation.GetSemanticModel(syntaxTree);
-        }
-
-        return null;
     }
 
     private static ExpressionSyntax? TryFindInlineInitializer(ISymbol symbol)
@@ -1735,7 +1721,7 @@ public sealed class IrExpressionExtractor
             if (bodyExpr is null)
                 return null;
 
-            var semanticModel = TryGetSemanticModelForInlineInitializer(bodyExpr.SyntaxTree);
+            var semanticModel = SymbolHelper.TryGetSemanticModel(_semantic.Compilation,bodyExpr.SyntaxTree);
             if (semanticModel is null)
                 return null;
 
@@ -1758,12 +1744,49 @@ public sealed class IrExpressionExtractor
                 argIndex = 1;
             }
 
+            // Classify caller arguments into a positional prefix and a
+            // named map so we can resolve each callee parameter by name
+            // (`F(b: 1, a: 2)`) or fall back to its explicit default
+            // (`F(b: 1)` against `void F(int a = 0, int b)`). Without
+            // this, positional substitution produced wrong bindings
+            // whenever the caller mixed names or skipped optionals.
+            var positionalArgs = new List<ArgumentSyntax>();
+            var namedArgs = new Dictionary<string, ArgumentSyntax>(StringComparer.Ordinal);
+            foreach (var arg in inv.ArgumentList.Arguments)
+            {
+                if (arg.NameColon is { } nc)
+                    namedArgs[nc.Name.Identifier.ValueText] = arg;
+                else
+                    positionalArgs.Add(arg);
+            }
+
             for (var i = argIndex; i < parameters.Length; i++)
             {
+                var parameter = parameters[i];
                 var syntaxIndex = i - argIndex;
-                if (syntaxIndex >= inv.ArgumentList.Arguments.Count)
-                    return null;
-                subs[parameters[i]] = Extract(inv.ArgumentList.Arguments[syntaxIndex].Expression);
+                ArgumentSyntax? matched = syntaxIndex < positionalArgs.Count
+                    ? positionalArgs[syntaxIndex]
+                    : namedArgs.GetValueOrDefault(parameter.Name);
+
+                if (matched is not null)
+                {
+                    subs[parameter] = Extract(matched.Expression);
+                    continue;
+                }
+
+                if (parameter.HasExplicitDefaultValue)
+                {
+                    subs[parameter] = BuildLiteralForDefault(
+                        parameter.ExplicitDefaultValue,
+                        parameter.Type
+                    );
+                    continue;
+                }
+
+                // No matching argument and no default — bail rather than
+                // emitting a half-bound body. Roslyn should only let us
+                // reach this branch for an ill-formed call.
+                return null;
             }
 
             var extractor = new IrExpressionExtractor(
