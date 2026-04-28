@@ -163,10 +163,12 @@ public class DartBackendTests
     }
 
     [Test]
-    public async Task RecordType_ExtendsMetanoObject()
+    public async Task RecordType_DoesNotInjectImplicitBaseClass()
     {
-        // Records lower into Dart classes that extend MetanoObject so the
-        // runtime can recognize Metano-generated value types via `is MetanoObject`.
+        // Generated records sit directly under Dart's `Object` — same shape as
+        // hand-written Dart classes. No implicit Metano base class so users can
+        // mix generated records with native Dart types without a
+        // `MetanoObject`-vs-anything-else split in their hierarchies.
         var (files, _) = TranspileDart(
             """
             [Transpile]
@@ -175,33 +177,12 @@ public class DartBackendTests
         );
 
         var dart = files["money.dart"];
-        await Assert.That(dart).Contains("class Money extends MetanoObject {");
-        await Assert
-            .That(dart)
-            .Contains(
-                "import 'package:metano_runtime/metano_runtime.dart' show HashCode, MetanoObject;"
-            );
+        await Assert.That(dart).Contains("class Money {");
+        await Assert.That(dart).DoesNotContain("extends");
     }
 
     [Test]
-    public async Task PlainObjectRecord_DoesNotExtendMetanoObject()
-    {
-        // [PlainObject] records are emitted as bare data carriers — no value
-        // equality is synthesized, and no MetanoObject base is injected.
-        var (files, _) = TranspileDart(
-            """
-            [Transpile, PlainObject]
-            public record Dto(int Id, string Name);
-            """
-        );
-
-        var dart = files["dto.dart"];
-        await Assert.That(dart).DoesNotContain("MetanoObject");
-        await Assert.That(dart).DoesNotContain("import 'package:metano_runtime");
-    }
-
-    [Test]
-    public async Task PlainClass_DoesNotExtendMetanoObject()
+    public async Task PlainClass_DoesNotInjectImplicitBaseClass()
     {
         var (files, _) = TranspileDart(
             """
@@ -215,17 +196,15 @@ public class DartBackendTests
         );
 
         var dart = files["plain.dart"];
-        // Pin the opening declaration so an unrelated future emission carrying
-        // the word "extends" (annotation, doc comment) can't silently pass.
         await Assert.That(dart).Contains("class Plain {");
-        await Assert.That(dart).DoesNotContain("MetanoObject");
+        await Assert.That(dart).DoesNotContain("extends");
     }
 
     [Test]
-    public async Task ExplicitBaseClass_WinsOverMetanoObjectInjection()
+    public async Task ExplicitBaseClass_PassesThrough()
     {
         // A record with an explicit C# base class keeps that base on the Dart
-        // side — MetanoObject injection only fills the empty case.
+        // side untouched — the bridge only respects what the source declares.
         var (files, _) = TranspileDart(
             """
             [Transpile]
@@ -238,7 +217,6 @@ public class DartBackendTests
 
         var dart = files["dog.dart"];
         await Assert.That(dart).Contains("class Dog extends Animal");
-        await Assert.That(dart).DoesNotContain("extends MetanoObject");
     }
 
     [Test]
@@ -618,8 +596,7 @@ public class DartBackendTests
         // Records lower to a class with synthesized `==`/`hashCode`. The
         // IrRuntimeRequirementScanner reports a `HashCode` requirement for
         // every non-PlainObject record, and the Dart import collector turns
-        // that into a `show HashCode, MetanoObject` import — the runtime
-        // mapping bundles MetanoObject because every such record also extends it.
+        // that into a `show HashCode` import from `metano_runtime`.
         var (files, _) = TranspileDart(
             """
             [Transpile]
@@ -630,9 +607,7 @@ public class DartBackendTests
         var dart = files["money.dart"];
         await Assert
             .That(dart)
-            .Contains(
-                "import 'package:metano_runtime/metano_runtime.dart' show HashCode, MetanoObject;"
-            );
+            .Contains("import 'package:metano_runtime/metano_runtime.dart' show HashCode;");
     }
 
     [Test]
@@ -682,12 +657,10 @@ public class DartBackendTests
         // The relative import to the record's file is still emitted — that is
         // how the consumer reaches Money's transitively-correct hashCode.
         await Assert.That(module).Contains("import 'money.dart';");
-        // And the record file itself carries the HashCode + MetanoObject import.
+        // And the record file itself carries the HashCode import.
         await Assert
             .That(files["money.dart"])
-            .Contains(
-                "import 'package:metano_runtime/metano_runtime.dart' show HashCode, MetanoObject;"
-            );
+            .Contains("import 'package:metano_runtime/metano_runtime.dart' show HashCode;");
     }
 
     [Test]

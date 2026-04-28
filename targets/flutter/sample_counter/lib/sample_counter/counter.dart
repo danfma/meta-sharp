@@ -1,6 +1,6 @@
-import 'package:metano_runtime/metano_runtime.dart' show HashCode, MetanoObject;
+import 'package:metano_runtime/metano_runtime.dart' show HashCode;
 
-class Counter extends MetanoObject {
+class Counter {
   Counter(this.count);
 
   final int count;
