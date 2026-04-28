@@ -9,6 +9,7 @@ public sealed class Button(string label, Action onPressed) : IWidget
         var btn = Js.Document.CreateElement(HtmlElementType.Button);
         btn.TextContent = label;
         btn.OnClick = _ => onPressed();
+
         return btn;
     }
 }

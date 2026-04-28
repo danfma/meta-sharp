@@ -7,8 +7,12 @@ public sealed class Column(IWidget[] children) : IWidget
     public HtmlElement Build()
     {
         var div = Js.Document.CreateElement(HtmlElementType.Div);
-        for (var i = 0; i < children.Length; i++)
-            div.Append(children[i].Build());
+
+        foreach (var child in children)
+        {
+            div.Append(child.Build());
+        }
+
         return div;
     }
 }

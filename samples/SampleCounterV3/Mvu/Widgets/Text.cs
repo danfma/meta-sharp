@@ -8,6 +8,7 @@ public sealed class Text(string content) : IWidget
     {
         var span = Js.Document.CreateElement(HtmlElementType.Span);
         span.TextContent = content;
+
         return span;
     }
 }

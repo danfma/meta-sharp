@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "csharpier": {
+      "version": "1.2.6",
+      "commands": [
+        "csharpier"
+      ],
+      "rollForward": false
+    },
+    "husky": {
+      "version": "0.9.1",
+      "commands": [
+        "husky"
+      ],
+      "rollForward": false
+    },
+    "dotnet-releaser": {
+      "version": "0.18.1",
+      "commands": [
+        "dotnet-releaser"
+      ],
+      "rollForward": false
+    }
+  }
+}
