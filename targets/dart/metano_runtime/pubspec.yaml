@@ -1,0 +1,9 @@
+name: metano_runtime
+description: A runtime library for Metano-compiled Dart/Flutter applications.
+version: 0.1.0
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  flutter:
+    sdk: flutter
