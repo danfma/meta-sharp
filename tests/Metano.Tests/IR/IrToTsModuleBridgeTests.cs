@@ -175,7 +175,7 @@ public class IrToTsModuleBridgeTests
             "IntExtensions"
         );
         await Assert.That(output).Contains("export function doubled(x: number): number");
-        await Assert.That(output).Contains("export function squared(x: number): number");
+        await Assert.That(output).Contains("export function squared$get(x: number): number");
     }
 
     [Test]
