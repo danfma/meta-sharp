@@ -10,24 +10,24 @@
     /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true,
     "verbatimModuleSyntax": true,
     "moduleDetection": "force",
-    "noEmit": true,
     "jsx": "preserve",
     "jsxImportSource": "solid-js",
 
     /* Linting */
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
 
+    "outDir": "./lib/",
+    "rootDir": "./src/",
     "paths": {
       "#/*": [
-        "./src/*",
-        "./dist/*"
+        "./src/*"
       ]
     }
   },
-  "include": ["src"]
+  "include": ["src", "lib"]
 }

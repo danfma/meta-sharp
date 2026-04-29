@@ -21,14 +21,9 @@
   "sideEffects": false,
   "imports": {
     "#/*": {
-      "types": "./dist/sample-counter/*.d.ts",
-      "import": "./dist/sample-counter/*.js",
-      "default": "./src/sample-counter/*.ts"
-    },
-    "#": {
-      "types": "./dist/sample-counter/index.d.ts",
-      "import": "./dist/sample-counter/index.js",
-      "default": "./src/sample-counter/index.ts"
+      "types": "./lib/*",
+      "import": "./lib/*",
+      "default": "./src/*"
     }
   }
 }
