@@ -327,6 +327,32 @@ public sealed class ImportCollector(
                 continue;
             }
 
+            // Erasable static-method export (e.g., `column` from a
+            // `[Erasable]` UI facade). The call-site flatten already
+            // dropped the type qualifier in the bridge; we look up the
+            // declaring type's emit metadata so the import points at
+            // the right module file with the lowercase function name
+            // (NOT the type's TsName) as the imported symbol.
+            if (
+                _context.ErasableFunctionExports.TryGetValue(typeName, out var erasableOwner)
+                && importedNames.Add(typeName)
+            )
+            {
+                // Same emit target — no import needed.
+                if (
+                    erasableOwner.Namespace == currentNs
+                    && erasableOwner.FileName == currentFileName
+                )
+                    continue;
+                var fnPath = _context.PathNaming.ComputeRelativeImportPath(
+                    currentNs,
+                    erasableOwner.Namespace,
+                    erasableOwner.FileName
+                );
+                AddLocal(fnPath, typeName, typeOnly: false);
+                continue;
+            }
+
             // Transpilable type within the project
             if (!_context.TranspilableTypes.TryGetValue(typeName, out var referencedRef))
                 continue;
@@ -752,6 +778,10 @@ public sealed class ImportCollector(
                 break;
             case TsTypePredicateType predicate:
                 CollectFromType(predicate.Type, names, crossPackageOrigins);
+                break;
+            case TsObjectType obj:
+                foreach (var field in obj.Fields)
+                    CollectFromType(field.Type, names, crossPackageOrigins);
                 break;
         }
     }

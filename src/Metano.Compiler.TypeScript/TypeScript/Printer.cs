@@ -830,6 +830,20 @@ public sealed class Printer(string indent = "  ")
                 _sb.Write(") => ");
                 PrintType(funcType.ReturnType);
                 break;
+
+            case TsObjectType obj:
+                _sb.Write("{ ");
+                for (var i = 0; i < obj.Fields.Count; i++)
+                {
+                    if (i > 0)
+                        _sb.Write("; ");
+                    var field = obj.Fields[i];
+                    _sb.Write(field.Name);
+                    _sb.Write(field.Optional ? "?: " : ": ");
+                    PrintType(field.Type);
+                }
+                _sb.Write(" }");
+                break;
         }
     }
 

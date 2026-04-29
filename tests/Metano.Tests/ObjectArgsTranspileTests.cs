@@ -48,6 +48,42 @@ public class ObjectArgsTranspileTests
     }
 
     [Test]
+    public async Task ModuleFunction_ObjectArgs_FieldTypeFromOtherFileIsImported()
+    {
+        // The synthesized `args: { ... }` parameter type must keep its
+        // nested type references visible to the import collector — the
+        // bridge cannot serialize the shape as raw text. Here `Widget`
+        // lives in its own file, so `ui.ts` must declare an explicit
+        // import for it.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            namespace App;
+
+            [Transpile]
+            public abstract class Widget
+            {
+                public abstract string Render();
+            }
+
+            [Transpile, Erasable]
+            public static class UI
+            {
+                [ObjectArgs]
+                public static Widget Container(Widget[] children) => children[0];
+            }
+            """
+        );
+
+        var output = result["ui.ts"];
+        await Assert.That(output).Contains("import");
+        await Assert.That(output).Contains("Widget");
+        await Assert.That(output).Contains("children: Widget[]");
+    }
+
+    [Test]
     public async Task CallSite_ObjectArgs_PositionalAndNamedCollapseToObjectLiteral()
     {
         var result = TranspileHelper.Transpile(

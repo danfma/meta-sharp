@@ -197,6 +197,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var declarativeMappings = DeclarativeMappingRegistry.FromIr(ir);
 
+        var erasableFunctionExports = BuildErasableFunctionExports(
+            transpilableTypes,
+            transpilableTypesDict
+        );
+
         _context = new TypeScriptTransformContext(
             compilation,
             _currentAssembly,
@@ -213,6 +218,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             TypeMapping = typeMappingContext,
             UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
+            ErasableFunctionExports = erasableFunctionExports,
         };
 
         var files = new List<TsSourceFile>();
@@ -1080,4 +1086,45 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 TsAccessibility.Protected,
             _ => TsAccessibility.Public,
         };
+
+    /// <summary>
+    /// Builds the camelCase-name → declaring-type lookup the import collector
+    /// uses to resolve cross-module references to <c>[Erasable]</c> static
+    /// methods. Without it the collector — which keys imports off
+    /// <see cref="IrTranspilableTypeRef.TsName"/> — cannot bridge a flattened
+    /// call site (<c>column(args)</c>) back to the file the function was
+    /// emitted into. Honors <c>[Name]</c> overrides through the same TS
+    /// naming policy <see cref="IrToTsModuleBridge"/> uses on the emit side
+    /// so both halves agree on the function identifier.
+    /// </summary>
+    private static IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildErasableFunctionExports(
+        IReadOnlyList<INamedTypeSymbol> transpilableTypes,
+        IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict
+    )
+    {
+        var exports = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
+        foreach (var type in transpilableTypes)
+        {
+            if (!SymbolHelper.HasErasable(type))
+                continue;
+            if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
+                continue;
+            foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
+            {
+                if (!IsExportableErasableMethod(member))
+                    continue;
+                exports.TryAdd(ResolveErasableFunctionName(member), typeRef);
+            }
+        }
+        return exports;
+    }
+
+    private static bool IsExportableErasableMethod(IMethodSymbol member) =>
+        member.IsStatic
+        && member.MethodKind == MethodKind.Ordinary
+        && member.DeclaredAccessibility == Accessibility.Public;
+
+    private static string ResolveErasableFunctionName(IMethodSymbol member) =>
+        SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
+        ?? TypeScriptNaming.ToCamelCase(member.Name);
 }

@@ -170,6 +170,24 @@ public sealed class TypeScriptTransformContext(
     public Action<MetanoDiagnostic> ReportDiagnostic { get; } = reportDiagnostic;
 
     /// <summary>
+    /// Per-export lookup for <c>[Erasable]</c> static methods: the
+    /// emitted (camelCase) function name maps back to its declaring
+    /// type's <see cref="IrTranspilableTypeRef"/>. Populated by
+    /// <see cref="TypeTransformer.TransformAll"/> after type discovery
+    /// and consumed by <see cref="ImportCollector"/> so a flattened
+    /// cross-module call site (<c>column(args)</c> referencing a
+    /// function emitted in <c>mvu/ui.ts</c>) collects the right
+    /// <c>import { column } from "./ui"</c> line. Without this map the
+    /// collector — which keys imports off type names — cannot resolve
+    /// a bare lowercase identifier back to a transpilable origin.
+    /// </summary>
+    public IReadOnlyDictionary<
+        string,
+        IrTranspilableTypeRef
+    > ErasableFunctionExports { get; init; } =
+        new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
+
+    /// <summary>
     /// Recognizes a referenced identifier as the TypeScript guard
     /// function for a transpilable type — i.e. an <c>is{Name}</c>
     /// import where the underlying type is in
