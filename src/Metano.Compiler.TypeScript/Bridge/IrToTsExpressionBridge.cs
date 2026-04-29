@@ -816,6 +816,13 @@ public static class IrToTsExpressionBridge
     )
     {
         var args = ne.Arguments.Select(a => MapArgument(a, bclRegistry)).ToList();
+        if (ne.IsObjectArgsCtor && ne.Type is IrNamedTypeRef objectArgsTarget)
+        {
+            return new TsCallExpression(
+                new TsPropertyAccess(new TsIdentifier(objectArgsTarget.Name), "create"),
+                args
+            );
+        }
         if (ne.IsPlainObject)
         {
             var properties = new List<TsObjectProperty>(args.Count);
