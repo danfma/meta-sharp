@@ -70,10 +70,7 @@ public static class IrToTsBclMapper
             // crash otherwise.
             if (!candidate.HasJsMapping)
                 continue;
-            if (
-                candidate.HasArgCountFilter
-                && candidate.WhenArgCount != loweredArgs.Count
-            )
+            if (candidate.HasArgCountFilter && candidate.WhenArgCount != loweredArgs.Count)
                 continue;
             if (DeclarativeMappingRendering.MatchesArgFilter(candidate, loweredArgs))
             {

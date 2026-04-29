@@ -32,8 +32,7 @@ public static class IrToDartBclMapper
             return null;
 
         var match = candidates.FirstOrDefault(c =>
-            c.HasDartMapping
-            && (!c.HasArgCountFilter || c.WhenArgCount == call.Arguments.Count)
+            c.HasDartMapping && (!c.HasArgCountFilter || c.WhenArgCount == call.Arguments.Count)
         );
         if (match is null)
             return null;
