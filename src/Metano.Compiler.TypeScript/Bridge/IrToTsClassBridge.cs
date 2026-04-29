@@ -314,6 +314,55 @@ internal static class IrToTsClassBridge
     }
 
     /// <summary>
+    /// Builds the static <c>create({...})</c> factory paired with a class
+    /// whose constructor carries <c>[ObjectArgs]</c>. The factory exposes the
+    /// object-literal call surface while the runtime constructor stays
+    /// positional, so generated <c>super(...)</c> calls and inheritance
+    /// continue to work unchanged. Returns <c>null</c> when the IR carries no
+    /// constructor.
+    /// </summary>
+    public static TsMethodMember? BuildObjectArgsCreateFactory(
+        IrConstructorDeclaration? ctor,
+        string typeName,
+        IReadOnlyList<TsTypeParameter>? typeParameters,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        if (ctor is null)
+            return null;
+
+        var parameters = ctor.Parameters.Select(p => p.Parameter).ToList();
+        var (argsParam, destructureHeader) = IrToTsObjectArgsBridge.BuildArgsParam(
+            parameters,
+            bclRegistry
+        );
+
+        var ctorArgs = parameters
+            .Select(p => (TsExpression)new TsIdentifier(TypeScriptNaming.ToCamelCase(p.Name)))
+            .ToList();
+
+        TsType returnType = typeParameters is { Count: > 0 } tps
+            ? new TsNamedType(typeName, tps.Select(tp => (TsType)new TsNamedType(tp.Name)).ToList())
+            : new TsNamedType(typeName);
+
+        IReadOnlyList<TsStatement> body =
+        [
+            destructureHeader,
+            new TsReturnStatement(new TsNewExpression(new TsIdentifier(typeName), ctorArgs)),
+        ];
+
+        return new TsMethodMember(
+            "create",
+            [argsParam],
+            returnType,
+            body,
+            Static: true,
+            Accessibility: TsAccessibility.Public,
+            TypeParameters: typeParameters
+        );
+    }
+
+    /// <summary>
     /// Lowers a single user-defined operator into a static method
     /// (<c>__add</c> / <c>__negate</c>) plus a thin instance helper
     /// (<c>$add(other)</c> / <c>$negate()</c>) that delegates to it.

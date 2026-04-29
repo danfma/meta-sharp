@@ -1,4 +1,5 @@
 using Metano.Annotations;
+using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
@@ -211,6 +212,10 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 classMembers.AddRange(members);
         }
 
+        var objectArgsFactory = TryBuildObjectArgsCreateFactory(type, ir, explicitCtors);
+        if (objectArgsFactory is not null)
+            classMembers.Add(objectArgsFactory);
+
         // Generate equals, hashCode, with for records via the IR-driven bridge
         // so the output flows through the same path the Dart target uses.
         // Gate: records yes, [PlainObject] records no.
@@ -235,6 +240,43 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
                 TypeParameters: IrToTsClassBridge.BuildTypeParameters(ir),
                 Abstract: emitAbstract
             )
+        );
+    }
+
+    /// <summary>
+    /// When the type's single public constructor carries <c>[ObjectArgs]</c>,
+    /// builds the static <c>create({...})</c> factory so call sites collapse
+    /// to the object-literal shape while the runtime constructor stays
+    /// positional. Surfaces a diagnostic and returns <c>null</c> when the
+    /// attribute mixes with constructor overloading, which Stage 3 does not
+    /// yet model.
+    /// </summary>
+    private TsMethodMember? TryBuildObjectArgsCreateFactory(
+        INamedTypeSymbol type,
+        IrClassDeclaration ir,
+        IReadOnlyList<IMethodSymbol> explicitCtors
+    )
+    {
+        var ctorsWithObjectArgs = explicitCtors.Where(SymbolHelper.HasObjectArgs).ToList();
+        if (ctorsWithObjectArgs.Count == 0)
+            return null;
+
+        if (explicitCtors.Count > 1)
+        {
+            _context.ReportUnsupportedBody(
+                type,
+                $"Constructor on '{type.Name}' combines [ObjectArgs] with overloading, "
+                    + "which the transpiler does not yet support; the create({...}) "
+                    + "factory was not emitted."
+            );
+            return null;
+        }
+
+        return IrToTsClassBridge.BuildObjectArgsCreateFactory(
+            ir.Constructor,
+            _context.ResolveTsName(type),
+            IrToTsClassBridge.BuildTypeParameters(ir),
+            _context.DeclarativeMappings
         );
     }
 

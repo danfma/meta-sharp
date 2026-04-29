@@ -242,6 +242,191 @@ public class ObjectArgsTranspileTests
     }
 
     [Test]
+    public async Task Constructor_ObjectArgs_EmitsPositionalCtorAndCreateFactory()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Column
+            {
+                [ObjectArgs]
+                public Column(int gap = 0, int width = 100)
+                {
+                    Gap = gap;
+                    Width = width;
+                }
+
+                public int Gap { get; }
+                public int Width { get; }
+            }
+            """
+        );
+
+        var output = result["column.ts"];
+        await Assert
+            .That(output)
+            .Contains("constructor(readonly gap: number = 0, readonly width: number = 100)");
+        await Assert
+            .That(output)
+            .Contains("static create(args: { gap?: number; width?: number }): Column");
+        await Assert.That(output).Contains("const { gap = 0, width = 100 } = args;");
+        await Assert.That(output).Contains("return new Column(gap, width);");
+    }
+
+    [Test]
+    public async Task Constructor_ObjectArgs_CallSiteCollapsesToCreateFactory()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Column
+            {
+                [ObjectArgs]
+                public Column(int gap = 0, int width = 100)
+                {
+                    Gap = gap;
+                    Width = width;
+                }
+
+                public int Gap { get; }
+                public int Width { get; }
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                public Column A() => new Column(gap: 12, width: 200);
+                public Column B() => new Column(50);
+                public Column C() => new Column();
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("Column.create({ gap: 12, width: 200 })");
+        await Assert.That(output).Contains("Column.create({ gap: 50 })");
+        await Assert.That(output).Contains("Column.create({})");
+        await Assert.That(output).DoesNotContain("new Column(gap");
+        await Assert.That(output).DoesNotContain("new Column(50");
+    }
+
+    [Test]
+    public async Task Constructor_ObjectArgs_HonorsNameOverrideOnCallSite()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile, Name(TargetLanguage.TypeScript, "MyColumn")]
+            public class Column
+            {
+                [ObjectArgs]
+                public Column(int gap = 0, int width = 100)
+                {
+                    Gap = gap;
+                    Width = width;
+                }
+
+                public int Gap { get; }
+                public int Width { get; }
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                public Column Make() => new Column(gap: 12, width: 200);
+            }
+            """
+        );
+
+        await Assert.That(result.Keys).Contains("my-column.ts");
+        var emitted = result["my-column.ts"];
+        await Assert
+            .That(emitted)
+            .Contains("static create(args: { gap?: number; width?: number }): MyColumn");
+        await Assert.That(emitted).Contains("return new MyColumn(gap, width);");
+
+        var caller = result["caller.ts"];
+        await Assert.That(caller).Contains("MyColumn.create({ gap: 12, width: 200 })");
+    }
+
+    [Test]
+    public async Task Constructor_NoObjectArgs_KeepsPositionalNew()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Plain
+            {
+                public Plain(int a, int b)
+                {
+                    A = a;
+                    B = b;
+                }
+
+                public int A { get; }
+                public int B { get; }
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                public Plain Make() => new Plain(1, 2);
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("new Plain(1, 2)");
+        await Assert.That(output).DoesNotContain(".create(");
+    }
+
+    [Test]
+    public async Task Constructor_ObjectArgs_WithMultipleCtors_EmitsDiagnostic()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Column
+            {
+                [ObjectArgs]
+                public Column(int gap)
+                {
+                    Gap = gap;
+                }
+
+                public Column(int gap, int width)
+                {
+                    Gap = gap;
+                    Width = width;
+                }
+
+                public int Gap { get; }
+                public int Width { get; }
+            }
+            """
+        );
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.UnsupportedFeature
+                    && d.Message.Contains("[ObjectArgs]")
+                    && d.Message.Contains("overloading")
+                )
+            )
+            .IsTrue();
+    }
+
+    [Test]
     public async Task ObjectArgs_OnOverloadedMethod_EmitsDiagnosticAndSkips()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(

@@ -1669,22 +1669,11 @@ public sealed class IrExpressionExtractor
     private static List<IrArgument> WrapInObjectArgs(
         IReadOnlyList<IrArgument> orderedArgs,
         IMethodSymbol symbol
-    )
-    {
-        var properties = new List<(string Name, IrExpression Value)>();
-        for (var i = 0; i < symbol.Parameters.Length && i < orderedArgs.Count; i++)
+    ) =>
+        new()
         {
-            var argument = orderedArgs[i];
-            if (
-                symbol.Parameters[i].HasExplicitDefaultValue
-                && argument.Value is IrLiteral literal
-                && IsLiteralEqualToDefault(literal, symbol.Parameters[i].ExplicitDefaultValue)
-            )
-                continue;
-            properties.Add((symbol.Parameters[i].Name, argument.Value));
-        }
-        return new List<IrArgument> { new(new IrObjectLiteral(properties)) };
-    }
+            new IrArgument(new IrObjectLiteral(BuildObjectArgsProperties(symbol, orderedArgs))),
+        };
 
     private static bool IsLiteralEqualToDefault(IrLiteral literal, object? defaultValue)
     {
@@ -2219,7 +2208,37 @@ public sealed class IrExpressionExtractor
         if (ctor is not null && args.Any(a => a.Name is not null))
             args = NormalizeArguments(args, ctor);
 
+        if (ctor is not null && SymbolHelper.HasObjectArgs(ctor))
+        {
+            var properties = BuildObjectArgsProperties(ctor, args);
+            return new IrNewExpression(
+                type,
+                [new IrArgument(new IrObjectLiteral(properties))],
+                IsObjectArgsCtor: true
+            );
+        }
+
         return new IrNewExpression(type, args, isPlainObject, parameterNames);
+    }
+
+    private static List<(string Name, IrExpression Value)> BuildObjectArgsProperties(
+        IMethodSymbol target,
+        IReadOnlyList<IrArgument> orderedArgs
+    )
+    {
+        var properties = new List<(string Name, IrExpression Value)>();
+        for (var i = 0; i < target.Parameters.Length && i < orderedArgs.Count; i++)
+        {
+            var argument = orderedArgs[i];
+            if (
+                target.Parameters[i].HasExplicitDefaultValue
+                && argument.Value is IrLiteral literal
+                && IsLiteralEqualToDefault(literal, target.Parameters[i].ExplicitDefaultValue)
+            )
+                continue;
+            properties.Add((target.Parameters[i].Name, argument.Value));
+        }
+        return properties;
     }
 
     /// <summary>

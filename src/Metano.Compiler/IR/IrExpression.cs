@@ -162,7 +162,8 @@ public sealed record IrNewExpression(
     IrTypeRef Type,
     IReadOnlyList<IrArgument> Arguments,
     bool IsPlainObject = false,
-    IReadOnlyList<string>? ParameterNames = null
+    IReadOnlyList<string>? ParameterNames = null,
+    bool IsObjectArgsCtor = false
 ) : IrExpression;
 
 // -- Operators --
