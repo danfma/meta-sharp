@@ -1,5 +1,5 @@
 import { Enumerable } from "metano-runtime";
-import { IssuePriority, IssueStatus, type Issue, type IssueId } from "#/issues/domain";
+import type { IssuePriority, IssueStatus, Issue, IssueId } from "#/issues/domain";
 import { PageResult, type PageRequest, type UserId } from "#/shared-kernel";
 import type { IIssueRepository } from "./i-issue-repository";
 

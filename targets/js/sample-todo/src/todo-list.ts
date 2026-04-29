@@ -1,5 +1,5 @@
 import { Enumerable, isString } from "metano-runtime";
-import { Priority } from "./priority";
+import type { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
 
 export class TodoList {

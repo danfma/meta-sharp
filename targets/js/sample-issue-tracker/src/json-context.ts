@@ -1,6 +1,6 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
-import { Decimal } from "decimal.js";
+import type { Decimal } from "decimal.js";
 import {
   Comment,
   IssueId,
@@ -19,7 +19,7 @@ export class JsonContext extends SerializerContext {
   private _comment?: TypeSpec<Comment>;
 
   static get default(): JsonContext {
-    return this._default;
+    return JsonContext._default;
   }
 
   get issueSnapshot(): TypeSpec<IssueSnapshot> {

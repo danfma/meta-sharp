@@ -8,16 +8,13 @@
     "@typescript/native-preview": "^7.0.0-dev.20260306.1"
   },
   "scripts": {
-    "dev": "bun run --parallel ts:watch sample-counter-v2 sample-counter-v3 sample-counter-v4",
+    "dev": "bun run --parallel ts:watch sample-counter-v2 sample-counter-v3 sample-counter-v4 sample-counter-v5",
     "build": "tsgo -b .",
     "ts:watch": "tsgo -b --watch -v",
     "sample-counter-v2": "bun run --cwd ./targets/js/sample-counter-v2 dev",
     "sample-counter-v3": "bun run --cwd ./targets/js/sample-counter-v3 dev",
-    "sample-counter-v4": "bun run --cwd ./targets/js/sample-counter-v4 dev"
+    "sample-counter-v4": "bun run --cwd ./targets/js/sample-counter-v4 dev",
+    "sample-counter-v5": "bun run --cwd ./targets/js/sample-counter-v5 dev"
   },
-  "dependencies": {
-    "upgrade": "^1.1.0"
-  },
-  "type": "module",
-  "sideEffects": false
+  "type": "module"
 }

@@ -21,5 +21,6 @@
     <Project Path="samples/SampleTodo/SampleTodo.csproj" />
     <Project Path="samples\SampleCounterV2\SampleCounterV2.csproj" />
     <Project Path="samples/SampleCounterV4/SampleCounterV4.csproj" />
+    <Project Path="samples/SampleCounterV5/SampleCounterV5.csproj" />
   </Folder>
 </Solution>

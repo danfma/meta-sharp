@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <MetanoOutputDir>../../targets/js/sample-counter-v5/src/</MetanoOutputDir>
+    <MetanoClean>true</MetanoClean>
+    <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
+  </ItemGroup>
+
+  <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />
+
+  <!--
+    Hand-written TS adapters override Metano's generated stubs in bindings/.
+    Method-level `[Import(name, from)]` doesn't yet rewrite the emitted
+    function body as a re-export from the npm package; the generated
+    stub throws at runtime. Until the compiler grows that mode the
+    sample copies hand-written re-export files on top of the generated
+    output, so consumer imports resolve to real Inferno exports.
+  -->
+  <Target Name="OverrideInfernoBindings" AfterTargets="MetanoTranspile">
+    <ItemGroup>
+      <InfernoAdapter Include="Bindings.ts/inferno.ts;Bindings.ts/inferno-render.ts;Bindings.ts/component.ts" />
+      <InfernoEntryAdapter Include="Bindings.ts/program.ts" />
+    </ItemGroup>
+    <Copy
+      SourceFiles="@(InfernoAdapter)"
+      DestinationFolder="$(MetanoOutputDir)bindings/"
+      OverwriteReadOnlyFiles="true"
+    />
+    <Copy
+      SourceFiles="@(InfernoEntryAdapter)"
+      DestinationFolder="$(MetanoOutputDir)"
+      OverwriteReadOnlyFiles="true"
+    />
+  </Target>
+</Project>

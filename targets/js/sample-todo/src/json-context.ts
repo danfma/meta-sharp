@@ -8,7 +8,7 @@ export class JsonContext extends SerializerContext {
   private _todoItem?: TypeSpec<TodoItem>;
 
   static get default(): JsonContext {
-    return this._default;
+    return JsonContext._default;
   }
 
   get todoItem(): TypeSpec<TodoItem> {

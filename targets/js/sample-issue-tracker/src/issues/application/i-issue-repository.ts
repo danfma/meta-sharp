@@ -1,4 +1,4 @@
-import { IssuePriority, IssueStatus, type Issue, type IssueId } from "#/issues/domain";
+import type { IssuePriority, IssueStatus, Issue, IssueId } from "#/issues/domain";
 import type { PageRequest, PageResult, UserId } from "#/shared-kernel";
 
 export interface IIssueRepository {
