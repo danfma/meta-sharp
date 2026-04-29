@@ -47,9 +47,7 @@ public class ErasableFactoryNameClashTests
         );
 
         await Assert
-            .That(
-                diagnostics.Any(d => d.Code == DiagnosticCodes.ErasableFactoryNameClash)
-            )
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.ErasableFactoryNameClash))
             .IsFalse();
 
         var ms0022 = diagnostics.FirstOrDefault(d =>

@@ -103,14 +103,18 @@ public class UsingAliasImportTests
 
         var output = result["ui.ts"];
         await Assert.That(output).Contains("import { Column as ColumnFromWidgets }");
-        await Assert.That(output).Contains("export function Column(gap: number): ColumnFromWidgets");
+        await Assert
+            .That(output)
+            .Contains("export function Column(gap: number): ColumnFromWidgets");
         await Assert.That(output).Contains("return new ColumnFromWidgets(gap);");
 
         var info = diagnostics.FirstOrDefault(d =>
             d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.AliasedImportConflict
         );
         await Assert.That(info).IsNotNull();
-        await Assert.That(info!.Severity).IsEqualTo(Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Info);
+        await Assert
+            .That(info!.Severity)
+            .IsEqualTo(Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Info);
         await Assert.That(info.Message).Contains("ColumnFromWidgets");
     }
 
@@ -155,6 +159,163 @@ public class UsingAliasImportTests
                 )
             )
             .IsFalse();
+    }
+
+    [Test]
+    public async Task ImportAliasAttribute_SingleType_AppliesPerFileAlias()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App.Widgets
+            {
+                [Transpile]
+                public class Column
+                {
+                    public int Gap { get; }
+                    public Column(int gap) { Gap = gap; }
+                }
+            }
+
+            namespace App
+            {
+                [ImportAlias(typeof(App.Widgets.Column), "ColumnW")]
+                file class TsModule;
+
+                [Transpile, Erasable]
+                public static class Ui
+                {
+                    [Name(TargetLanguage.TypeScript, "Column")]
+                    public static App.Widgets.Column Column(int gap) => new App.Widgets.Column(gap);
+                }
+            }
+            """
+        );
+
+        var output = result["ui.ts"];
+        await Assert.That(output).Contains("import { Column as ColumnW }");
+        await Assert.That(output).Contains("export function Column(gap: number): ColumnW");
+        await Assert.That(output).Contains("return new ColumnW(gap);");
+        await Assert.That(result.Keys).DoesNotContain("ts-module.ts");
+    }
+
+    [Test]
+    public async Task ImportAliasAttribute_BulkSuffix_AppliesToAllListedTypes()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App.Widgets
+            {
+                [Transpile]
+                public class Row
+                {
+                    public Row() { }
+                }
+
+                [Transpile]
+                public class Text
+                {
+                    public Text() { }
+                }
+            }
+
+            namespace App
+            {
+                [ImportAlias(Suffix = "Widget", Types = new[] { typeof(App.Widgets.Row), typeof(App.Widgets.Text) })]
+                file class TsModule;
+
+                [Transpile]
+                public class Caller
+                {
+                    public App.Widgets.Row MakeRow() => new App.Widgets.Row();
+                    public App.Widgets.Text MakeText() => new App.Widgets.Text();
+                }
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("Row as RowWidget");
+        await Assert.That(output).Contains("Text as TextWidget");
+        await Assert.That(output).Contains("return new RowWidget();");
+        await Assert.That(output).Contains("return new TextWidget();");
+    }
+
+    [Test]
+    public async Task ImportAliasAttribute_OverridesUsingAlias()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            using ColumnA = App.Widgets.Column;
+
+            namespace App.Widgets
+            {
+                [Transpile]
+                public class Column
+                {
+                    public int Gap { get; }
+                    public Column(int gap) { Gap = gap; }
+                }
+            }
+
+            namespace App
+            {
+                [ImportAlias(typeof(App.Widgets.Column), "ColumnB")]
+                file class TsModule;
+
+                [Transpile]
+                public class Caller
+                {
+                    public ColumnA Make() => new ColumnA(12);
+                }
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("import { Column as ColumnB }");
+        await Assert.That(output).DoesNotContain("ColumnA");
+    }
+
+    [Test]
+    public async Task ImportAliasAttribute_PerTargetFilter_NonMatchingDropped()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+
+            namespace App.Widgets
+            {
+                [Transpile]
+                public class Column
+                {
+                    public int Gap { get; }
+                    public Column(int gap) { Gap = gap; }
+                }
+            }
+
+            namespace App
+            {
+                [ImportAlias(TargetLanguage.Dart, typeof(App.Widgets.Column), "ColumnDart")]
+                file class TsModule;
+
+                [Transpile]
+                public class Caller
+                {
+                    public App.Widgets.Column Make() => new App.Widgets.Column(12);
+                }
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("import { Column }");
+        await Assert.That(output).DoesNotContain("ColumnDart");
+        await Assert.That(output).DoesNotContain(" as ");
     }
 
     [Test]

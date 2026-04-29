@@ -308,6 +308,26 @@ public sealed class TypeScriptTransformContext(
         new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
 
     /// <summary>
+    /// Per-source-file alias map produced by <c>[ImportAlias]</c>
+    /// attributes on file-scoped <c>file class TsModule</c> carriers.
+    /// Built lazily once per context from the live <c>Compilation</c> so
+    /// the registry stays in sync with the source tree on every transform
+    /// pass. Layer B in #181's two-layer model: takes precedence over the
+    /// user's <c>using</c> aliases (Layer A) and the auto-synthesized
+    /// fallback (Stage 2).
+    /// </summary>
+    public IReadOnlyDictionary<
+        string,
+        IReadOnlyDictionary<string, string>
+    > ImportAliasOverrides =>
+        _importAliasOverrides ??= ImportAliasResolver.BuildPerFileAliases(
+            Compilation,
+            TargetLanguage.TypeScript
+        );
+
+    private IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>>? _importAliasOverrides;
+
+    /// <summary>
     /// Recognizes a referenced identifier as the TypeScript guard
     /// function for a transpilable type — i.e. an <c>is{Name}</c>
     /// import where the underlying type is in

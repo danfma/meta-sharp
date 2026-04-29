@@ -492,29 +492,23 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     }
 
     /// <summary>
-    /// Merges user-declared <c>using X = Y;</c> aliases with the
-    /// auto-synthesized aliases produced when an <c>[Erasable]</c>
-    /// factory shadows an imported transpilable type (Stage 2 of #181).
-    /// User aliases win on collision so the explicit choice always
-    /// trumps the synthesized fallback.
+    /// Merges three alias sources in precedence order (lowest first, so
+    /// later writes overwrite):
+    /// <list type="number">
+    ///   <item>Auto-synthesized fallbacks (Stage 2) — the implicit safety
+    ///   net when a factory shadows a transpilable type.</item>
+    ///   <item>User-declared <c>using X = Y;</c> aliases (Layer A).</item>
+    ///   <item><c>[ImportAlias]</c> entries on a <c>file class</c>
+    ///   carrier (Layer B) — most explicit, wins everything.</item>
+    /// </list>
     /// </summary>
     private UsingAliasScope? MergeAliasesForGroup(SyntaxTree? primarySyntaxTree)
     {
-        var userScope = UsingAliasResolver.ResolveForTree(primarySyntaxTree, Context.Compilation);
+        var layerA = UsingAliasResolver.ResolveForTree(primarySyntaxTree, Context.Compilation);
         var filePath = primarySyntaxTree?.FilePath ?? string.Empty;
-        if (
-            !Context.SynthesizedAliasesByFile.TryGetValue(filePath, out var synthesized)
-            || synthesized.Count == 0
-        )
-            return userScope;
-
-        var merged = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var (canonical, alias) in synthesized)
-            merged[canonical] = alias;
-        if (userScope is not null)
-            foreach (var (canonical, alias) in userScope.CanonicalToAlias)
-                merged[canonical] = alias;
-        return UsingAliasScope.Create(merged);
+        Context.SynthesizedAliasesByFile.TryGetValue(filePath, out var synthesized);
+        Context.ImportAliasOverrides.TryGetValue(filePath, out var layerB);
+        return ImportAliasResolver.Merge(layerA, synthesized, layerB);
     }
 
     /// <summary>
@@ -1425,9 +1419,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     private static string SuggestAliasFromOwnerRef(string canonical, IrTranspilableTypeRef ownerRef)
     {
-        var lastSegment = ownerRef.Namespace.LastIndexOf('.') is var dot && dot >= 0
-            ? ownerRef.Namespace[(dot + 1)..]
-            : ownerRef.Namespace;
+        var lastSegment =
+            ownerRef.Namespace.LastIndexOf('.') is var dot && dot >= 0
+                ? ownerRef.Namespace[(dot + 1)..]
+                : ownerRef.Namespace;
         if (string.IsNullOrEmpty(lastSegment))
             return canonical + "Imported";
         return canonical + "From" + Capitalize(lastSegment);

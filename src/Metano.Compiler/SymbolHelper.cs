@@ -682,6 +682,12 @@ public static class SymbolHelper
         // attribute semantics stay explicit at the source-code layer.
         if (HasExternal(symbol))
             return false;
+        // C# 11 file-scoped types are emit-time metadata carriers
+        // (e.g. `[ImportAlias]` carriers in #181 Stage 3). They never
+        // produce a .ts file regardless of the surrounding
+        // [Transpile] / [assembly: TranspileAssembly] state.
+        if (symbol is INamedTypeSymbol { IsFileLocal: true })
+            return false;
         if (HasTranspile(symbol))
             return true;
         // Assembly-wide: only for types in the current compilation's assembly (not BCL/referenced assemblies)
