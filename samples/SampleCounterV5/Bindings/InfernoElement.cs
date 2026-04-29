@@ -1,12 +1,12 @@
-using Metano.Annotations.TypeScript;
+using Metano.Annotations;
 
 namespace SampleCounterV5.Bindings;
 
 /// <summary>
-/// Opaque virtual-DOM node returned by Inferno's <c>createElement</c>.
-/// Ambient marker only — no TS file is emitted; consumer code obtains
-/// values of this type by calling <see cref="Inferno.H"/> or a widget
-/// factory and feeds them back to Inferno's <c>render</c>.
+/// Inferno's virtual-DOM node type. The npm package exports it as
+/// <c>VNode</c>; the <c>[Import]</c> attribute aliases the export so
+/// consumer files reference the local C# name <c>InfernoElement</c>
+/// while the import line emits <c>{ VNode as InfernoElement }</c>.
 /// </summary>
-[External]
+[Import(name: "VNode", from: "inferno", Version = "^9.0.0")]
 public abstract class InfernoElement;

@@ -26,8 +26,9 @@
   -->
   <Target Name="OverrideInfernoBindings" AfterTargets="MetanoTranspile">
     <ItemGroup>
-      <InfernoAdapter Include="Bindings.ts/inferno.ts;Bindings.ts/inferno-render.ts;Bindings.ts/component.ts" />
+      <InfernoAdapter Include="Bindings.ts/inferno.ts;Bindings.ts/inferno-render.ts" />
       <InfernoEntryAdapter Include="Bindings.ts/program.ts" />
+      <InfernoComponentAdapter Include="Bindings.ts/counter-app.ts" />
     </ItemGroup>
     <Copy
       SourceFiles="@(InfernoAdapter)"
@@ -37,6 +38,11 @@
     <Copy
       SourceFiles="@(InfernoEntryAdapter)"
       DestinationFolder="$(MetanoOutputDir)"
+      OverwriteReadOnlyFiles="true"
+    />
+    <Copy
+      SourceFiles="@(InfernoComponentAdapter)"
+      DestinationFolder="$(MetanoOutputDir)components/"
       OverwriteReadOnlyFiles="true"
     />
   </Target>

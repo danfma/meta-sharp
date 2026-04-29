@@ -295,13 +295,40 @@ public sealed class ImportCollector(
             // External import mapping ([Import] attribute, with optional AsDefault).
             // Not bucketed: default imports never merge (`import Foo from "..."` is
             // one-name-only) and named externals come from arbitrary modules.
+            // When the C# type name differs from the npm export name, we emit
+            // `import { Original as Local } from "..."` so the local binding
+            // matches what the rest of the file references (e.g. C# class
+            // `InfernoElement` mapped to `[Import(name: "VNode", from: "inferno")]`).
             if (
                 _context.ExternalImportMap.TryGetValue(typeName, out var extImport)
                 && importedNames.Add(typeName)
             )
             {
+                IReadOnlyDictionary<string, string>? aliases = null;
+                if (
+                    !extImport.IsDefault
+                    && !string.Equals(extImport.Name, typeName, StringComparison.Ordinal)
+                )
+                    aliases = new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        [extImport.Name] = typeName,
+                    };
+                // Type-only inference: when the consumer only references the
+                // import in type positions (no `new`, no `instanceof`, no
+                // member access on it as a value), mark the named import as
+                // `type` so `verbatimModuleSyntax` consumers stay valid.
+                var isTypeOnly = !extImport.IsDefault && !valueTypes.Contains(typeName);
+                IReadOnlySet<string>? typeOnlyNames = isTypeOnly
+                    ? new HashSet<string>(StringComparer.Ordinal) { extImport.Name }
+                    : null;
                 imports.Add(
-                    new TsImport([extImport.Name], extImport.From, IsDefault: extImport.IsDefault)
+                    new TsImport(
+                        [extImport.Name],
+                        extImport.From,
+                        IsDefault: extImport.IsDefault,
+                        TypeOnlyNames: typeOnlyNames,
+                        Aliases: aliases
+                    )
                 );
                 // Track for auto-deps when [Import] declared a Version. The package
                 // name is `extImport.From` (the module specifier).
@@ -472,6 +499,7 @@ public sealed class ImportCollector(
             // Merge all names, preserving type-only where every contributor agrees.
             var allNames = new List<string>();
             var typeOnlyNames = new HashSet<string>(StringComparer.Ordinal);
+            var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
             var allTypeOnly = true;
 
             foreach (var item in items)
@@ -488,6 +516,10 @@ public sealed class ImportCollector(
                     if (isTypeOnly)
                         typeOnlyNames.Add(name);
                 }
+
+                if (item.Aliases is not null)
+                    foreach (var (original, local) in item.Aliases)
+                        aliases[original] = local;
 
                 if (!item.TypeOnly)
                     allTypeOnly = false;
@@ -518,7 +550,8 @@ public sealed class ImportCollector(
                     TypeOnly: finalAllTypeOnly,
                     TypeOnlyNames: !finalAllTypeOnly && typeOnlyNames.Count > 0
                         ? typeOnlyNames
-                        : null
+                        : null,
+                    Aliases: aliases.Count > 0 ? aliases : null
                 )
             );
         }

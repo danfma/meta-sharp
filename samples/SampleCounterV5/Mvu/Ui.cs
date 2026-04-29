@@ -17,19 +17,11 @@ public static class Ui
 {
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Column))]
     public static InfernoElement Column(int gap = 0, params InfernoElement[] children) =>
-        Inferno.H(
-            "div",
-            new DomProps(ClassName: $"column gap-{gap}"),
-            children
-        );
+        Inferno.H("div", new DomProps(ClassName: $"column gap-{gap}"), children);
 
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Row))]
     public static InfernoElement Row(int gap = 0, params InfernoElement[] children) =>
-        Inferno.H(
-            "div",
-            new DomProps(ClassName: $"row gap-{gap}"),
-            children
-        );
+        Inferno.H("div", new DomProps(ClassName: $"row gap-{gap}"), children);
 
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Text))]
     public static InfernoElement Text(string content) =>
@@ -41,11 +33,7 @@ public static class Ui
 
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Button))]
     public static InfernoElement Button(string label, Action onClick) =>
-        Inferno.H(
-            "button",
-            new ButtonProps(ClassName: "btn", OnClick: onClick),
-            TextNode(label)
-        );
+        Inferno.H("button", new ButtonProps(ClassName: "btn", OnClick: onClick), TextNode(label));
 
     /// <summary>
     /// Inferno accepts a string child directly — no wrapping needed —

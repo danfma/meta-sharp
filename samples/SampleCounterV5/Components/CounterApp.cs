@@ -15,11 +15,11 @@ public sealed class CounterApp : Component<EmptyProps, Counter>
     public override InfernoElement Render() =>
         Column(
             gap: 12,
-            Heading($"Count: {State.Count}", level: 1),
+            Heading($"Count: {State!.Count}", level: 1),
             Row(
                 gap: 8,
-                Button("➖", onClick: () => SetState(State.Decrement())),
-                Button("➕", onClick: () => SetState(State.Increment())),
+                Button("➖", onClick: () => SetState(State!.Decrement())),
+                Button("➕", onClick: () => SetState(State!.Increment())),
                 Button("Reset", onClick: () => SetState(Counter.Zero))
             )
         );

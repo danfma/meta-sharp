@@ -1,3 +1,4 @@
+import { type VNode as InfernoElement } from "inferno";
 import { createElement } from "#/bindings";
 
 export function Column(args: { gap?: number; children: InfernoElement[] }): InfernoElement {
