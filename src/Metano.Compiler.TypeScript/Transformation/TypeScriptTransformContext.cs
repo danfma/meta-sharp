@@ -120,6 +120,25 @@ public sealed class TypeScriptTransformContext(
                 );
                 break;
 
+            // Classic extension property: Roslyn surfaces it as an
+            // `IPropertySymbol` on a static class with the receiver in
+            // `Parameters[0]`. The call-site rewrite lowers reads to
+            // `prop$get(receiver)` so the registry must resolve those
+            // helpers for cross-file imports.
+            case IPropertySymbol prop
+                when prop.DeclaredAccessibility == Accessibility.Public
+                    && !prop.IsIndexer
+                    && prop.Parameters.Length > 0:
+                Register(
+                    ResolvePropertyHelperName(prop),
+                    prop,
+                    ownerRef,
+                    map,
+                    firstClaim,
+                    reportDiagnostic
+                );
+                break;
+
             case INamedTypeSymbol nested
                 when string.IsNullOrEmpty(nested.Name)
                     && nested.ContainingType is { IsStatic: true }:
@@ -207,9 +226,7 @@ public sealed class TypeScriptTransformContext(
     {
         if (firstClaim.TryGetValue(helperName, out var prior))
         {
-            if (
-                SymbolEqualityComparer.Default.Equals(prior.ContainingType, member.ContainingType)
-            )
+            if (SymbolEqualityComparer.Default.Equals(prior.ContainingType, member.ContainingType))
                 return;
             var priorOwner = prior.ContainingType?.Name ?? "<global>";
             var newOwner = member.ContainingType?.Name ?? "<global>";

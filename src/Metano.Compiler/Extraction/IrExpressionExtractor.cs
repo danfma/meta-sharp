@@ -1644,7 +1644,13 @@ public sealed class IrExpressionExtractor
         {
             var receiver = Extract(extensionAccess.Expression);
             var extensionArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
-            ApplyParamsSpread(extensionArgs, extLowering.OriginSymbol, inv.ArgumentList.Arguments);
+            // The reduced `extensionCallee` is the receiver-less view of the
+            // method (parameter count matches the syntax arg count); use it
+            // for argument-shape decisions so params spreading and named
+            // argument normalization key off the right parameter list.
+            ApplyParamsSpread(extensionArgs, extensionCallee, inv.ArgumentList.Arguments);
+            if (extensionArgs.Any(a => a.Name is not null))
+                extensionArgs = NormalizeArguments(extensionArgs, extensionCallee).ToList();
             IReadOnlyList<IrTypeRef>? extensionTypeArgs = null;
             if (symbol is { TypeArguments.Length: > 0 })
                 extensionTypeArgs = symbol

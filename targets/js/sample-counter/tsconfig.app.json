@@ -29,5 +29,6 @@
       ]
     }
   },
-  "include": ["src", "lib"]
+  "include": ["src"],
+  "exclude": ["lib"]
 }
