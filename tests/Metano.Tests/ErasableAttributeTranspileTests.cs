@@ -103,6 +103,37 @@ public class ErasableAttributeTranspileTests
         await Assert.That(output).DoesNotContain("MathUtils.add");
     }
 
+    [Test]
+    public async Task Erasable_CrossModuleCall_EmitsFunctionImport()
+    {
+        // Cross-file consumer of an `[Erasable]` static method must
+        // import the camelCased function name (NOT the type name) from
+        // the file the function was emitted into. Without the export
+        // registry the import collector keys off type names only, and
+        // a flattened lowercase callee leaks as `Cannot find name` at
+        // type-check time.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Erasable]
+            public static class MathUtils
+            {
+                public static int Add(int a, int b) => a + b;
+            }
+
+            public class Calculator
+            {
+                public int Sum() => MathUtils.Add(1, 2);
+            }
+            """
+        );
+
+        var output = result["calculator.ts"];
+        await Assert.That(output).Contains("import { add } from \"./math-utils\"");
+    }
+
     // ─── Diagnostics (MS0015) ────────────────────────────────
 
     [Test]
