@@ -341,10 +341,11 @@ public static class IrClassExtractor
                     // declaration whose generated body would never be called.
                     if (SymbolHelper.HasEmit(method))
                         break;
-                    if (!methodGroups.TryGetValue(method.Name, out var list))
+                    var groupKey = OverloadGroupKey(method);
+                    if (!methodGroups.TryGetValue(groupKey, out var list))
                     {
                         list = new List<IMethodSymbol>();
-                        methodGroups[method.Name] = list;
+                        methodGroups[groupKey] = list;
                     }
                     list.Add(method);
                     break;
@@ -397,6 +398,9 @@ public static class IrClassExtractor
             is MethodKind.Ordinary
                 or MethodKind.UserDefinedOperator
                 or MethodKind.Conversion;
+
+    private static string OverloadGroupKey(IMethodSymbol method) =>
+        method.IsOverride ? method.Name + "$override" : method.Name;
 
     private static IrFieldDeclaration? TryExtractField(
         IFieldSymbol field,

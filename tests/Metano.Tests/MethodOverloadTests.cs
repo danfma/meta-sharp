@@ -195,4 +195,37 @@ public class MethodOverloadTests
         // Dispatcher should be async
         await Assert.That(output).Contains("async findAsync(...args: unknown[])");
     }
+
+    [Test]
+    public async Task ParameterlessOverride_DoesNotMergeWithSiblingParameterizedAbstract()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            namespace App;
+
+            [Transpile]
+            public abstract class Widget
+            {
+                public abstract string Build();
+            }
+
+            [Transpile]
+            public abstract class StatefulWidget : Widget
+            {
+                protected abstract Widget Build(int context);
+
+                public override string Build() => "ok";
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == "MS0001"))
+            .IsFalse();
+
+        var output = result["stateful-widget.ts"];
+        await Assert.That(output).Contains("build(): string");
+        await Assert.That(output).Contains("build(context: number): Widget");
+        await Assert.That(output).DoesNotContain("...args: unknown[]");
+    }
 }
