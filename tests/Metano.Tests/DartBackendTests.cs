@@ -201,6 +201,49 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task DartMethodMapping_RewritesStaticBclCallSite()
+    {
+        // `[MapMethod(..., DartMethod = "...")]` on a static C# member rewrites
+        // the call site to a bare Dart function call (the qualifier is dropped
+        // because Dart static functions live at top level).
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public class Greeter
+            {
+                public static void Greet() => Console.WriteLine("hi");
+            }
+            """
+        );
+
+        var dart = files["greeter.dart"];
+        await Assert.That(dart).Contains("print('hi')");
+        await Assert.That(dart).DoesNotContain("Console.WriteLine");
+    }
+
+    [Test]
+    public async Task DartMethodMapping_OnlyAppliesToDartTarget()
+    {
+        // Mappings declared only on the JS side leave the Dart output untouched
+        // — the Dart bridge consults DartName / DartTemplate, not JsName /
+        // JsTemplate. The positive assertion guards against the rewriter ever
+        // wiring up the JS-side template by mistake.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public class Greeter
+            {
+                public static string Hello() => string.Empty;
+            }
+            """
+        );
+
+        var dart = files["greeter.dart"];
+        await Assert.That(dart).Contains("static String hello()");
+        await Assert.That(dart).DoesNotContain("emptyString");
+    }
+
+    [Test]
     public async Task ExplicitBaseClass_PassesThrough()
     {
         // A record with an explicit C# base class keeps that base on the Dart

@@ -117,6 +117,29 @@ public sealed class MapMethodAttribute : Attribute
     /// </summary>
     public string? RuntimeImports { get; init; }
 
+    /// <summary>
+    /// Dart-target counterpart of <see cref="JsMethod"/>. Same shape and semantics —
+    /// when set, the Dart backend renames the call site to <c>$this.&lt;DartMethod&gt;(args)</c>
+    /// (instance) or <c>&lt;DartMethod&gt;(args)</c> (static). Mutually exclusive with
+    /// <see cref="DartTemplate"/>. A single attribute can declare both <c>Js*</c>
+    /// and <c>Dart*</c> values; each target reads its own pair.
+    /// </summary>
+    public string? DartMethod { get; init; }
+
+    /// <summary>
+    /// Dart-target counterpart of <see cref="JsTemplate"/>. Supports the same
+    /// <c>$this</c> / <c>$0</c> / <c>$1</c> / <c>$T0</c> placeholders. Mutually exclusive
+    /// with <see cref="DartMethod"/>.
+    /// </summary>
+    public string? DartTemplate { get; init; }
+
+    /// <summary>
+    /// Dart-target counterpart of <see cref="RuntimeImports"/>. Comma-separated list of
+    /// identifiers from <c>package:metano_runtime/metano_runtime.dart</c> that the
+    /// lowered Dart call site needs to import.
+    /// </summary>
+    public string? DartRuntimeImports { get; init; }
+
     public MapMethodAttribute(Type declaringType, string csharpMethod)
     {
         DeclaringType = declaringType;

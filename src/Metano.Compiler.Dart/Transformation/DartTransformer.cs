@@ -5,6 +5,7 @@ using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
 using Metano.Dart.AST;
 using Metano.Dart.Bridge;
+using Metano.Transformation;
 using Microsoft.CodeAnalysis;
 
 namespace Metano.Dart.Transformation;
@@ -25,6 +26,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
     private readonly IrCompilation _ir = ir;
     private readonly Compilation _compilation = compilation;
     private readonly List<MetanoDiagnostic> _diagnostics = new();
+    private readonly DartIrRewriter _rewriter = new(DeclarativeMappingRegistry.FromIr(ir));
 
     public IReadOnlyList<MetanoDiagnostic> Diagnostics => _diagnostics;
 
@@ -119,7 +121,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                             compilation: _compilation,
                             target: TargetLanguage.Dart
                         );
-                        IrToDartModuleBridge.Convert(functions, statements);
+                        IrToDartModuleBridge.Convert(functions, statements, _rewriter);
                         ScanFunctionsInto(runtimeRequirements, functions);
                         break;
                     }
@@ -130,7 +132,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                         target: TargetLanguage.Dart
                     );
                     ReportOverloadDiagnostics(classIr, type.Name);
-                    IrToDartClassBridge.Convert(classIr, statements);
+                    IrToDartClassBridge.Convert(classIr, statements, _rewriter);
                     ScanInto(runtimeRequirements, classIr);
                     break;
 
