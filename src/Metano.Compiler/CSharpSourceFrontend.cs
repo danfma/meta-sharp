@@ -252,7 +252,10 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             return false;
         }
 
-        if (SymbolHelper.HasExportedAsModule(containingType))
+        if (
+            SymbolHelper.HasExportedAsModule(containingType)
+            || SymbolHelper.HasErasable(containingType)
+        )
         {
             programType = null!;
             return false;
@@ -602,14 +605,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         foreach (var iface in containing.Interfaces)
             CheckType(iface, containing.Locations.FirstOrDefault(), target, diagnostics, seen);
         foreach (var typeParam in containing.TypeParameters)
-            foreach (var constraint in typeParam.ConstraintTypes)
-                CheckType(
-                    constraint,
-                    typeParam.Locations.FirstOrDefault(),
-                    target,
-                    diagnostics,
-                    seen
-                );
+        foreach (var constraint in typeParam.ConstraintTypes)
+            CheckType(constraint, typeParam.Locations.FirstOrDefault(), target, diagnostics, seen);
 
         foreach (var member in containing.GetMembers())
         {
@@ -648,22 +645,16 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                         seen
                     );
                     foreach (var p in method.Parameters)
+                        CheckType(p.Type, p.Locations.FirstOrDefault(), target, diagnostics, seen);
+                    foreach (var typeParam in method.TypeParameters)
+                    foreach (var constraint in typeParam.ConstraintTypes)
                         CheckType(
-                            p.Type,
-                            p.Locations.FirstOrDefault(),
+                            constraint,
+                            typeParam.Locations.FirstOrDefault(),
                             target,
                             diagnostics,
                             seen
                         );
-                    foreach (var typeParam in method.TypeParameters)
-                        foreach (var constraint in typeParam.ConstraintTypes)
-                            CheckType(
-                                constraint,
-                                typeParam.Locations.FirstOrDefault(),
-                                target,
-                                diagnostics,
-                                seen
-                            );
                     ScanMethodBody(method, target, compilation, diagnostics, seen);
                     break;
             }
@@ -671,8 +662,11 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         foreach (var nested in containing.GetTypeMembers())
             if (
-                SymbolHelper.IsTranspilable(nested, assemblyWideTranspile: false, currentAssembly: containing.ContainingAssembly)
-                && !SymbolHelper.HasNoEmit(nested, target)
+                SymbolHelper.IsTranspilable(
+                    nested,
+                    assemblyWideTranspile: false,
+                    currentAssembly: containing.ContainingAssembly
+                ) && !SymbolHelper.HasNoEmit(nested, target)
             )
                 ScanTypeReferences(nested, target, compilation, diagnostics, seen);
     }
@@ -729,7 +723,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     case MemberAccessExpressionSyntax ma:
                         var info = semantic.GetSymbolInfo(ma).Symbol;
                         if (info?.ContainingType is INamedTypeSymbol owner)
-                            CheckType(owner, ma.Expression.GetLocation(), target, diagnostics, seen);
+                            CheckType(
+                                owner,
+                                ma.Expression.GetLocation(),
+                                target,
+                                diagnostics,
+                                seen
+                            );
                         continue;
                 }
                 if (referenced is not null)

@@ -1,13 +1,13 @@
 namespace Metano.Tests;
 
-public class ExportedAsModuleTranspileTests
+public class ErasableTranspileTests
 {
     [Test]
     public async Task StaticClass_EmitsTopLevelFunctions()
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class MathUtils
             {
                 public static int Add(int a, int b) => a + b;
@@ -26,7 +26,7 @@ public class ExportedAsModuleTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Helpers
             {
                 public static int Double(int x) => x * 2;
@@ -44,7 +44,7 @@ public class ExportedAsModuleTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Api
             {
                 public static async Task<string> FetchData(string url)
@@ -64,7 +64,7 @@ public class ExportedAsModuleTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Utils
             {
                 public static int Visible() => 1;
@@ -85,7 +85,7 @@ public class ExportedAsModuleTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Ops
             {
                 [Name("sum")]
@@ -104,7 +104,7 @@ public class ExportedAsModuleTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Pure
             {
                 public static int Identity(int x) => x;

@@ -22,7 +22,7 @@ public class ExportVarFromBodyTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint, ExportVarFromBody("app", AsDefault = true, InPlace = false)]
@@ -48,7 +48,7 @@ public class ExportVarFromBodyTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint, ExportVarFromBody("app", InPlace = true)]
@@ -72,7 +72,7 @@ public class ExportVarFromBodyTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint, ExportVarFromBody("app")]
@@ -96,7 +96,7 @@ public class ExportVarFromBodyTests
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint, ExportVarFromBody("app", AsDefault = true, InPlace = true)]
@@ -116,7 +116,7 @@ public class ExportVarFromBodyTests
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint, ExportVarFromBody("doesNotExist")]
@@ -138,7 +138,7 @@ public class ExportVarFromBodyTests
         // form should still work — TypeScript live-binds named exports.
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint, ExportVarFromBody("greeting")]

@@ -2,7 +2,7 @@ namespace Metano.Tests;
 
 /// <summary>
 /// Tests for the <c>[ModuleEntryPoint]</c> attribute. Marks one static method on an
-/// <c>[ExportedAsModule]</c> class so its body is unwrapped as the top-level executable
+/// <c>[Erasable]</c> class so its body is unwrapped as the top-level executable
 /// code of the generated TS module instead of being emitted as an exported function.
 /// Other static methods on the same class continue to become regular exported functions.
 /// </summary>
@@ -13,7 +13,7 @@ public class ModuleEntryPointTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint]
@@ -42,7 +42,7 @@ public class ModuleEntryPointTests
         // unwrapped top-level code.
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 public static int Helper(int x) => x * 2;
@@ -73,7 +73,7 @@ public class ModuleEntryPointTests
             """
             using System.Threading.Tasks;
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint]
@@ -99,7 +99,7 @@ public class ModuleEntryPointTests
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint]
@@ -116,7 +116,7 @@ public class ModuleEntryPointTests
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint]
@@ -133,7 +133,7 @@ public class ModuleEntryPointTests
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Program
             {
                 [ModuleEntryPoint]

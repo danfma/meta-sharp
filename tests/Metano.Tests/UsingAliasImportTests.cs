@@ -56,7 +56,7 @@ public class UsingAliasImportTests
 
             namespace App
             {
-                [Transpile, ExportedAsModule]
+                [Transpile, Erasable]
                 public static class Ui
                 {
                     [Name(TargetLanguage.TypeScript, "Column")]

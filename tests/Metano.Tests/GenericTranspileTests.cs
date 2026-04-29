@@ -93,7 +93,7 @@ public class GenericTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Parser
             {
                 public static T Identity<T>(T value) => value;
@@ -115,7 +115,7 @@ public class GenericTranspileTests
                 [Transpile]
                 public interface IEntity { string Id { get; } }
 
-                [Transpile, ExportedAsModule]
+                [Transpile, Erasable]
                 public static class Finder
                 {
                     public static T Find<T>(T[] items, string id) where T : IEntity

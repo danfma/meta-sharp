@@ -110,10 +110,17 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
 
                 case TypeKind.Class:
                 case TypeKind.Struct:
-                    // Static classes decorated with [ExportedAsModule] collapse to
-                    // top-level Dart functions (the idiomatic utility-module shape)
-                    // instead of a class of static methods.
-                    if (type.IsStatic && SymbolHelper.HasExportedAsModule(type))
+                    // Static classes decorated with [Erasable] (or the legacy
+                    // [ExportedAsModule] still tracked under the same predicate)
+                    // collapse to top-level Dart functions (the idiomatic
+                    // utility-module shape) instead of a class of static methods.
+                    if (
+                        type.IsStatic
+                        && (
+                            SymbolHelper.HasExportedAsModule(type)
+                            || SymbolHelper.HasErasable(type)
+                        )
+                    )
                     {
                         var functions = IrModuleFunctionExtractor.Extract(
                             type,

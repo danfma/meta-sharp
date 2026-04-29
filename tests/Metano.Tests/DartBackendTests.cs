@@ -359,14 +359,14 @@ public class DartBackendTests
     }
 
     [Test]
-    public async Task ExportedAsModule_LowersToTopLevelFunctions()
+    public async Task Erasable_LowersToTopLevelFunctions()
     {
-        // A static class tagged [ExportedAsModule] should emit top-level Dart
+        // A static class tagged [Erasable] should emit top-level Dart
         // functions rather than a Dart class of static methods — the idiomatic
         // utility-module shape on the Dart side.
         var (files, _) = TranspileDart(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class MathUtils
             {
                 public static int Double(int x) => x * 2;
@@ -454,9 +454,9 @@ public class DartBackendTests
     }
 
     [Test]
-    public async Task ExportedAsModule_CollectsImportsFromParameterAndReturnTypes()
+    public async Task Erasable_CollectsImportsFromParameterAndReturnTypes()
     {
-        // Top-level DartFunctions emitted for [ExportedAsModule] must still
+        // Top-level DartFunctions emitted for [Erasable] must still
         // contribute imports for any transpiled types they reference —
         // otherwise a cross-module API call fails to analyze.
         var (files, _) = TranspileDart(
@@ -464,7 +464,7 @@ public class DartBackendTests
             [Transpile]
             public class Order { public int Id { get; } public Order(int id) { Id = id; } }
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class OrderRepository
             {
                 public static Order FindById(int id) => new Order(id);
@@ -575,14 +575,14 @@ public class DartBackendTests
     }
 
     [Test]
-    public async Task ExportedAsModule_PreservesDefaultParameters()
+    public async Task Erasable_PreservesDefaultParameters()
     {
-        // A [ExportedAsModule] function with a defaulted parameter must keep
+        // A [Erasable] function with a defaulted parameter must keep
         // the Dart optional-positional shape (`[int x = 1]`) rather than
         // dropping the default and making the parameter required.
         var (files, _) = TranspileDart(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Calc
             {
                 public static int Inc(int x, int step = 1) => x + step;
@@ -771,9 +771,9 @@ public class DartBackendTests
     }
 
     [Test]
-    public async Task ExportedAsModule_DoesNotInheritRecordRuntimeRequirements()
+    public async Task Erasable_DoesNotInheritRecordRuntimeRequirements()
     {
-        // Module-level functions emitted for [ExportedAsModule] go through the
+        // Module-level functions emitted for [Erasable] go through the
         // ScanFunctionsInto path, which only walks return-type / parameter type
         // references. The record's HashCode requirement belongs to the record's
         // OWN file, not to consumers — so the Treasury module must stay free of
@@ -783,7 +783,7 @@ public class DartBackendTests
             [Transpile]
             public record Money(int Amount);
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Treasury
             {
                 public static Money Empty() => new Money(0);

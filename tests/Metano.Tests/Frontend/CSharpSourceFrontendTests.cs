@@ -1303,9 +1303,9 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
-    public async Task ExportedAsModuleOnProgramOptsOutOfSyntheticRouting()
+    public async Task ErasableOnProgramOptsOutOfSyntheticRouting()
     {
-        // `[ExportedAsModule]` on a `Program` partial opts the synthetic
+        // `[Erasable]` on a `Program` partial opts the synthetic
         // entry-point routing out. The IR entry-point record must be null
         // so top-level-statement bodies fall through to the regular
         // module-emission path.
@@ -1315,7 +1315,7 @@ public class CSharpSourceFrontendTests
 
             System.Console.WriteLine("boot");
 
-            [ExportedAsModule]
+            [Erasable]
             public static partial class Program {}
             """,
             OutputKind.ConsoleApplication

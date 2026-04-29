@@ -90,7 +90,7 @@ public class ExternalMappingTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Helpers
             {
                 [Emit("$0.toFixed($1)")]
@@ -111,7 +111,7 @@ public class ExternalMappingTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Utils
             {
                 [Emit("typeof $0")]
@@ -134,7 +134,7 @@ public class ExternalMappingTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Fmt
             {
                 [Emit("$0.slice($1, $2)")]

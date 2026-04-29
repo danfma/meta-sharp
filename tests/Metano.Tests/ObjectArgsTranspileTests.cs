@@ -9,7 +9,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class UI
             {
                 [ObjectArgs]
@@ -32,7 +32,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class UI
             {
                 [ObjectArgs]
@@ -90,7 +90,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class UI
             {
                 [ObjectArgs]
@@ -108,9 +108,9 @@ public class ObjectArgsTranspileTests
         );
 
         var output = result["widget.ts"];
-        await Assert.That(output).Contains("UI.column({ width: 100, gap: 12 })");
-        await Assert.That(output).Contains("UI.column({ width: 50, gap: 4 })");
-        await Assert.That(output).Contains("UI.column({ width: 200 })");
+        await Assert.That(output).Contains("column({ width: 100, gap: 12 })");
+        await Assert.That(output).Contains("column({ width: 50, gap: 4 })");
+        await Assert.That(output).Contains("column({ width: 200 })");
     }
 
     [Test]
@@ -262,7 +262,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class UI
             {
                 public static int Plain(int gap = 0, int width = 100) => gap + width;
@@ -357,7 +357,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class UI
             {
                 [ObjectArgs]
@@ -384,7 +384,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class UI
             {
                 [ObjectArgs]
@@ -411,7 +411,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class UI
             {
                 [ObjectArgs]
@@ -427,7 +427,7 @@ public class ObjectArgsTranspileTests
         );
 
         var output = result["caller.ts"];
-        await Assert.That(output).Contains("UI.column({ gap: 12 })");
+        await Assert.That(output).Contains("column({ gap: 12 })");
     }
 
     [Test]

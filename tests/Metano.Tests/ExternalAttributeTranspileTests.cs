@@ -348,20 +348,20 @@ public class ExternalAttributeTranspileTests
         await Assert.That(output).DoesNotContain("Constants.");
     }
 
-    // ─── Doesn't affect non-External static classes ─────────
+    // ─── Erasable flattens vs plain static class ───────────
 
     [Test]
-    public async Task NonExternal_StaticClass_AccessStillUsesPrefix()
+    public async Task ErasableStaticClass_AccessFlattens()
     {
-        // Baseline: `[ExportedAsModule]` (without `[External]`) emits
-        // a module file and a static access through the class reference
-        // stays qualified with the class name. The flatten only kicks
-        // in when `[Erasable]` is explicit.
+        // Baseline counterpart to External_StaticMethod_CallStaysClassQualified:
+        // `[Erasable]` is the lone flatten anchor after #106. A consumer
+        // calling `Helpers.Zero()` lowers to a bare `zero()` because the
+        // class scope vanishes at the call site.
         var result = TranspileHelper.Transpile(
             """
             [assembly: TranspileAssembly]
 
-            [Transpile, ExportedAsModule]
+            [Transpile, Erasable]
             public static class Helpers
             {
                 public static int Zero() => 0;
@@ -375,8 +375,7 @@ public class ExternalAttributeTranspileTests
         );
 
         var output = result["consumer.ts"];
-        // `Helpers.Zero()` lowers to `Helpers.zero()` — the prefix
-        // survives because no flatten happens without [Erasable].
-        await Assert.That(output).Contains("Helpers.zero()");
+        await Assert.That(output).Contains("return zero();");
+        await Assert.That(output).DoesNotContain("Helpers.");
     }
 }

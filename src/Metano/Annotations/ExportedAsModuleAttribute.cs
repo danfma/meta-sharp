@@ -13,5 +13,8 @@ namespace Metano.Annotations;
 /// <c>ClassName.member</c> without a TypeScript-side class declaration.
 /// </para>
 /// </summary>
+[Obsolete(
+    "Use [Erasable] instead. [ExportedAsModule] will be removed in a future release."
+)]
 [AttributeUsage(AttributeTargets.Class)]
 public sealed class ExportedAsModuleAttribute : Attribute;
