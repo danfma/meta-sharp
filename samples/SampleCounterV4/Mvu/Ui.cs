@@ -15,7 +15,7 @@ public static class Ui
     public static ColumnWidget Column(int gap, params Widget[] children) => new(gap, children);
 
     [ObjectArgs]
-    public static Row Row(int gap, Widget[] children) => new(gap, children);
+    public static Row Row(int gap, params Widget[] children) => new(gap, children);
 
     [ObjectArgs]
     public static Text Text(string content) => new(content);
