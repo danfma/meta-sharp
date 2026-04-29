@@ -1,4 +1,5 @@
 using System.Diagnostics.CodeAnalysis;
+using Metano.Annotations;
 using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
@@ -79,6 +80,7 @@ public sealed class TypeScriptTransformContext(
     private IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildExtensionHelperFunctions()
     {
         var map = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
+        var firstClaim = new Dictionary<string, ISymbol>(StringComparer.Ordinal);
         if (CurrentAssembly is null)
             return map;
 
@@ -88,7 +90,7 @@ public sealed class TypeScriptTransformContext(
                 continue;
 
             foreach (var member in type.GetMembers())
-                RegisterStaticClassMember(member, ownerRef, map);
+                RegisterStaticClassMember(member, ownerRef, map, firstClaim, ReportDiagnostic);
         }
 
         return map;
@@ -97,7 +99,9 @@ public sealed class TypeScriptTransformContext(
     private static void RegisterStaticClassMember(
         ISymbol member,
         IrTranspilableTypeRef ownerRef,
-        Dictionary<string, IrTranspilableTypeRef> map
+        Dictionary<string, IrTranspilableTypeRef> map,
+        Dictionary<string, ISymbol> firstClaim,
+        Action<MetanoDiagnostic> reportDiagnostic
     )
     {
         switch (member)
@@ -106,14 +110,27 @@ public sealed class TypeScriptTransformContext(
                 when method.IsExtensionMethod
                     && method.MethodKind is MethodKind.Ordinary
                     && method.DeclaredAccessibility == Accessibility.Public:
-                map[TypeScriptNaming.ToCamelCase(method.Name)] = ownerRef;
+                Register(
+                    ResolveMethodHelperName(method),
+                    method,
+                    ownerRef,
+                    map,
+                    firstClaim,
+                    reportDiagnostic
+                );
                 break;
 
             case INamedTypeSymbol nested
                 when string.IsNullOrEmpty(nested.Name)
                     && nested.ContainingType is { IsStatic: true }:
                 foreach (var nestedMember in nested.GetMembers())
-                    RegisterExtensionBlockMember(nestedMember, ownerRef, map);
+                    RegisterExtensionBlockMember(
+                        nestedMember,
+                        ownerRef,
+                        map,
+                        firstClaim,
+                        reportDiagnostic
+                    );
                 break;
         }
     }
@@ -121,7 +138,9 @@ public sealed class TypeScriptTransformContext(
     private static void RegisterExtensionBlockMember(
         ISymbol member,
         IrTranspilableTypeRef ownerRef,
-        Dictionary<string, IrTranspilableTypeRef> map
+        Dictionary<string, IrTranspilableTypeRef> map,
+        Dictionary<string, ISymbol> firstClaim,
+        Action<MetanoDiagnostic> reportDiagnostic
     )
     {
         switch (member)
@@ -129,17 +148,86 @@ public sealed class TypeScriptTransformContext(
             case IMethodSymbol method
                 when method.MethodKind is MethodKind.Ordinary
                     && method.DeclaredAccessibility == Accessibility.Public:
-                map[TypeScriptNaming.ToCamelCase(method.Name)] = ownerRef;
+                Register(
+                    ResolveMethodHelperName(method),
+                    method,
+                    ownerRef,
+                    map,
+                    firstClaim,
+                    reportDiagnostic
+                );
                 break;
 
             case IPropertySymbol prop
                 when prop.DeclaredAccessibility == Accessibility.Public && !prop.IsIndexer:
-                map[
-                    TypeScriptNaming.ToCamelCase(prop.Name)
-                        + IrExtensionConventions.PropertyGetterSuffix
-                ] = ownerRef;
+                Register(
+                    ResolvePropertyHelperName(prop),
+                    prop,
+                    ownerRef,
+                    map,
+                    firstClaim,
+                    reportDiagnostic
+                );
                 break;
         }
+    }
+
+    /// <summary>
+    /// Mirrors the same <c>[Name]</c> resolution the IR call-site rewrite
+    /// applies, so the registry key and the lowered call agree on the
+    /// emitted helper name. Falls back to camelCase when no override is
+    /// declared, matching <c>IrToTsNamingPolicy.ToFunctionName</c>.
+    /// </summary>
+    private static string ResolveMethodHelperName(IMethodSymbol method) =>
+        SymbolHelper.GetNameOverride(method, TargetLanguage.TypeScript)
+        ?? TypeScriptNaming.ToCamelCase(method.Name);
+
+    private static string ResolvePropertyHelperName(IPropertySymbol property) =>
+        (
+            SymbolHelper.GetNameOverride(property, TargetLanguage.TypeScript)
+            ?? TypeScriptNaming.ToCamelCase(property.Name)
+        ) + IrExtensionConventions.PropertyGetterSuffix;
+
+    /// <summary>
+    /// Records <paramref name="ownerRef"/> as the import target for
+    /// <paramref name="helperName"/>, or raises <c>MS0021</c> when a
+    /// different static class already claimed the same emitted name.
+    /// First-write wins so the previously-registered import keeps
+    /// flowing; the user resolves the clash by adding <c>[Name]</c> on
+    /// either side.
+    /// </summary>
+    private static void Register(
+        string helperName,
+        ISymbol member,
+        IrTranspilableTypeRef ownerRef,
+        Dictionary<string, IrTranspilableTypeRef> map,
+        Dictionary<string, ISymbol> firstClaim,
+        Action<MetanoDiagnostic> reportDiagnostic
+    )
+    {
+        if (firstClaim.TryGetValue(helperName, out var prior))
+        {
+            if (
+                SymbolEqualityComparer.Default.Equals(prior.ContainingType, member.ContainingType)
+            )
+                return;
+            var priorOwner = prior.ContainingType?.Name ?? "<global>";
+            var newOwner = member.ContainingType?.Name ?? "<global>";
+            reportDiagnostic(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Error,
+                    DiagnosticCodes.ExtensionHelperNameClash,
+                    $"Extension helper '{newOwner}.{member.Name}' resolves to TS export "
+                        + $"name '{helperName}', which is already exported by "
+                        + $"'{priorOwner}.{prior.Name}'. Add a [Name(\"...\")] override on "
+                        + "one of them so the import collector can pick the right module.",
+                    member.Locations.FirstOrDefault()
+                )
+            );
+            return;
+        }
+        map[helperName] = ownerRef;
+        firstClaim[helperName] = member;
     }
 
     private static IEnumerable<INamedTypeSymbol> EnumerateTopLevelStaticTypes(INamespaceSymbol root)

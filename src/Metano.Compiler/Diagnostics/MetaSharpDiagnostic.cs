@@ -197,4 +197,12 @@ public static class DiagnosticCodes
     /// <c>[Name(\"otherName\")]</c> or drop the override to fall back to
     /// camelCase.</summary>
     public const string ErasableFactoryNameClash = "MS0020";
+
+    /// <summary>MS0021 — two extension members (classic <c>(this T)</c>
+    /// methods or C# 14 <c>extension(T) { … }</c> block members) declared
+    /// on different static classes resolve to the same emitted TS helper
+    /// name, so the import collector cannot pick which file to import
+    /// from on a bare call site. Add <c>[Name("…")]</c> to one of the
+    /// members to disambiguate.</summary>
+    public const string ExtensionHelperNameClash = "MS0021";
 }

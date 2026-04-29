@@ -39,6 +39,7 @@ The current stable code range is **`MS0001` through `MS0018`**, with
 | `MS0018` | `InvalidThis` | `[This]` (from `Metano.Annotations`) was applied outside the first positional parameter, or combined with `ref` / `out` / `params`. |
 | `MS0019` | `GenericNewConstraint` | Instantiating a generic type parameter via the `new()` constraint produces invalid TypeScript because TS erases generics at runtime. |
 | `MS0020` | `ErasableFactoryNameClash` | A `[Erasable]` static method's emitted TS name (after `[Name]` resolution, otherwise camelCase) collides with the TS name of a transpilable type the same emit scope can see, or with another `[Erasable]` factory of the same name across classes. |
+| `MS0021` | `ExtensionHelperNameClash` | Two extension members declared on different static classes resolve to the same emitted TS helper name, so the import collector cannot pick which file to import from on a bare call site. |
 
 ## Reserved Codes
 
