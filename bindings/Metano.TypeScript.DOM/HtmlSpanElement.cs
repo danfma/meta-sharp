@@ -1,6 +1,7 @@
 using Metano.Annotations;
+using Metano.Annotations.TypeScript;
 
 namespace Metano.TypeScript.DOM;
 
-[NoEmit, Name("HTMLSpanElement")]
+[External, Name("HTMLSpanElement")]
 public abstract class HtmlSpanElement : HtmlElement;

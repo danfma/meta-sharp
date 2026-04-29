@@ -1,6 +1,7 @@
 using Metano.Annotations;
+using Metano.Annotations.TypeScript;
 
 namespace Metano.TypeScript.DOM;
 
-[NoEmit]
+[External]
 public abstract class HtmlBodyElement : HtmlElement;

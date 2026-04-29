@@ -1,6 +1,7 @@
 using Metano.Annotations;
+using Metano.Annotations.TypeScript;
 
 namespace Metano.TypeScript.DOM;
 
-[NoEmit, Name("HTMLButtonElement")]
+[External, Name("HTMLButtonElement")]
 public abstract class HtmlButtonElement : HtmlElement;

@@ -1,6 +1,7 @@
 using Metano.Annotations;
+using Metano.Annotations.TypeScript;
 
 namespace Metano.TypeScript.DOM;
 
-[NoEmit, Name("HTMLHeadingElement")]
+[External, Name("HTMLHeadingElement")]
 public abstract class HtmlHeadingElement : HtmlElement;

@@ -1,15 +1,16 @@
 using Metano.Annotations;
+using Metano.Annotations.TypeScript;
 
 namespace SampleTodo.Service.Js.Hono;
 
 /// <summary>
-/// Structural shape of Hono's <c>Context</c> object. Decorated with <c>[NoEmit]</c>
-/// so Metano recognizes the type in C# (parameter signatures, member access)
+/// Structural shape of Hono's <c>Context</c> object. Decorated with <c>[External]</c>
+/// (per #106) so Metano recognizes the type in C# (parameter signatures, member access)
 /// without producing any TypeScript declaration — at runtime the user's transpiled
 /// code receives the real Hono context, and TypeScript infers its type from Hono's
 /// types via the <c>app.get/post/...</c> handler signature.
 /// </summary>
-[NoEmit]
+[External]
 public interface IHonoContext
 {
     [Name("text")]
@@ -43,10 +44,10 @@ public interface IHonoContext
 }
 
 /// <summary>
-/// Structural shape of Hono's <c>HonoRequest</c>. Same <c>[NoEmit]</c> story as
+/// Structural shape of Hono's <c>HonoRequest</c>. Same <c>[External]</c> story as
 /// <see cref="IHonoContext"/> — types only, no emitted TS declaration.
 /// </summary>
-[NoEmit]
+[External]
 public interface IHonoRequest
 {
     /// <summary>

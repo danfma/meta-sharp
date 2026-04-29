@@ -274,16 +274,17 @@ public class IrToTsBodyBridgeTests
     }
 
     [Test]
-    public async Task LambdaWithNoEmitReceiverType_OmitsTypeAnnotation()
+    public async Task LambdaWithExternalReceiverType_OmitsTypeAnnotation()
     {
-        // Ambient `[NoEmit]` parameter types have no TS identifier to emit —
+        // Ambient `[External]` parameter types have no TS identifier to emit —
         // the bridge drops the annotation so the lambda's inferred type
-        // comes from the call-site signature at consumption time. Matches
-        // the legacy LambdaHandler behavior.
+        // comes from the call-site signature at consumption time. Migrated
+        // from `[NoEmit]` per #106 (legacy ambient still works while the
+        // attribute carries the parity flag).
         var ts = PrintMethodFromIr(
             "void Use(System.Action<IAmbient> cb) { cb(default!); cb2(x => x.Read()); }",
             extraMembers: """
-            [NoEmit]
+            [Metano.Annotations.TypeScript.External]
             public interface IAmbient { int Read(); }
             public void cb2(System.Action<IAmbient> cb) { }
             """
