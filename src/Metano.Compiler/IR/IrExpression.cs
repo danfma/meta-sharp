@@ -415,9 +415,20 @@ public sealed record IrRuntimeHelperCall(string HelperName, IReadOnlyList<IrExpr
 /// <param name="Arguments">Arguments filling <c>$1</c>, <c>$2</c>, etc.</param>
 /// <param name="RequiredImports">Runtime imports needed for this template
 /// (e.g., helper functions from the target's runtime library).</param>
+/// <param name="TypeArguments">Generic type arguments at the call site —
+/// substituted into <c>$T0</c>/<c>$T1</c> placeholders when the template
+/// expands. Carries the IR type ref so the backend can resolve the emitted
+/// name (and the import collector can pull in the corresponding type).</param>
+/// <param name="ExternalImports">External JS modules the template body
+/// references textually (e.g., a literal <c>createElement</c> in the
+/// template paired with an <c>[Import]</c> on the source method). The
+/// walker can't see these inside the opaque template text, so the extractor
+/// threads them through as a separate field.</param>
 public sealed record IrTemplateExpression(
     string Template,
     IrExpression? Receiver,
     IReadOnlyList<IrExpression> Arguments,
-    IReadOnlyList<string>? RequiredImports = null
+    IReadOnlyList<string>? RequiredImports = null,
+    IReadOnlyList<IrTypeRef>? TypeArguments = null,
+    IReadOnlyList<IrExternalImport>? ExternalImports = null
 ) : IrExpression;

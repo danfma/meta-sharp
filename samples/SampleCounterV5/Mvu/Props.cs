@@ -1,6 +1,6 @@
 using Metano.Annotations;
 
-namespace SampleCounterV5.Mvu.Widgets;
+namespace SampleCounterV5.Mvu;
 
 /// <summary>
 /// Inferno's standard intrinsic-element prop record. Carries the

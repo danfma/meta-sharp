@@ -62,10 +62,15 @@ public static class IrToTsExpressionBridge
             IrTemplateExpression tpl => new TsTemplate(
                 tpl.Template,
                 tpl.Receiver is null ? null : Map(tpl.Receiver, bclRegistry),
-                tpl.Arguments.Select(a => Map(a, bclRegistry)).ToList(),
-                [],
-                tpl.RequiredImports ?? []
-            ),
+                tpl.Arguments.Select(a => Map(a, bclRegistry)).ToList()
+            )
+            {
+                TypeArgumentNames = tpl.TypeArguments is { Count: > 0 } tArgs
+                    ? tArgs.Select(t => TsTypeArgName(t) ?? "unknown").ToList()
+                    : [],
+                RuntimeImports = tpl.RequiredImports ?? [],
+                ExternalImports = tpl.ExternalImports ?? [],
+            },
             IrYieldExpression ye => new TsIdentifier(
                 ye.Value is not null ? $"yield {FormatInner(ye.Value)}" : "yield"
             ),

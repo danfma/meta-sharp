@@ -50,6 +50,12 @@ public static class IrModuleFunctionExtractor
                 // function should be emitted for them.
                 if (SymbolHelper.HasEmit(method))
                     continue;
+                // [Import] methods are external bindings — every call site
+                // lowers to the imported identifier directly (with the import
+                // line auto-emitted on the consumer file). The declaring class
+                // contributes no body and emits no helper here.
+                if (SymbolHelper.GetImport(method) is not null)
+                    continue;
                 // Skip property accessors. Classic-style extension properties
                 // come through as methods whose AssociatedSymbol is the
                 // property; they're emitted separately via

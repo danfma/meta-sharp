@@ -1,6 +1,6 @@
 using Metano.Annotations;
 using SampleCounterV5.Bindings;
-using SampleCounterV5.Mvu.Widgets;
+using static SampleCounterV5.Bindings.Inferno;
 
 namespace SampleCounterV5.Mvu;
 
@@ -17,23 +17,23 @@ public static class Ui
 {
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Column))]
     public static InfernoElement Column(int gap = 0, params InfernoElement[] children) =>
-        Inferno.H("div", new DomProps(ClassName: $"column gap-{gap}"), children);
+        H("div", new DomProps(ClassName: $"column gap-{gap}"), children);
 
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Row))]
     public static InfernoElement Row(int gap = 0, params InfernoElement[] children) =>
-        Inferno.H("div", new DomProps(ClassName: $"row gap-{gap}"), children);
+        H("div", new DomProps(ClassName: $"row gap-{gap}"), children);
 
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Text))]
     public static InfernoElement Text(string content) =>
-        Inferno.H("span", new DomProps(ClassName: "text"), TextNode(content));
+        H("span", new DomProps(ClassName: "text"), TextNode(content));
 
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Heading))]
     public static InfernoElement Heading(string content, int level = 1) =>
-        Inferno.H($"h{level}", new DomProps(ClassName: "heading"), TextNode(content));
+        H($"h{level}", new DomProps(ClassName: "heading"), TextNode(content));
 
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Button))]
     public static InfernoElement Button(string label, Action onClick) =>
-        Inferno.H("button", new ButtonProps(ClassName: "btn", OnClick: onClick), TextNode(label));
+        H("button", new ButtonProps(ClassName: "btn", OnClick: onClick), TextNode(label));
 
     /// <summary>
     /// Inferno accepts a string child directly — no wrapping needed —

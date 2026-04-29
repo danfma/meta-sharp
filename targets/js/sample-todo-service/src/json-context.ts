@@ -14,11 +14,11 @@ export class JsonContext extends SerializerContext {
   private _todoItem?: TypeSpec<TodoItem>;
 
   static get default(): JsonContext {
-    return JsonContext._default;
+    return this._default;
   }
 
   get storedTodo(): TypeSpec<StoredTodo> {
-    return (this._storedTodo ??= this.createSpec({
+    return this._storedTodo ??= this.createSpec({
       factory: (p: Record<string, unknown>) => ({ id: p.id as string, item: p.item as TodoItem }),
       properties: [
         {
@@ -35,15 +35,12 @@ export class JsonContext extends SerializerContext {
           },
         },
       ],
-    }));
+    });
   }
 
   get createTodoDto(): TypeSpec<CreateTodoDto> {
-    return (this._createTodoDto ??= this.createSpec({
-      factory: (p: Record<string, unknown>) => ({
-        title: p.title as string,
-        priority: p.priority as Priority,
-      }),
+    return this._createTodoDto ??= this.createSpec({
+      factory: (p: Record<string, unknown>) => ({ title: p.title as string, priority: p.priority as Priority }),
       properties: [
         {
           ts: "title",
@@ -56,16 +53,12 @@ export class JsonContext extends SerializerContext {
           type: { kind: "enum", values: Priority },
         },
       ],
-    }));
+    });
   }
 
   get updateTodoDto(): TypeSpec<UpdateTodoDto> {
-    return (this._updateTodoDto ??= this.createSpec({
-      factory: (p: Record<string, unknown>) => ({
-        title: p.title as string | null,
-        priority: p.priority as Priority | null,
-        completed: p.completed as boolean | null,
-      }),
+    return this._updateTodoDto ??= this.createSpec({
+      factory: (p: Record<string, unknown>) => ({ title: p.title as string | null, priority: p.priority as Priority | null, completed: p.completed as boolean | null }),
       properties: [
         {
           ts: "title",
@@ -95,14 +88,13 @@ export class JsonContext extends SerializerContext {
           optional: true,
         },
       ],
-    }));
+    });
   }
 
   get todoItem(): TypeSpec<TodoItem> {
-    return (this._todoItem ??= this.createSpec({
+    return this._todoItem ??= this.createSpec({
       type: TodoItem,
-      factory: (p: Record<string, unknown>) =>
-        new TodoItem(p.title as string, p.completed as boolean, p.priority as Priority),
+      factory: (p: Record<string, unknown>) => new TodoItem(p.title as string, p.completed as boolean, p.priority as Priority),
       properties: [
         {
           ts: "title",
@@ -120,6 +112,6 @@ export class JsonContext extends SerializerContext {
           type: { kind: "enum", values: Priority },
         },
       ],
-    }));
+    });
   }
 }

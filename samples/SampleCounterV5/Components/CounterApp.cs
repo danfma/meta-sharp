@@ -12,15 +12,19 @@ namespace SampleCounterV5.Components;
 /// </summary>
 public sealed class CounterApp : Component<EmptyProps, Counter>
 {
-    public override InfernoElement Render() =>
-        Column(
+    public override InfernoElement Render()
+    {
+        var state = State ?? Counter.Zero;
+
+        return Column(
             gap: 12,
-            Heading($"Count: {State!.Count}", level: 1),
+            Heading($"Count: {state.Count}", level: 1),
             Row(
                 gap: 8,
-                Button("➖", onClick: () => SetState(State!.Decrement())),
-                Button("➕", onClick: () => SetState(State!.Increment())),
+                Button("➖", onClick: () => SetState(state.Decrement())),
+                Button("➕", onClick: () => SetState(state.Increment())),
                 Button("Reset", onClick: () => SetState(Counter.Zero))
             )
         );
+    }
 }

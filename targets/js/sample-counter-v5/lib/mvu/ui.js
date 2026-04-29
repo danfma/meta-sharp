@@ -1,12 +1,12 @@
 import {} from "inferno";
-import { createElement } from "#/bindings";
+import { createElement } from "inferno-create-element";
 export function Column(args) {
     const { gap = 0, children } = args;
-    return createElement("div", { className: `column gap-${gap}` }, ...children);
+    return createElement("div", { className: `column gap-${gap}` }, children);
 }
 export function Row(args) {
     const { gap = 0, children } = args;
-    return createElement("div", { className: `row gap-${gap}` }, ...children);
+    return createElement("div", { className: `row gap-${gap}` }, children);
 }
 export function Text(args) {
     const { content } = args;

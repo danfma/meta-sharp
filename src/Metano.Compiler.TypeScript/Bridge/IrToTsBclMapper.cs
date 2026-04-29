@@ -99,13 +99,10 @@ public static class IrToTsBclMapper
     )
     {
         if (mapping.HasTemplate)
-            return new TsTemplate(
-                mapping.JsTemplate!,
-                receiver,
-                Arguments: [],
-                TypeArgumentNames: [],
-                RuntimeImports: mapping.RuntimeImportsList
-            );
+            return new TsTemplate(mapping.JsTemplate!, receiver, Arguments: [])
+            {
+                RuntimeImports = mapping.RuntimeImportsList,
+            };
 
         var name = mapping.JsName!;
         return receiver is not null ? new TsPropertyAccess(receiver, name) : new TsIdentifier(name);
@@ -119,13 +116,11 @@ public static class IrToTsBclMapper
     )
     {
         if (mapping.HasTemplate)
-            return new TsTemplate(
-                mapping.JsTemplate!,
-                receiver,
-                args,
-                typeArgumentNames,
-                mapping.RuntimeImportsList
-            );
+            return new TsTemplate(mapping.JsTemplate!, receiver, args)
+            {
+                TypeArgumentNames = typeArgumentNames,
+                RuntimeImports = mapping.RuntimeImportsList,
+            };
 
         var name = mapping.JsName!;
         var callee = receiver is not null

@@ -14,7 +14,7 @@ namespace SampleCounterV5.Bindings;
 public abstract class Component<TProps, TState>
 {
     public TProps Props { get; } = default!;
-    public TState State { get; } = default!;
+    public TState? State { get; }
 
     [Name("setState")]
     public void SetState(TState newState) => throw new NotSupportedException();

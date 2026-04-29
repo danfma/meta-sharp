@@ -1,3 +1,5 @@
+using Metano.Compiler.IR;
+
 namespace Metano.TypeScript.AST;
 
 /// <summary>
@@ -33,23 +35,10 @@ namespace Metano.TypeScript.AST;
 public sealed record TsTemplate(
     string Template,
     TsExpression? Receiver,
-    IReadOnlyList<TsExpression> Arguments,
-    IReadOnlyList<string> TypeArgumentNames,
-    IReadOnlyList<string> RuntimeImports
+    IReadOnlyList<TsExpression> Arguments
 ) : TsExpression
 {
-    public TsTemplate(
-        string template,
-        TsExpression? receiver,
-        IReadOnlyList<TsExpression> arguments
-    )
-        : this(template, receiver, arguments, [], []) { }
-
-    public TsTemplate(
-        string template,
-        TsExpression? receiver,
-        IReadOnlyList<TsExpression> arguments,
-        IReadOnlyList<string> typeArgumentNames
-    )
-        : this(template, receiver, arguments, typeArgumentNames, []) { }
+    public IReadOnlyList<string> TypeArgumentNames { get; init; } = [];
+    public IReadOnlyList<string> RuntimeImports { get; init; } = [];
+    public IReadOnlyList<IrExternalImport> ExternalImports { get; init; } = [];
 }

@@ -1,16 +1,16 @@
 import { type VNode as InfernoElement } from "inferno";
-import { createElement } from "#/bindings";
+import { createElement } from "inferno-create-element";
 
 export function Column(args: { gap?: number; children: InfernoElement[] }): InfernoElement {
   const { gap = 0, children } = args;
 
-  return createElement("div", { className: `column gap-${gap}` }, ...children);
+  return createElement("div", { className: `column gap-${gap}` }, children);
 }
 
 export function Row(args: { gap?: number; children: InfernoElement[] }): InfernoElement {
   const { gap = 0, children } = args;
 
-  return createElement("div", { className: `row gap-${gap}` }, ...children);
+  return createElement("div", { className: `row gap-${gap}` }, children);
 }
 
 export function Text(args: { content: string }): InfernoElement {

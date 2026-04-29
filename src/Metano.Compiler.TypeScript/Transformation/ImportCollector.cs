@@ -34,6 +34,12 @@ public sealed class ImportCollector(
     private readonly IReadOnlySet<IrRuntimeRequirement>? _irRuntimeRequirements =
         irRuntimeRequirements;
 
+    // Per-Collect-call sink for `[Import]` metadata declared on `[Emit]` template
+    // methods. Populated by the TsTemplate walker case (see CollectFromExpression);
+    // drained by the Collect entry point after the walk. Reset on every Collect
+    // invocation so a single ImportCollector instance can serve multiple files.
+    private List<IrExternalImport>? _templateExternals;
+
     public IReadOnlyList<TsImport> Collect(
         INamedTypeSymbol currentType,
         List<TsTopLevel> statements
@@ -43,13 +49,22 @@ public sealed class ImportCollector(
         var valueTypes = new HashSet<string>(); // types used via `new` or `extends` (need runtime import)
         var runtimeHelpers = new HashSet<string>(); // identifiers from TsTemplate.RuntimeImports
         var crossPackageOrigins = new Dictionary<string, TsTypeOrigin>(); // name → cross-package origin
-        CollectReferencedTypeNames(
-            statements,
-            referencedTypes,
-            valueTypes,
-            runtimeHelpers,
-            crossPackageOrigins
-        );
+        var templateExternals = new List<IrExternalImport>(); // [Import] declared on [Emit] methods
+        _templateExternals = templateExternals;
+        try
+        {
+            CollectReferencedTypeNames(
+                statements,
+                referencedTypes,
+                valueTypes,
+                runtimeHelpers,
+                crossPackageOrigins
+            );
+        }
+        finally
+        {
+            _templateExternals = null;
+        }
 
         // C# `using X = Y;` aliases substitute the canonical type name with
         // the user's alias on every emitted token. The walker therefore sees
@@ -467,8 +482,32 @@ public sealed class ImportCollector(
             );
         }
 
+        // Template-driven external imports collected from TsTemplate.ExternalImports
+        // (e.g., `[Emit("createElement($T0, $0)"), Import("createElement", "inferno-create-element")]`).
+        // The walker can't see identifiers buried inside the opaque template text, so the
+        // IR extractor threads them through here as a separate list. Dedupe by (name, from)
+        // and skip names already emitted by the main loop above so we don't double-import.
+        if (templateExternals.Count > 0)
+        {
+            var seenTemplateExternals = new HashSet<(string Name, string From, bool IsDefault)>();
+            foreach (var ext in templateExternals)
+            {
+                if (importedNames.Contains(ext.Name))
+                    continue;
+                if (!seenTemplateExternals.Add((ext.Name, ext.From, ext.IsDefault)))
+                    continue;
+                imports.Add(
+                    new TsImport([ext.Name], ext.From, IsDefault: ext.IsDefault)
+                );
+                importedNames.Add(ext.Name);
+                if (ext.Version is { Length: > 0 } version)
+                    _typeMappingContext.UsedCrossPackages[ext.From] = version;
+            }
+        }
+
         return MergeImportsByPath(imports);
     }
+
 
     /// <summary>
     /// Consolidates multiple <see cref="TsImport"/> entries that share the same path into
@@ -597,7 +636,7 @@ public sealed class ImportCollector(
 
     // ─── Reference walker (pure / static) ───────────────────
 
-    private static void CollectReferencedTypeNames(
+    private void CollectReferencedTypeNames(
         IEnumerable<TsTopLevel> statements,
         HashSet<string> names,
         HashSet<string> valueNames,
@@ -609,7 +648,7 @@ public sealed class ImportCollector(
             CollectFromTopLevel(stmt, names, valueNames, runtimeHelpers, crossPackageOrigins);
     }
 
-    private static void CollectFromTopLevel(
+    private void CollectFromTopLevel(
         TsTopLevel node,
         HashSet<string> names,
         HashSet<string> valueNames,
@@ -777,7 +816,7 @@ public sealed class ImportCollector(
         }
     }
 
-    private static void CollectFromTypeParameters(
+    private void CollectFromTypeParameters(
         IReadOnlyList<TsTypeParameter>? typeParams,
         HashSet<string> names,
         Dictionary<string, TsTypeOrigin> crossPackageOrigins
@@ -792,7 +831,7 @@ public sealed class ImportCollector(
         }
     }
 
-    private static void CollectFromType(
+    private void CollectFromType(
         TsType? type,
         HashSet<string> names,
         Dictionary<string, TsTypeOrigin> crossPackageOrigins
@@ -859,7 +898,7 @@ public sealed class ImportCollector(
         }
     }
 
-    private static void CollectFromStatements(
+    private void CollectFromStatements(
         IReadOnlyList<TsStatement> statements,
         HashSet<string> names,
         HashSet<string> valueNames,
@@ -871,7 +910,7 @@ public sealed class ImportCollector(
             CollectFromStatement(stmt, names, valueNames, runtimeHelpers, crossPackageOrigins);
     }
 
-    private static void CollectFromStatement(
+    private void CollectFromStatement(
         TsStatement stmt,
         HashSet<string> names,
         HashSet<string> valueNames,
@@ -945,7 +984,7 @@ public sealed class ImportCollector(
         }
     }
 
-    private static void CollectFromExpression(
+    private void CollectFromExpression(
         TsExpression expr,
         HashSet<string> names,
         HashSet<string> valueNames,
@@ -1228,6 +1267,19 @@ public sealed class ImportCollector(
                         runtimeHelpers,
                         crossPackageOrigins
                     );
+                // `$T0`/`$T1` placeholders embed generic type-argument names
+                // verbatim into the template body — those names must be
+                // resolved as referenced identifiers so the import collector
+                // can pull in the matching declaration. PascalCase guard skips
+                // primitive type aliases (`string`, `number`, `boolean`) that
+                // don't need import lines.
+                foreach (var typeArg in template.TypeArgumentNames)
+                {
+                    if (typeArg.Length == 0 || !char.IsUpper(typeArg[0]))
+                        continue;
+                    names.Add(typeArg);
+                    valueNames.Add(typeArg);
+                }
                 // Runtime helper identifiers carried alongside the template (e.g.,
                 // "dayNumber", "listRemove", "immutableInsert") from
                 // [MapMethod(..., RuntimeImports = "...")] declarations. The walker can't
@@ -1237,6 +1289,15 @@ public sealed class ImportCollector(
                 // bundled `import { ... } from "metano-runtime"` line.
                 foreach (var helper in template.RuntimeImports)
                     runtimeHelpers.Add(helper);
+                // External `[Import]` metadata threaded from `[Emit]` methods —
+                // the template body references the identifier by name (e.g.,
+                // `createElement` in `createElement($T0, $0)`) but the walker
+                // can't see it inside the opaque template text. The Collect
+                // entry point drains this list into TsImport lines after the
+                // walk finishes.
+                if (_templateExternals is { } externals)
+                    foreach (var ext in template.ExternalImports)
+                        externals.Add(ext);
                 break;
         }
     }

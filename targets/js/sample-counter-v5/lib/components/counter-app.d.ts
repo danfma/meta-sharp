@@ -1,9 +1,7 @@
-import { Component, type VNode } from "inferno";
+import { Component, type VNode as InfernoElement } from "inferno";
+import type { EmptyProps } from "#/bindings";
 import { Counter } from "#/models";
-interface EmptyProps {
-}
 export declare class CounterApp extends Component<EmptyProps, Counter> {
     constructor();
-    render(): VNode;
+    render(): InfernoElement;
 }
-export {};

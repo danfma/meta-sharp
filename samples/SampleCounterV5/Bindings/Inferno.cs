@@ -21,18 +21,19 @@ public static class Inferno
         Import(name: "createElement", from: "inferno-create-element", Version = "^9.0.0"),
         Name("createElement")
     ]
-    public static InfernoElement H(
-        object tagOrComponent,
-        object? props,
-        params InfernoElement[] children
-    ) => throw new NotSupportedException();
-}
-
-/// <summary>Mounts an <see cref="InfernoElement"/> tree into a real DOM container.</summary>
-[Erasable]
-public static class InfernoRender
-{
-    [Import(name: "render", from: "inferno", Version = "^9.0.0"), Name("render")]
-    public static void Render(InfernoElement vnode, object container) =>
+    public static InfernoElement H(string tag, object? props, params InfernoElement[] children) =>
         throw new NotSupportedException();
+
+    /// <summary>
+    /// Component-node creation. The <c>$T0</c> placeholder embeds the
+    /// emitted name of the type argument — <c>Inferno.Of&lt;CounterApp&gt;(props)</c>
+    /// lowers to <c>createElement(CounterApp, props)</c>. The C# generic
+    /// constraint is intentionally absent: any class emits cleanly as a
+    /// runtime-class reference on the TS side.
+    /// </summary>
+    [
+        Emit("createElement($T0, $0)"),
+        Import(name: "createElement", from: "inferno-create-element", Version = "^9.0.0")
+    ]
+    public static extern InfernoElement Of<TComponent>(object? props);
 }
