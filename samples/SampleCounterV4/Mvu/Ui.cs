@@ -1,6 +1,9 @@
 using Metano.Annotations;
-using SampleCounterV4.Mvu.Widgets;
+using ButtonWidget = SampleCounterV4.Mvu.Widgets.Button;
 using ColumnWidget = SampleCounterV4.Mvu.Widgets.Column;
+using HeadingWidget = SampleCounterV4.Mvu.Widgets.Heading;
+using RowWidget = SampleCounterV4.Mvu.Widgets.Row;
+using TextWidget = SampleCounterV4.Mvu.Widgets.Text;
 
 namespace SampleCounterV4.Mvu;
 
@@ -14,15 +17,15 @@ public static class Ui
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Column))]
     public static ColumnWidget Column(int gap, params Widget[] children) => new(gap, children);
 
-    [ObjectArgs]
-    public static Row Row(int gap, params Widget[] children) => new(gap, children);
+    [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Row))]
+    public static RowWidget Row(int gap, params Widget[] children) => new(gap, children);
 
-    [ObjectArgs]
-    public static Text Text(string content) => new(content);
+    [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Text))]
+    public static TextWidget Text(string content) => new(content);
 
-    [ObjectArgs]
-    public static Heading Heading(string content, int level = 1) => new(content, level);
+    [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Heading))]
+    public static HeadingWidget Heading(string content, int level = 1) => new(content, level);
 
-    [ObjectArgs]
-    public static Button Button(string label, Action onPressed) => new(label, onPressed);
+    [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Button))]
+    public static ButtonWidget Button(string label, Action onPressed) => new(label, onPressed);
 }

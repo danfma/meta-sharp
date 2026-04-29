@@ -36,6 +36,6 @@
     }
   },
   "files": {
-    "includes": ["targets/js/metano-runtime/src/**", "targets/js/metano-runtime/test/**"]
+    "includes": ["targets/js/*/src/**"]
   }
 }
