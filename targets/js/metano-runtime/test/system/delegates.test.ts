@@ -22,11 +22,11 @@ describe("createDelegate", () => {
     const results: string[] = [];
     const d = createDelegate(
       (msg: string) => {
-        results.push("A:" + msg);
+        results.push(`A:${msg}`);
         return 1;
       },
       (msg: string) => {
-        results.push("B:" + msg);
+        results.push(`B:${msg}`);
         return 2;
       },
     );
@@ -136,11 +136,11 @@ describe("event simulation (full round-trip)", () => {
     let onMessage: ((sender: unknown, msg: string) => void) | null = null;
 
     // += handler1
-    const handler1 = (_: unknown, msg: string) => log.push("H1:" + msg);
+    const handler1 = (_: unknown, msg: string) => log.push(`H1:${msg}`);
     onMessage = delegateAdd(onMessage, handler1);
 
     // += handler2
-    const handler2 = (_: unknown, msg: string) => log.push("H2:" + msg);
+    const handler2 = (_: unknown, msg: string) => log.push(`H2:${msg}`);
     onMessage = delegateAdd(onMessage, handler2);
 
     // Invoke
