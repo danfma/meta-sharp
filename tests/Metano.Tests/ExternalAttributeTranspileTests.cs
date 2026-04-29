@@ -4,25 +4,28 @@ namespace Metano.Tests;
 
 /// <summary>
 /// Tests for <c>[External]</c> from
-/// <c>Metano.Annotations.TypeScript</c>. The attribute marks a static
-/// class as a stub for runtime globals: the class emits no file,
-/// static member access flattens to a bare identifier so
-/// <c>Js.Document</c> in C# becomes <c>document</c> in TypeScript.
-/// Covers the emission flatten, the MS0012 validation surface, and
-/// the no-file contract.
+/// <c>Metano.Annotations.TypeScript</c>. Per #106 the attribute marks
+/// an ambient runtime-provided shape: no file is emitted, but static
+/// member access stays class-qualified at the call site
+/// (<c>Js.Document</c> in C# becomes <c>Js.document</c> in TS — the
+/// flatten now lives exclusively on <c>[Erasable]</c>). The widened
+/// surface accepts <c>class</c>, <c>abstract class</c>, <c>interface</c>,
+/// and <c>struct</c> targets so ambient structural shapes (DOM types,
+/// Hono-style context interfaces) can use <c>[External]</c> directly.
 /// </summary>
 public class ExternalAttributeTranspileTests
 {
-    // ─── Emission flatten ────────────────────────────────────
+    // ─── Emission contract — class-qualified access ─────────
 
     [Test]
-    public async Task External_StaticProperty_AccessFlattensToIdentifier()
+    public async Task External_StaticProperty_AccessStaysClassQualified()
     {
-        // `Js.Document` on the C# side should lower to `document` (no
-        // enclosing type qualifier) on the TS side because `Js` is an
-        // `[External]` static class acting as a stub for runtime
-        // globals. The `[Name("document")]` on the property drives the
-        // emitted identifier.
+        // Per #106: `[External]` no longer flattens. `Js.Document` on the
+        // C# side lowers to `Js.document` on the TS side; the runtime
+        // ambient declarations expose `Js` as the namespace alias around
+        // the runtime global (the consumer's project provides the actual
+        // `Js` object). The `[Name("document")]` on the property still
+        // drives the camelCased member name.
         var result = TranspileHelper.TranspileWithLibrary(
             """
             using Metano.Annotations.TypeScript;
@@ -48,17 +51,14 @@ public class ExternalAttributeTranspileTests
         );
 
         var output = result["renderer.ts"];
-        await Assert.That(output).Contains("return document;");
-        await Assert.That(output).DoesNotContain("Js.document");
+        await Assert.That(output).Contains("return Js.document;");
     }
 
     [Test]
-    public async Task External_StaticProperty_ChainedAccessFlattens()
+    public async Task External_StaticProperty_ChainedAccessKeepsRoot()
     {
-        // Chained call after the flattened access: `Js.Document.Body`
-        // lowers to `document.body` (no `Js.` at the root). The member
-        // after the first flatten keeps the normal property-access
-        // emission so the full chain stays legible.
+        // `Js.Document.Body` lowers to `Js.document.body` — the root
+        // qualifier survives because `[External]` no longer flattens.
         var result = TranspileHelper.TranspileWithLibrary(
             """
             using Metano.Annotations.TypeScript;
@@ -90,16 +90,15 @@ public class ExternalAttributeTranspileTests
         );
 
         var output = result["renderer.ts"];
-        await Assert.That(output).Contains("return document.body;");
-        await Assert.That(output).DoesNotContain("Js.");
+        await Assert.That(output).Contains("return Js.document.body;");
     }
 
     [Test]
-    public async Task External_StaticMethod_CallFlattens()
+    public async Task External_StaticMethod_CallStaysClassQualified()
     {
         // Static method call on an `[External]` class with a
-        // `[Name("parseInt")]` override lowers to a bare call
-        // `parseInt("5")` — no `Js.` qualifier.
+        // `[Name("parseInt")]` override lowers to `Js.parseInt(s)` — the
+        // qualifier survives.
         var result = TranspileHelper.TranspileWithLibrary(
             """
             using Metano.Annotations.TypeScript;
@@ -122,8 +121,7 @@ public class ExternalAttributeTranspileTests
         );
 
         var output = result["parser.ts"];
-        await Assert.That(output).Contains("return parseInt(s);");
-        await Assert.That(output).DoesNotContain("Js.parseInt");
+        await Assert.That(output).Contains("return Js.parseInt(s);");
     }
 
     [Test]
@@ -151,11 +149,117 @@ public class ExternalAttributeTranspileTests
         await Assert.That(result).ContainsKey("placeholder.ts");
     }
 
+    // ─── Widened surface (PR1 of #106) ───────────────────────
+
+    [Test]
+    public async Task External_Interface_EmitsNoFile_NoDiagnostic()
+    {
+        // Per #106: `[External]` accepts interface targets so ambient
+        // structural shapes (DOM types, Hono-style context interfaces)
+        // can carry the attribute directly without a `[NoEmit]` ambient
+        // workaround.
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations.TypeScript;
+            [assembly: TranspileAssembly]
+
+            [External]
+            public interface IAmbient
+            {
+                IAmbient Echo(string text);
+            }
+
+            public class Caller
+            {
+                public IAmbient Use(IAmbient c) => c.Echo("hi");
+            }
+            """
+        );
+
+        await Assert.That(result).DoesNotContainKey("i-ambient.ts");
+        await Assert.That(result).ContainsKey("caller.ts");
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidExternal))
+            .IsFalse();
+    }
+
+    [Test]
+    public async Task External_AbstractClass_EmitsNoFile_NoDiagnostic()
+    {
+        // Per #106: non-static abstract classes are accepted — they model
+        // ambient shapes (DOM Element-style hierarchies) without
+        // implementation.
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations.TypeScript;
+            [assembly: TranspileAssembly]
+
+            [External]
+            public abstract class Node
+            {
+                public abstract string Tag { get; }
+            }
+
+            public class Caller
+            {
+                public string Read(Node n) => n.Tag;
+            }
+            """
+        );
+
+        await Assert.That(result).DoesNotContainKey("node.ts");
+        await Assert.That(result).ContainsKey("caller.ts");
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidExternal))
+            .IsFalse();
+    }
+
+    [Test]
+    public async Task External_LambdaParameter_OmitsTypeAnnotation()
+    {
+        // An `[External]` ambient type used as a lambda parameter must
+        // emit the lambda WITHOUT a parameter type annotation so
+        // TypeScript infers from context (matches the legacy `[NoEmit]`
+        // ambient behavior, now widened to cover `[External]`).
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations.TypeScript;
+            using System;
+            [assembly: TranspileAssembly]
+
+            [External]
+            public interface ICtx
+            {
+                ICtx Send(string text);
+            }
+
+            [Import(name: "External", from: "external-lib")]
+            public class External
+            {
+                public void Subscribe(Func<ICtx, ICtx> handler) => throw null!;
+            }
+
+            public class Caller
+            {
+                public void Wire(External e) => e.Subscribe(c => c.Send("hi"));
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("e.subscribe((c) =>");
+        await Assert.That(output).DoesNotContain("c: ICtx");
+    }
+
     // ─── Diagnostics (MS0012) ────────────────────────────────
 
     [Test]
-    public async Task External_OnNonStaticClass_EmitsMs0012()
+    public async Task External_OnConcreteNonStaticClass_EmitsMs0012()
     {
+        // Per #106 the validator narrowed to "concrete instance class
+        // with implementation" — a class that's neither static nor
+        // abstract still raises MS0012 since `[External]` cannot honor
+        // an emitted body.
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations.TypeScript;
@@ -214,6 +318,36 @@ public class ExternalAttributeTranspileTests
             .IsFalse();
     }
 
+    // ─── Erasable retains the flatten behavior ───────────────
+
+    [Test]
+    public async Task Erasable_StaticMethod_CallFlattens()
+    {
+        // Counterpart to External_StaticMethod_CallStaysClassQualified.
+        // After #106, only `[Erasable]` flattens at the call site.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Erasable]
+            public static class Constants
+            {
+                public static int Pi => 3;
+            }
+
+            public class Consumer
+            {
+                public int Get() => Constants.Pi;
+            }
+            """
+        );
+
+        var output = result["consumer.ts"];
+        await Assert.That(output).Contains("return pi;");
+        await Assert.That(output).DoesNotContain("Constants.");
+    }
+
     // ─── Doesn't affect non-External static classes ─────────
 
     [Test]
@@ -222,7 +356,7 @@ public class ExternalAttributeTranspileTests
         // Baseline: `[ExportedAsModule]` (without `[External]`) emits
         // a module file and a static access through the class reference
         // stays qualified with the class name. The flatten only kicks
-        // in when `[External]` is explicit.
+        // in when `[Erasable]` is explicit.
         var result = TranspileHelper.Transpile(
             """
             [assembly: TranspileAssembly]
@@ -242,7 +376,7 @@ public class ExternalAttributeTranspileTests
 
         var output = result["consumer.ts"];
         // `Helpers.Zero()` lowers to `Helpers.zero()` — the prefix
-        // survives because no flatten happens without [External].
+        // survives because no flatten happens without [Erasable].
         await Assert.That(output).Contains("Helpers.zero()");
     }
 }

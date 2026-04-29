@@ -314,7 +314,8 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.NumericEnum,
                 IsTranspilable: IsTranspilableType(named),
                 IsNoEmit: SymbolHelper.HasNoEmit(named),
-                EnumDefaultMember: ExtractEnumDefaultMember(named, target)
+                EnumDefaultMember: ExtractEnumDefaultMember(named, target),
+                IsExternal: SymbolHelper.HasExternal(named)
             );
         }
 
@@ -322,7 +323,8 @@ public static class IrTypeRefMapper
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Interface,
                 IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named)
+                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsExternal: SymbolHelper.HasExternal(named)
             );
 
         if (named.TypeKind == TypeKind.Delegate)
@@ -337,7 +339,8 @@ public static class IrTypeRefMapper
                 IrNamedTypeKind.Branded,
                 BrandedUnderlyingPrimitive: primitive,
                 IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named)
+                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsExternal: SymbolHelper.HasExternal(named)
             );
         }
 
@@ -345,28 +348,32 @@ public static class IrTypeRefMapper
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Exception,
                 IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named)
+                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsExternal: SymbolHelper.HasExternal(named)
             );
 
         if (named.IsRecord)
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Record,
                 IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named)
+                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsExternal: SymbolHelper.HasExternal(named)
             );
 
         if (named.TypeKind == TypeKind.Struct)
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Struct,
                 IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named)
+                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsExternal: SymbolHelper.HasExternal(named)
             );
 
         if (named.TypeKind == TypeKind.Class)
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Class,
                 IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named)
+                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsExternal: SymbolHelper.HasExternal(named)
             );
 
         return null;

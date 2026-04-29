@@ -55,7 +55,8 @@ public sealed record IrNamedTypeSemantics(
     IrPrimitive? BrandedUnderlyingPrimitive = null,
     bool IsTranspilable = false,
     bool IsNoEmit = false,
-    IrEnumMemberInfo? EnumDefaultMember = null
+    IrEnumMemberInfo? EnumDefaultMember = null,
+    bool IsExternal = false
 );
 
 /// <summary>

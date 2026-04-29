@@ -846,16 +846,26 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     {
         if (type.HasExternal())
         {
-            if (!type.IsStatic)
+            // The attribute now serves two distinct shapes:
+            // 1. Static class — runtime-global facade (`Js.*`). The
+            //    historical static-only constraint stays for these.
+            // 2. Interface / non-static abstract class / struct —
+            //    ambient structural shape (DOM types, Hono `IHonoContext`).
+            //    No static-only constraint; the type contributes only its
+            //    declaration shape, never an emitted body.
+            // Concrete (non-abstract) non-static classes still raise
+            // MS0012: an `[External]` instance class with implementation
+            // would suggest emission semantics the attribute can't honor.
+            if (type.TypeKind is TypeKind.Class && !type.IsStatic && !type.IsAbstract)
             {
                 diagnostics.Add(
                     new MetanoDiagnostic(
                         MetanoDiagnosticSeverity.Error,
                         DiagnosticCodes.InvalidExternal,
-                        $"[External] on '{type.Name}' requires a static class. The attribute "
-                            + $"marks a stub for runtime globals — non-static types have no "
-                            + $"static surface to declare. Mark the class 'static' or remove "
-                            + $"[External].",
+                        $"[External] on '{type.Name}' requires a static, abstract, or interface "
+                            + $"target. Concrete instance classes carry implementation that "
+                            + $"the attribute's no-emission contract cannot honor. Mark the "
+                            + $"class 'static' / 'abstract' or use an interface.",
                         type.Locations.FirstOrDefault()
                     )
                 );
@@ -867,7 +877,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                         MetanoDiagnosticSeverity.Error,
                         DiagnosticCodes.InvalidExternal,
                         $"[External] on '{type.Name}' conflicts with [Transpile]. "
-                            + $"[External] marks a stub for runtime globals (no emission); "
+                            + $"[External] marks a runtime-provided stub (no emission); "
                             + $"[Transpile] asks for full emission. Pick one — ambient "
                             + $"bindings drop [Transpile], emitted helpers drop [External].",
                         type.Locations.FirstOrDefault()

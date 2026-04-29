@@ -252,16 +252,17 @@ public static class IrToTsExpressionBridge
             memberName = TypeScriptNaming.ToCamelCaseMember(ma.MemberName);
         // `[External]` and `[Erasable]` declaring types: the class
         // vanishes at the call site. `[External]` groups runtime
-        // globals; `[Erasable]` marks compile-time sugar containers.
-        // Both lower static member access to the bare identifier
-        // (no enclosing type qualifier) so `Js.Document` → `document`
-        // feeds cleanly into `document.getElementById(…)`, and a
-        // `Constants.Pi` access on an `[Erasable]` catalog lowers to
-        // just `Pi`. Instance access (ill-formed on a static class)
+        // `[Erasable]` marks a compile-time sugar container — its scope
+        // vanishes at the call site, so `Constants.Pi` lowers to just
+        // `Pi`. `[External]` no longer participates in this flatten
+        // (per #106): an `[External]` static class stays
+        // class-qualified at the call site so the emitted TS keeps the
+        // namespace contract the runtime ambient declarations expose
+        // (e.g. `Js.document` over the runtime's actual `document`
+        // global). Instance access (ill-formed on a static class)
         // falls through to the normal property-access path.
         if (
-            ma.Origin is { IsStatic: true } origin
-            && (origin.IsDeclaringTypeExternal || origin.IsDeclaringTypeErasable)
+            ma.Origin is { IsStatic: true, IsDeclaringTypeErasable: true }
             && ma.Target is IrTypeReference
         )
             return new TsIdentifier(memberName);
@@ -364,7 +365,16 @@ public static class IrToTsExpressionBridge
 
     private static TsType? LowerLambdaParameterType(IrParameter p)
     {
-        if (p.Type is IrNamedTypeRef named && named.Semantics?.IsNoEmit == true)
+        // Ambient types (`[NoEmit]` legacy + `[External]` new contract)
+        // have no emitted declaration in the consumer's tree, so the
+        // lambda parameter type annotation is omitted and TypeScript
+        // infers it from the surrounding signature (the real .d.ts of
+        // the npm package).
+        if (
+            p.Type is IrNamedTypeRef named
+            && named.Semantics is { } sem
+            && (sem.IsNoEmit || sem.IsExternal)
+        )
             return null;
         return IrToTsTypeMapper.Map(p.Type);
     }

@@ -43,6 +43,8 @@ namespace Metano.Annotations.TypeScript;
 /// </summary>
 [AttributeUsage(
     AttributeTargets.Class
+        | AttributeTargets.Interface
+        | AttributeTargets.Struct
         | AttributeTargets.Method
         | AttributeTargets.Property
         | AttributeTargets.Field,
