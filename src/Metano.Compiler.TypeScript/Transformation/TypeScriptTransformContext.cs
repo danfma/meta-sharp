@@ -228,6 +228,11 @@ public sealed class TypeScriptTransformContext(
         {
             if (SymbolEqualityComparer.Default.Equals(prior.ContainingType, member.ContainingType))
                 return;
+            // Roslyn surfaces C# 14 `extension(R r) { … }` members twice: once
+            // inside a synthetic empty-name nested type and once lifted onto
+            // the static class. Same source — collapse to one registration.
+            if (AreSameLogicalExtensionMember(prior, member))
+                return;
             var priorOwner = prior.ContainingType?.Name ?? "<global>";
             var newOwner = member.ContainingType?.Name ?? "<global>";
             reportDiagnostic(
@@ -245,6 +250,19 @@ public sealed class TypeScriptTransformContext(
         }
         map[helperName] = ownerRef;
         firstClaim[helperName] = member;
+    }
+
+    private static bool AreSameLogicalExtensionMember(ISymbol a, ISymbol b)
+    {
+        if (!string.Equals(a.Name, b.Name, StringComparison.Ordinal))
+            return false;
+        var aOwner = a.ContainingType;
+        var bOwner = b.ContainingType;
+        if (aOwner is null || bOwner is null)
+            return false;
+        var aLogical = string.IsNullOrEmpty(aOwner.Name) ? aOwner.ContainingType : aOwner;
+        var bLogical = string.IsNullOrEmpty(bOwner.Name) ? bOwner.ContainingType : bOwner;
+        return SymbolEqualityComparer.Default.Equals(aLogical, bLogical);
     }
 
     private static IEnumerable<INamedTypeSymbol> EnumerateTopLevelStaticTypes(INamespaceSymbol root)

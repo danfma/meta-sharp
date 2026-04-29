@@ -46,15 +46,15 @@ public static class IrModuleFunctionExtractor
                 && method.DeclaredAccessibility == Accessibility.Public
             )
             {
-                // [Emit] methods are inlined at the call site — no standalone
-                // function should be emitted for them.
                 if (SymbolHelper.HasEmit(method))
                     continue;
-                // [Import] methods are external bindings — every call site
-                // lowers to the imported identifier directly (with the import
-                // line auto-emitted on the consumer file). The declaring class
-                // contributes no body and emits no helper here.
                 if (SymbolHelper.GetImport(method) is not null)
+                    continue;
+                // Roslyn surfaces C# 14 `extension(R r) { … }` members both
+                // lifted onto the static class and as members of a synthetic
+                // empty-name nested type; the syntax pass below picks them up
+                // — skip the lifted view to avoid duplicate emission.
+                if (IsDeclaredInsideExtensionBlock(method))
                     continue;
                 // Skip property accessors. Classic-style extension properties
                 // come through as methods whose AssociatedSymbol is the
@@ -397,6 +397,19 @@ public static class IrModuleFunctionExtractor
             TypeParameters: typeParameters,
             Attributes: IrAttributeExtractor.Extract(method)
         );
+    }
+
+    private static bool IsDeclaredInsideExtensionBlock(IMethodSymbol method)
+    {
+        foreach (var syntaxRef in method.DeclaringSyntaxReferences)
+        {
+            for (var node = syntaxRef.GetSyntax().Parent; node is not null; node = node.Parent)
+            {
+                if (node.Kind().ToString() == "ExtensionBlockDeclaration")
+                    return true;
+            }
+        }
+        return false;
     }
 
     private static bool DetectYield(IMethodSymbol method)

@@ -145,4 +145,35 @@ public class ExtensionTranspileTests
             .That(output)
             .Contains("export function repeat(text: string, times: number): string");
     }
+
+    [Test]
+    public async Task ExtensionBlock_MethodEmittedOnce()
+    {
+        // Roslyn surfaces a C# 14 extension-block member twice (lifted onto
+        // the static class with IsExtensionMethod=true AND inside a synthetic
+        // empty-name nested type). The transpiler must collapse both views to
+        // one declaration in the generated TypeScript.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public static class IntExtensions
+            {
+                extension(int value)
+                {
+                    public int Doubled() => value + value;
+                }
+            }
+            """
+        );
+
+        var output = result["int-extensions.ts"];
+        var firstOccurrence = output.IndexOf("export function doubled(", System.StringComparison.Ordinal);
+        var secondOccurrence = output.IndexOf(
+            "export function doubled(",
+            firstOccurrence + 1,
+            System.StringComparison.Ordinal
+        );
+        await Assert.That(firstOccurrence).IsGreaterThanOrEqualTo(0);
+        await Assert.That(secondOccurrence).IsEqualTo(-1);
+    }
 }

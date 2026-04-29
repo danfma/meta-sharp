@@ -1,1 +1,1 @@
-export {};
+export { getOrCreateElementById } from "./dom-extensions";

@@ -496,9 +496,7 @@ public sealed class ImportCollector(
                     continue;
                 if (!seenTemplateExternals.Add((ext.Name, ext.From, ext.IsDefault)))
                     continue;
-                imports.Add(
-                    new TsImport([ext.Name], ext.From, IsDefault: ext.IsDefault)
-                );
+                imports.Add(new TsImport([ext.Name], ext.From, IsDefault: ext.IsDefault));
                 importedNames.Add(ext.Name);
                 if (ext.Version is { Length: > 0 } version)
                     _typeMappingContext.UsedCrossPackages[ext.From] = version;
@@ -507,7 +505,6 @@ public sealed class ImportCollector(
 
         return MergeImportsByPath(imports);
     }
-
 
     /// <summary>
     /// Consolidates multiple <see cref="TsImport"/> entries that share the same path into

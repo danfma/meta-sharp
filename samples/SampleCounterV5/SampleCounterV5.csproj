@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/Metano/Metano.csproj" PrivateAssets="all" />
+    <ProjectReference Include="..\..\bindings\Metano.TypeScript.DOM\Metano.TypeScript.DOM.csproj" />
   </ItemGroup>
 
   <Import Project="../../src/Metano.Build/build/Metano.Build.targets" />
