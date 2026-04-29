@@ -16,8 +16,14 @@ namespace Metano.Tests;
 public class ErasableFactoryNameClashTests
 {
     [Test]
-    public async Task NameOverride_MatchingTranspilableType_RaisesMs0020()
+    public async Task NameOverride_MatchingTranspilableType_AutoAliasesAndEmitsMs0022()
     {
+        // Stage 2 of #181: a factory shadowing a transpilable type used
+        // to raise MS0020 (Error) and abort the export. The auto-alias
+        // path now synthesizes a path-derived alias and downgrades the
+        // diagnostic to MS0022 (Info) so the export survives. MS0020
+        // still fires for non-transpilable collisions (BCL, [Import],
+        // runtime helper) — covered by sibling tests.
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations;
@@ -40,12 +46,18 @@ public class ErasableFactoryNameClashTests
             """
         );
 
-        var ms0020 = diagnostics.FirstOrDefault(d =>
-            d.Code == DiagnosticCodes.ErasableFactoryNameClash
+        await Assert
+            .That(
+                diagnostics.Any(d => d.Code == DiagnosticCodes.ErasableFactoryNameClash)
+            )
+            .IsFalse();
+
+        var ms0022 = diagnostics.FirstOrDefault(d =>
+            d.Code == DiagnosticCodes.AliasedImportConflict
         );
-        await Assert.That(ms0020).IsNotNull();
-        await Assert.That(ms0020!.Message).Contains("Column");
-        await Assert.That(ms0020.Message).Contains("UI.Column");
+        await Assert.That(ms0022).IsNotNull();
+        await Assert.That(ms0022!.Message).Contains("Column");
+        await Assert.That(ms0022.Message).Contains("UI.Column");
     }
 
     [Test]

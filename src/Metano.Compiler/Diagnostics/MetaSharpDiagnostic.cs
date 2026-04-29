@@ -205,4 +205,12 @@ public static class DiagnosticCodes
     /// from on a bare call site. Add <c>[Name("…")]</c> to one of the
     /// members to disambiguate.</summary>
     public const string ExtensionHelperNameClash = "MS0021";
+
+    /// <summary>MS0022 — a local declaration (factory function, class,
+    /// alias) shadows an imported symbol with the same name and the
+    /// transpiler synthesized an alias to keep both surfaces working.
+    /// Pin the alias deterministically with a <c>using NewName = T;</c>
+    /// directive (or the upcoming <c>[ImportAlias]</c> attribute) to
+    /// silence this notice.</summary>
+    public const string AliasedImportConflict = "MS0022";
 }

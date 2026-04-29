@@ -73,6 +73,91 @@ public class UsingAliasImportTests
     }
 
     [Test]
+    public async Task ErasableFactoryNameClash_AutoAliasesAndEmitsInfo()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+
+            namespace App.Widgets
+            {
+                [Transpile]
+                public class Column
+                {
+                    public int Gap { get; }
+                    public Column(int gap) { Gap = gap; }
+                }
+            }
+
+            namespace App
+            {
+                [Transpile, Erasable]
+                public static class Ui
+                {
+                    [Name(TargetLanguage.TypeScript, "Column")]
+                    public static App.Widgets.Column Column(int gap) => new App.Widgets.Column(gap);
+                }
+            }
+            """
+        );
+
+        var output = result["ui.ts"];
+        await Assert.That(output).Contains("import { Column as ColumnFromWidgets }");
+        await Assert.That(output).Contains("export function Column(gap: number): ColumnFromWidgets");
+        await Assert.That(output).Contains("return new ColumnFromWidgets(gap);");
+
+        var info = diagnostics.FirstOrDefault(d =>
+            d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.AliasedImportConflict
+        );
+        await Assert.That(info).IsNotNull();
+        await Assert.That(info!.Severity).IsEqualTo(Metano.Compiler.Diagnostics.MetanoDiagnosticSeverity.Info);
+        await Assert.That(info.Message).Contains("ColumnFromWidgets");
+    }
+
+    [Test]
+    public async Task UsingAlias_OverridesAutoSynthesis()
+    {
+        var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            using ColumnWidget = App.Widgets.Column;
+
+            namespace App.Widgets
+            {
+                [Transpile]
+                public class Column
+                {
+                    public int Gap { get; }
+                    public Column(int gap) { Gap = gap; }
+                }
+            }
+
+            namespace App
+            {
+                [Transpile, Erasable]
+                public static class Ui
+                {
+                    [Name(TargetLanguage.TypeScript, "Column")]
+                    public static ColumnWidget Column(int gap) => new ColumnWidget(gap);
+                }
+            }
+            """
+        );
+
+        var output = result["ui.ts"];
+        await Assert.That(output).Contains("import { Column as ColumnWidget }");
+        await Assert.That(output).DoesNotContain("ColumnFromWidgets");
+
+        await Assert
+            .That(
+                diagnostics.Any(d =>
+                    d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.AliasedImportConflict
+                )
+            )
+            .IsFalse();
+    }
+
+    [Test]
     public async Task NoUsingAlias_KeepsCanonicalImport()
     {
         var result = TranspileHelper.Transpile(

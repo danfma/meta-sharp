@@ -197,7 +197,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var declarativeMappings = DeclarativeMappingRegistry.FromIr(ir);
 
-        var erasableFunctionExports = BuildErasableFunctionExports(
+        var (erasableFunctionExports, synthesizedAliasesByFile) = BuildErasableFunctionExports(
             transpilableTypes,
             transpilableTypesDict,
             ir.BclExports,
@@ -223,6 +223,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             TypeMapping = typeMappingContext,
             UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
             ErasableFunctionExports = erasableFunctionExports,
+            SynthesizedAliasesByFile = synthesizedAliasesByFile,
         };
 
         var files = new List<TsSourceFile>();
@@ -451,12 +452,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         // group's emission. Restoring the previous slot in finally keeps
         // the AsyncLocal state clean across groups (and across parallel
         // test runs).
-        var primarySyntaxTree = group.Types[0].DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
+        var primarySyntaxTree = group
+            .Types[0]
+            .DeclaringSyntaxReferences.FirstOrDefault()
+            ?.SyntaxTree;
         var previousAliases = IrToTsTypeMapper.UsingAliases;
-        IrToTsTypeMapper.UsingAliases = UsingAliasResolver.ResolveForTree(
-            primarySyntaxTree,
-            Context.Compilation
-        );
+        IrToTsTypeMapper.UsingAliases = MergeAliasesForGroup(primarySyntaxTree);
 
         try
         {
@@ -481,16 +482,39 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             );
             statements.InsertRange(0, imports);
 
-            var relativePath = Context.PathNaming.GetRelativePath(
-                group.Namespace,
-                group.FileName
-            );
+            var relativePath = Context.PathNaming.GetRelativePath(group.Namespace, group.FileName);
             return new TsSourceFile(relativePath, statements, group.Namespace);
         }
         finally
         {
             IrToTsTypeMapper.UsingAliases = previousAliases;
         }
+    }
+
+    /// <summary>
+    /// Merges user-declared <c>using X = Y;</c> aliases with the
+    /// auto-synthesized aliases produced when an <c>[Erasable]</c>
+    /// factory shadows an imported transpilable type (Stage 2 of #181).
+    /// User aliases win on collision so the explicit choice always
+    /// trumps the synthesized fallback.
+    /// </summary>
+    private UsingAliasScope? MergeAliasesForGroup(SyntaxTree? primarySyntaxTree)
+    {
+        var userScope = UsingAliasResolver.ResolveForTree(primarySyntaxTree, Context.Compilation);
+        var filePath = primarySyntaxTree?.FilePath ?? string.Empty;
+        if (
+            !Context.SynthesizedAliasesByFile.TryGetValue(filePath, out var synthesized)
+            || synthesized.Count == 0
+        )
+            return userScope;
+
+        var merged = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var (canonical, alias) in synthesized)
+            merged[canonical] = alias;
+        if (userScope is not null)
+            foreach (var (canonical, alias) in userScope.CanonicalToAlias)
+                merged[canonical] = alias;
+        return UsingAliasScope.Create(merged);
     }
 
     /// <summary>
@@ -1127,7 +1151,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// naming policy <see cref="IrToTsModuleBridge"/> uses on the emit side
     /// so both halves agree on the function identifier.
     /// </summary>
-    private static IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildErasableFunctionExports(
+    private static (
+        IReadOnlyDictionary<string, IrTranspilableTypeRef> Exports,
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> SynthesizedAliasesByFile
+    ) BuildErasableFunctionExports(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes,
         IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
         IReadOnlyDictionary<string, IrBclExport> bclExports,
@@ -1145,6 +1172,9 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var exports = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
         var claimedFactoryNames = new Dictionary<string, IMethodSymbol>(StringComparer.Ordinal);
+        var synthesizedAliasesByFile = new Dictionary<string, Dictionary<string, string>>(
+            StringComparer.Ordinal
+        );
 
         foreach (var type in transpilableTypes)
         {
@@ -1161,11 +1191,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 var fnName = ResolveErasableFunctionName(member);
 
                 if (
-                    TryReportImportNameCollision(
+                    TryResolveImportNameCollision(
                         member,
                         fnName,
                         reservedNames,
                         compilation,
+                        synthesizedAliasesByFile,
                         reportDiagnostic
                     )
                 )
@@ -1179,7 +1210,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 claimedFactoryNames.Add(fnName, member);
             }
         }
-        return exports;
+        return (
+            exports,
+            synthesizedAliasesByFile.ToDictionary(
+                kv => kv.Key,
+                kv => (IReadOnlyDictionary<string, string>)kv.Value,
+                StringComparer.Ordinal
+            )
+        );
     }
 
     /// <summary>
@@ -1212,7 +1250,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 continue;
             reserved[typeRef.TsName] = new ReservedImportName(
                 ReservedImportKind.TranspilableType,
-                type.ToDisplayString()
+                type.ToDisplayString(),
+                typeRef
             );
         }
 
@@ -1282,7 +1321,11 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         RuntimeHelper,
     }
 
-    private readonly record struct ReservedImportName(ReservedImportKind Kind, string Description);
+    private readonly record struct ReservedImportName(
+        ReservedImportKind Kind,
+        string Description,
+        IrTranspilableTypeRef? OwnerRef = null
+    );
 
     private static bool IsExportableErasableMethod(IMethodSymbol member) =>
         member.IsStatic
@@ -1298,34 +1341,79 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <paramref name="factory"/> shadowing an import name the consumer
     /// file already binds, signaling the caller to skip the export.
     /// </summary>
-    private static bool TryReportImportNameCollision(
+    /// <summary>
+    /// Detects a clash between an <c>[Erasable]</c> factory name and a
+    /// reserved import slot. Layered resolution:
+    /// <list type="number">
+    ///   <item>If the factory's source file already aliases the colliding
+    ///   canonical via <c>using X = Y;</c>, the user's choice wins —
+    ///   silent pass-through, factory survives.</item>
+    ///   <item>If the colliding slot is a transpilable type and we know
+    ///   its emit metadata, synthesize a path-derived alias
+    ///   (<c>Column</c> from <c>#/mvu/widgets</c> → <c>ColumnFromWidgets</c>),
+    ///   register it for the factory's source file, and emit MS0022
+    ///   (Info) so the user can pin it.</item>
+    ///   <item>Otherwise (BCL export, external <c>[Import]</c>, runtime
+    ///   helper, or a transpilable target without enough metadata),
+    ///   fall back to the original MS0020 error — there is no obvious
+    ///   alias to derive.</item>
+    /// </list>
+    /// Returns <c>true</c> when the caller should skip exporting the
+    /// factory (Layer 3 only); cases 1 and 2 keep the export valid.
+    /// </summary>
+    private static bool TryResolveImportNameCollision(
         IMethodSymbol factory,
         string factoryName,
         IReadOnlyDictionary<string, ReservedImportName> reservedNames,
         Compilation compilation,
+        Dictionary<string, Dictionary<string, string>> synthesizedAliasesByFile,
         Action<MetanoDiagnostic> reportDiagnostic
     )
     {
         if (!reservedNames.TryGetValue(factoryName, out var reserved))
             return false;
 
-        // A C# `using` alias on the colliding canonical name in the
-        // factory's source file remaps the imported symbol to a different
-        // local identifier — the factory's name is then free. Skip the
-        // diagnostic so the user's resolution stays valid.
         var factoryTree = factory.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
+        var factoryFilePath = factoryTree?.FilePath ?? string.Empty;
+
         if (
             UsingAliasResolver.ResolveForTree(factoryTree, compilation) is { } scope
             && scope.CanonicalToAlias.ContainsKey(factoryName)
         )
             return false;
 
-        var owner = factory.ContainingType!.Name;
+        if (reserved.OwnerRef is { } ownerRef)
+        {
+            var alias = SuggestAliasFromOwnerRef(factoryName, ownerRef);
+            if (!synthesizedAliasesByFile.TryGetValue(factoryFilePath, out var fileAliases))
+            {
+                fileAliases = new Dictionary<string, string>(StringComparer.Ordinal);
+                synthesizedAliasesByFile[factoryFilePath] = fileAliases;
+            }
+            fileAliases[factoryName] = alias;
+
+            var owner = factory.ContainingType!.Name;
+            reportDiagnostic(
+                new MetanoDiagnostic(
+                    MetanoDiagnosticSeverity.Info,
+                    DiagnosticCodes.AliasedImportConflict,
+                    $"[Erasable] static method '{owner}.{factory.Name}' resolves to TS factory "
+                        + $"name '{factoryName}', which collides with transpilable type "
+                        + $"'{reserved.Description}'. Imported as '{alias}' inside this file. "
+                        + $"Pin the alias deterministically with a 'using {alias} = …;' "
+                        + "directive to silence this notice.",
+                    factory.Locations.FirstOrDefault()
+                )
+            );
+            return false;
+        }
+
+        var ownerName = factory.ContainingType!.Name;
         reportDiagnostic(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
                 DiagnosticCodes.ErasableFactoryNameClash,
-                $"[Erasable] static method '{owner}.{factory.Name}' resolves to TS factory "
+                $"[Erasable] static method '{ownerName}.{factory.Name}' resolves to TS factory "
                     + $"name '{factoryName}', which collides with {DescribeReservedKind(reserved.Kind)} "
                     + $"'{reserved.Description}'. Drop the [Name] override or pick a name that "
                     + "does not match an emitted type or imported symbol.",
@@ -1334,6 +1422,24 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
         return true;
     }
+
+    private static string SuggestAliasFromOwnerRef(string canonical, IrTranspilableTypeRef ownerRef)
+    {
+        var lastSegment = ownerRef.Namespace.LastIndexOf('.') is var dot && dot >= 0
+            ? ownerRef.Namespace[(dot + 1)..]
+            : ownerRef.Namespace;
+        if (string.IsNullOrEmpty(lastSegment))
+            return canonical + "Imported";
+        return canonical + "From" + Capitalize(lastSegment);
+    }
+
+    private static string Capitalize(string value) =>
+        value.Length switch
+        {
+            0 => value,
+            1 => value.ToUpperInvariant(),
+            _ => char.ToUpperInvariant(value[0]) + value[1..],
+        };
 
     /// <summary>
     /// Anchored on the second occurrence — same convention as MS0008

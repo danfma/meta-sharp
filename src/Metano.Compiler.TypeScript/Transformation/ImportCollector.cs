@@ -211,11 +211,7 @@ public sealed class ImportCollector(
         // rather than per-name `{ type A, type B }`).
         var localByPath = new Dictionary<
             string,
-            (
-                List<string> Names,
-                HashSet<string> TypeOnlyNames,
-                Dictionary<string, string> Aliases
-            )
+            (List<string> Names, HashSet<string> TypeOnlyNames, Dictionary<string, string> Aliases)
         >(StringComparer.Ordinal);
 
         // Per-specifier dedup inside a bucket. The outer `importedNames` set dedupes

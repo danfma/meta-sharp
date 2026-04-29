@@ -293,6 +293,21 @@ public sealed class TypeScriptTransformContext(
         new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
 
     /// <summary>
+    /// Per-source-file synthesized alias map keyed by the absolute file
+    /// path. Populated when <c>BuildErasableFunctionExports</c> detects a
+    /// factory shadowing an imported transpilable type and falls back to
+    /// auto-aliasing (Stage 2 of #181). Consumed by
+    /// <c>TransformGroup</c> when seeding <c>UsingAliasScope</c> so the
+    /// synthesized alias flows through every emit site exactly the way a
+    /// user-declared <c>using X = Y;</c> would.
+    /// </summary>
+    public IReadOnlyDictionary<
+        string,
+        IReadOnlyDictionary<string, string>
+    > SynthesizedAliasesByFile { get; init; } =
+        new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.Ordinal);
+
+    /// <summary>
     /// Recognizes a referenced identifier as the TypeScript guard
     /// function for a transpilable type — i.e. an <c>is{Name}</c>
     /// import where the underlying type is in

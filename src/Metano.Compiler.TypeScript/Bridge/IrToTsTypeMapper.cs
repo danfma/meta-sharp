@@ -91,7 +91,8 @@ public static class IrToTsTypeMapper
     /// roots — so the alias replaces the canonical consistently.
     /// </summary>
     public static string ResolveAliasedName(string canonicalName) =>
-        UsingAliases is { } scope && scope.CanonicalToAlias.TryGetValue(canonicalName, out var alias)
+        UsingAliases is { } scope
+        && scope.CanonicalToAlias.TryGetValue(canonicalName, out var alias)
             ? alias
             : canonicalName;
 
@@ -102,7 +103,10 @@ public static class IrToTsTypeMapper
             name = renamed;
 
         string? originalName = null;
-        if (UsingAliases is { } aliasScope && aliasScope.CanonicalToAlias.TryGetValue(name, out var aliasName))
+        if (
+            UsingAliases is { } aliasScope
+            && aliasScope.CanonicalToAlias.TryGetValue(name, out var aliasName)
+        )
         {
             originalName = name;
             name = aliasName;

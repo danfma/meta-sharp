@@ -16,7 +16,10 @@ public sealed class UsingAliasScope
     public UsingAliasScope(IReadOnlyDictionary<string, string> canonicalToAlias)
     {
         CanonicalToAlias = canonicalToAlias;
-        var inverse = new Dictionary<string, string>(canonicalToAlias.Count, StringComparer.Ordinal);
+        var inverse = new Dictionary<string, string>(
+            canonicalToAlias.Count,
+            StringComparer.Ordinal
+        );
         foreach (var (canonical, alias) in canonicalToAlias)
             inverse[alias] = canonical;
         AliasToCanonical = inverse;
