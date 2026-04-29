@@ -1,5 +1,5 @@
 export abstract class Widget {
-  constructor() {}
+  constructor() { }
 
   abstract render(): HTMLElement;
 }
