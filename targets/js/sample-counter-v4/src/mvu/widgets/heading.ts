@@ -1,11 +1,11 @@
 import { Widget } from "#/mvu";
 
 export class Heading extends Widget {
+  private readonly _level: number;
+
   private readonly _content: string;
 
-  private readonly _level: number = 0;
-
-  constructor(content: string, level: number = 1) {
+  constructor(content: string, level: number) {
     super();
     this._content = content;
     this._level = level;
