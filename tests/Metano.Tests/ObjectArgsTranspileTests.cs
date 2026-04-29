@@ -315,6 +315,35 @@ public class ObjectArgsTranspileTests
     }
 
     [Test]
+    public async Task Constructor_ObjectArgs_PreservesTypeArgumentsAtCallSite()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Box<T>
+            {
+                [ObjectArgs]
+                public Box(T value) { Value = value; }
+                public T Value { get; }
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                public Box<int> MakeInt() => new Box<int>(value: 12);
+                public Box<string> MakeString() => new Box<string>(value: "hello");
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("Box.create<number>({ value: 12 })");
+        await Assert.That(output).Contains("Box.create<string>({ value: \"hello\" })");
+    }
+
+    [Test]
     public async Task Constructor_ObjectArgs_HonorsNameOverrideOnCallSite()
     {
         var result = TranspileHelper.Transpile(

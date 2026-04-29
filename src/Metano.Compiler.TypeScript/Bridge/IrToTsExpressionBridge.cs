@@ -818,9 +818,14 @@ public static class IrToTsExpressionBridge
         var args = ne.Arguments.Select(a => MapArgument(a, bclRegistry)).ToList();
         if (ne.IsObjectArgsCtor && ne.Type is IrNamedTypeRef objectArgsTarget)
         {
+            IReadOnlyList<TsType>? typeArguments = objectArgsTarget.TypeArguments
+                is { Count: > 0 } tArgs
+                ? tArgs.Select(t => IrToTsTypeMapper.Map(t)).ToList()
+                : null;
             return new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier(objectArgsTarget.Name), "create"),
-                args
+                args,
+                TypeArguments: typeArguments
             );
         }
         if (ne.IsPlainObject)

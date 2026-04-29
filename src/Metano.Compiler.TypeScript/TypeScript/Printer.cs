@@ -1050,6 +1050,12 @@ public sealed class Printer(string indent = "  ")
                 PrintCallCallee(call.Callee);
                 if (call.Optional)
                     _sb.Write("?.");
+                if (call.TypeArguments is { Count: > 0 } typeArgs)
+                {
+                    _sb.Write("<");
+                    _sb.WriteList(typeArgs, PrintType);
+                    _sb.Write(">");
+                }
                 _sb.Write("(");
                 _sb.WriteList(call.Arguments, PrintExpression);
                 _sb.Write(")");
