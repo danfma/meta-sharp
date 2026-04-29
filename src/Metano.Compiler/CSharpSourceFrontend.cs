@@ -1837,6 +1837,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         string? dartName = null;
         string? dartTemplate = null;
         string? dartRuntimeImports = null;
+        int? whenArgCount = null;
         foreach (var named in attr.NamedArguments)
         {
             switch (named.Key)
@@ -1864,6 +1865,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     break;
                 case "DartRuntimeImports":
                     dartRuntimeImports = named.Value.Value as string;
+                    break;
+                case "WhenArgCount":
+                    // The attribute uses a sentinel `-1` because `int?` is not
+                    // allowed as an attribute argument type. Anything < 0 means
+                    // "no filter".
+                    if (named.Value.Value is int count && count >= 0)
+                        whenArgCount = count;
                     break;
             }
         }
@@ -1901,7 +1909,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             runtimeImports,
             dartName,
             dartTemplate,
-            dartRuntimeImports
+            dartRuntimeImports,
+            whenArgCount
         );
     }
 

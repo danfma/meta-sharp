@@ -140,6 +140,15 @@ public sealed class MapMethodAttribute : Attribute
     /// </summary>
     public string? DartRuntimeImports { get; init; }
 
+    /// <summary>
+    /// Optional argument-count filter. When set, this declaration only matches a call
+    /// site whose argument count equals this value. Used to disambiguate overloads
+    /// when one shape lowers cleanly and another does not — e.g. <c>Console.WriteLine(value)</c>
+    /// (single-arg, maps to Dart's <c>print(value)</c>) vs the format-string
+    /// <c>Console.WriteLine(format, args...)</c> (no clean Dart equivalent).
+    /// </summary>
+    public int WhenArgCount { get; init; } = -1;
+
     public MapMethodAttribute(Type declaringType, string csharpMethod)
     {
         DeclaringType = declaringType;
