@@ -1,11 +1,11 @@
 import { Enumerable, isString } from "metano-runtime";
-import { Priority } from "./priority";
+import type { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
 
 export class TodoList {
   private readonly _items: TodoItem[] = [];
 
-  constructor(readonly name: string) { }
+  constructor(readonly name: string) {}
 
   get items(): TodoItem[] {
     return this._items;
@@ -35,7 +35,11 @@ export class TodoList {
   add(item: TodoItem): void;
   add(title: string): void;
   add(...args: unknown[]): void {
-    if (args.length === 2 && isString(args[0]) && (args[1] === "low" || args[1] === "medium" || args[1] === "high")) {
+    if (
+      args.length === 2 &&
+      isString(args[0]) &&
+      (args[1] === "low" || args[1] === "medium" || args[1] === "high")
+    ) {
       this.addTitlePriority(args[0] as string, args[1] as Priority);
 
       return;

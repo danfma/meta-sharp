@@ -1,6 +1,6 @@
 using Metano.Annotations;
 
-namespace SampleCounterV5.Bindings;
+namespace SampleCounterV5.Inferno;
 
 /// <summary>
 /// Inferno's virtual-DOM node type. The npm package exports it as

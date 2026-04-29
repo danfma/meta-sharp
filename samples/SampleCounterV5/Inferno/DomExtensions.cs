@@ -1,7 +1,6 @@
-using Metano.Annotations;
 using Metano.TypeScript.DOM;
 
-namespace SampleCounterV5.Bindings;
+namespace SampleCounterV5.Inferno;
 
 public static class DomExtensions
 {

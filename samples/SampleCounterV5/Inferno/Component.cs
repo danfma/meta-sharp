@@ -1,6 +1,6 @@
 using Metano.Annotations;
 
-namespace SampleCounterV5.Bindings;
+namespace SampleCounterV5.Inferno;
 
 /// <summary>
 /// Strongly-typed wrapper over Inferno's stateful <c>Component</c> class.

@@ -1,6 +1,6 @@
 using Metano.Annotations;
-using SampleCounterV5.Bindings;
-using static SampleCounterV5.Bindings.Inferno;
+using SampleCounterV5.Inferno;
+using static SampleCounterV5.Inferno.Inferno;
 
 namespace SampleCounterV5.Mvu;
 

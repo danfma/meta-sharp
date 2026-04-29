@@ -1,6 +1,6 @@
 using Metano.Annotations;
 
-namespace SampleCounterV5.Bindings;
+namespace SampleCounterV5.Inferno;
 
 /// <summary>
 /// Thin facade over <c>inferno-create-element</c>. <c>[Erasable]</c>

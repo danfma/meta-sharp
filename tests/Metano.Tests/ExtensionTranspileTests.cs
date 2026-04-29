@@ -167,7 +167,10 @@ public class ExtensionTranspileTests
         );
 
         var output = result["int-extensions.ts"];
-        var firstOccurrence = output.IndexOf("export function doubled(", System.StringComparison.Ordinal);
+        var firstOccurrence = output.IndexOf(
+            "export function doubled(",
+            System.StringComparison.Ordinal
+        );
         var secondOccurrence = output.IndexOf(
             "export function doubled(",
             firstOccurrence + 1,

@@ -1,0 +1,12 @@
+{
+  "format_on_save": true,
+  "formatter": {
+    "language_server": {
+      "name": "biome",
+    },
+    "external": {
+      "command": "biome",
+      "arguments": ["format", "--write", "{buffer_path}"],
+    },
+  },
+}

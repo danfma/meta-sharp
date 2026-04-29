@@ -1,4 +1,4 @@
-using SampleCounterV5.Bindings;
+using SampleCounterV5.Inferno;
 using SampleCounterV5.Models;
 using static SampleCounterV5.Mvu.Ui;
 
