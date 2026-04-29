@@ -32,17 +32,25 @@ public sealed record DeclarativeMappingEntry(
     string? RuntimeImports = null,
     string? DartName = null,
     string? DartTemplate = null,
-    string? DartRuntimeImports = null
+    string? DartRuntimeImports = null,
+    int? WhenArgCount = null
 )
 {
     public bool HasTemplate => JsTemplate is not null;
 
     public bool HasDartTemplate => DartTemplate is not null;
 
+    /// <summary>True when at least one TypeScript-target field is populated.
+    /// The TS backend filters with this so a Dart-only entry never reaches
+    /// <c>IrToTsBclMapper</c>'s <c>JsName!</c> / <c>JsTemplate!</c> dereferences.</summary>
+    public bool HasJsMapping => JsName is not null || JsTemplate is not null;
+
     /// <summary>True when at least one Dart-target field is populated.</summary>
     public bool HasDartMapping => DartName is not null || DartTemplate is not null;
 
     public bool HasArgFilter => WhenArg0StringEquals is not null;
+
+    public bool HasArgCountFilter => WhenArgCount is not null;
 
     public bool HasWrapReceiver => WrapReceiver is not null;
 

@@ -298,6 +298,26 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task DartMethodMapping_HonorsWhenArgCountFilter()
+    {
+        // The Console.WriteLine → print mapping is gated to single-arg
+        // overloads (WhenArgCount = 1). A format-string call site stays
+        // unmapped because Dart's `print` only accepts one argument.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public class FormattedLogger
+            {
+                public static void Log() => Console.WriteLine("hi {0}", 1);
+            }
+            """
+        );
+
+        var dart = files["formatted_logger.dart"];
+        await Assert.That(dart).DoesNotContain("print('hi {0}', 1)");
+    }
+
+    [Test]
     public async Task DartMethodMapping_OnlyAppliesToDartTarget()
     {
         // Mappings declared only on the JS side leave the Dart output untouched

@@ -29,6 +29,10 @@ public static class IrToTsBclMapper
             )
         )
             return null;
+        // Dart-only entries share the registry but carry no JS data; skip
+        // them so the dereferences in ApplyPropertyMapping never see nulls.
+        if (!entry.HasJsMapping)
+            return null;
         var receiver = access.Origin.IsStatic ? null : loweredTarget;
         return ApplyPropertyMapping(entry, receiver);
     }
@@ -60,6 +64,17 @@ public static class IrToTsBclMapper
         DeclarativeMappingEntry? match = null;
         foreach (var candidate in candidates)
         {
+            // Multi-target attributes can carry only Dart-side data; those
+            // entries must be invisible to the TS pipeline because the call
+            // site below dereferences `JsName!` / `JsTemplate!` and would
+            // crash otherwise.
+            if (!candidate.HasJsMapping)
+                continue;
+            if (
+                candidate.HasArgCountFilter
+                && candidate.WhenArgCount != loweredArgs.Count
+            )
+                continue;
             if (DeclarativeMappingRendering.MatchesArgFilter(candidate, loweredArgs))
             {
                 match = candidate;

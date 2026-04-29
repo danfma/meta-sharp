@@ -31,7 +31,10 @@ public static class IrToDartBclMapper
         )
             return null;
 
-        var match = candidates.FirstOrDefault(c => c.HasDartMapping);
+        var match = candidates.FirstOrDefault(c =>
+            c.HasDartMapping
+            && (!c.HasArgCountFilter || c.WhenArgCount == call.Arguments.Count)
+        );
         if (match is null)
             return null;
         if (match.DartName is not null)
