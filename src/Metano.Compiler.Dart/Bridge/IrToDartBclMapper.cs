@@ -62,7 +62,10 @@ public static class IrToDartBclMapper
 
         return access.Origin.IsStatic
             ? new IrIdentifier(entry.DartName)
-            : access with { MemberName = entry.DartName };
+            : access with
+            {
+                MemberName = entry.DartName,
+            };
     }
 
     /// <summary>

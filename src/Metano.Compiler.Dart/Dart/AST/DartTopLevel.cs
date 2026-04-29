@@ -96,5 +96,16 @@ public sealed record DartConstructorParameter(
     Metano.Compiler.IR.IrExpression? DefaultValue = null
 );
 
+/// <summary>
+/// A Dart <c>typedef</c> aliasing a function signature, e.g.
+/// <c>typedef MouseListener = void Function(MouseEvent e);</c>. Metano
+/// emits one per transpilable C# delegate.
+/// </summary>
+public sealed record DartTypedef(
+    string Name,
+    DartFunctionType Signature,
+    IReadOnlyList<DartTypeParameter>? TypeParameters = null
+) : DartTopLevel;
+
 /// <summary>A complete generated Dart source file.</summary>
 public sealed record DartSourceFile(string FileName, IReadOnlyList<DartTopLevel> Statements);

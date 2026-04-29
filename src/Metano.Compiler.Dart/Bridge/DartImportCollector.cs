@@ -67,9 +67,11 @@ public static class DartImportCollector
     );
 
     // ── AST walkers ───────────────────────────────────────────────────────
-    // Phase 2 only emits class/enum/function declarations, so the walker doesn't
-    // descend into method bodies or expressions. Phase 5 (records, exception
-    // types, dispatchers, delegates) will need a body-aware extension here.
+    // The walker covers the AST shape the bridge currently emits: classes,
+    // module-level functions, and delegate-derived typedefs. Method bodies and
+    // expression-level references aren't traversed yet — the body printer
+    // resolves those identifiers directly. Future AST features (exception
+    // types, dispatcher-style classes) will plug in additional cases here.
 
     private static void WalkTopLevel(DartTopLevel stmt, WalkContext ctx)
     {
@@ -84,6 +86,17 @@ public static class DartImportCollector
                 WalkType(fn.ReturnType, ctx);
                 foreach (var p in fn.Parameters)
                     WalkType(p.Type, ctx);
+                break;
+            case DartTypedef td:
+                // Delegate-derived typedefs alias a function signature; both the
+                // return and parameter types pull imports. Type-parameter
+                // constraints can also reference cross-package types, so walk
+                // each `extends` bound here too.
+                WalkType(td.Signature, ctx);
+                if (td.TypeParameters is not null)
+                    foreach (var tp in td.TypeParameters)
+                        if (tp.Extends is not null)
+                            WalkType(tp.Extends, ctx);
                 break;
         }
     }

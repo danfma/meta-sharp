@@ -50,7 +50,18 @@ public sealed class Printer
             case DartFunction fn:
                 PrintFunction(sb, fn);
                 break;
+            case DartTypedef td:
+                PrintTypedef(sb, td);
+                break;
         }
+    }
+
+    private static void PrintTypedef(StringBuilder sb, DartTypedef td)
+    {
+        sb.Append("typedef ").Append(td.Name);
+        if (td.TypeParameters is { Count: > 0 })
+            sb.Append('<').Append(FormatTypeParams(td.TypeParameters)).Append('>');
+        sb.Append(" = ").Append(FormatType(td.Signature)).AppendLine(";");
     }
 
     private static void PrintFunction(StringBuilder sb, DartFunction fn)
