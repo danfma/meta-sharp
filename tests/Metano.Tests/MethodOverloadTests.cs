@@ -219,9 +219,7 @@ public class MethodOverloadTests
             """
         );
 
-        await Assert
-            .That(diagnostics.Any(d => d.Code == "MS0001"))
-            .IsFalse();
+        await Assert.That(diagnostics.Any(d => d.Code == "MS0001")).IsFalse();
 
         var output = result["stateful-widget.ts"];
         await Assert.That(output).Contains("build(): string");

@@ -5,7 +5,7 @@ export class Heading extends Widget {
 
   private readonly _level: number = 0;
 
-  constructor(content: string, level: number) {
+  constructor(content: string, level: number = 1) {
     super();
     this._content = content;
     this._level = level;

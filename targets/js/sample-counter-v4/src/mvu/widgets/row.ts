@@ -1,7 +1,7 @@
 import { Widget } from "#/mvu";
 
 export class Row extends Widget {
-  private readonly _gap: number = 0;
+  private readonly _gap: number;
 
   private readonly _children: Widget[];
 
