@@ -24,6 +24,11 @@
       "types": "./lib/*",
       "import": "./lib/*",
       "default": "./src/*"
+    },
+    "#": {
+      "types": "./dist/sample-counter/index.d.ts",
+      "import": "./dist/sample-counter/index.js",
+      "default": "./src/sample-counter/index.ts"
     }
   }
 }
