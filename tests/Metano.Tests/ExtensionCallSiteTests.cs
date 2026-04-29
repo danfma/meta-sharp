@@ -142,6 +142,83 @@ public class ExtensionCallSiteTests
     }
 
     [Test]
+    public async Task ClassicExtension_NamedArguments_CallSiteReorders()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public static class IntExt
+            {
+                public static int Combine(this int x, int a, int b) => x + a + b;
+            }
+
+            [Transpile]
+            public class Calc
+            {
+                public int Run(int n) => n.Combine(b: 2, a: 1);
+            }
+            """
+        );
+
+        var caller = result["calc.ts"];
+        await Assert.That(caller).Contains("combine(n, 1, 2)");
+    }
+
+    [Test]
+    public async Task ClassicExtension_ParamsArray_CallSiteSpreadsRest()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public static class IntExt
+            {
+                public static int Sum(this int x, params int[] values) => x;
+            }
+
+            [Transpile]
+            public class Calc
+            {
+                public int Run(int n) => n.Sum(1, 2, 3);
+            }
+            """
+        );
+
+        var caller = result["calc.ts"];
+        await Assert.That(caller).Contains("sum(n, 1, 2, 3)");
+    }
+
+    [Test]
+    public async Task ClassicExtensionProperty_AcrossFile_ImportsAtCallSite()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public static class IntExt
+            {
+                public static int Squared(this int x) => x * x;
+                public static bool IsEven(this int x) => x % 2 == 0;
+            }
+
+            [Transpile]
+            public class Calc
+            {
+                public bool Run(int n) => n.IsEven();
+            }
+            """
+        );
+
+        var caller = result["calc.ts"];
+        await Assert.That(caller).Contains("isEven(n)");
+        await Assert.That(caller).Contains("import { isEven }");
+    }
+
+    [Test]
     public async Task TwoExtensionsSameEmittedName_RaisesMs0021()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
