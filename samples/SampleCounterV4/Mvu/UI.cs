@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using SampleCounterV4.Mvu.Widgets;
 
 namespace SampleCounterV4.Mvu;
@@ -6,15 +7,21 @@ namespace SampleCounterV4.Mvu;
 // `using static SampleCounterV4.Mvu.UI;` and write `Column(...)`, `Row(...)`,
 // etc. without `new`. A real generator would scan widget classes and emit
 // one factory per public ctor.
+[Erasable]
 public static class UI
 {
+    [ObjectArgs]
     public static Column Column(int gap, Widget[] children) => new(gap, children);
 
+    [ObjectArgs]
     public static Row Row(int gap, Widget[] children) => new(gap, children);
 
+    [ObjectArgs]
     public static Text Text(string content) => new(content);
 
+    [ObjectArgs]
     public static Heading Heading(string content, int level = 1) => new(content, level);
 
+    [ObjectArgs]
     public static Button Button(string label, Action onPressed) => new(label, onPressed);
 }

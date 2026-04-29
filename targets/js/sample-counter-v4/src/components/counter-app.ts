@@ -1,5 +1,5 @@
 import { Counter } from "#/models";
-import { App, StatefulWidget, UI, type BuildContext, type Widget } from "#/mvu";
+import { App, StatefulWidget, button, column, heading, row, type BuildContext, type Widget } from "#/mvu";
 
 export class CounterApp extends StatefulWidget<Counter> {
   constructor() {
@@ -11,7 +11,22 @@ export class CounterApp extends StatefulWidget<Counter> {
   }
 
   protected build(ctx: BuildContext<Counter>): Widget {
-    return UI.column(12, [UI.heading(`Count: ${ctx.state.count}`, 1), UI.row(8, [UI.button("➖", () => ctx.setState((s: Counter) => s.decrement())), UI.button("➕", () => ctx.setState((s: Counter) => s.increment())), UI.button("Reset", () => ctx.setState((_: Counter) => Counter.zero))])]);
+    return column({
+      gap: 12,
+      children: [heading({ content: `Count: ${ctx.state.count}` }), row({
+        gap: 8,
+        children: [button({
+          label: "➖",
+          onPressed: () => ctx.setState((s: Counter) => s.decrement()),
+        }), button({
+          label: "➕",
+          onPressed: () => ctx.setState((s: Counter) => s.increment()),
+        }), button({
+          label: "Reset",
+          onPressed: () => ctx.setState((_: Counter) => Counter.zero),
+        })],
+      })],
+    });
   }
 
   static mount(containerId: string): void {
