@@ -37,6 +37,8 @@ The current stable code range is **`MS0001` through `MS0018`**, with
 | `MS0016` | `InvalidInline` | `[Inline]` was applied to an unsupported shape (instance or mutable field, field without initializer, block-bodied property, non-static property, or any other target). |
 | `MS0017` | `InterfacePrefixCollision` | Stripping the `I` prefix from an interface name (under `--strip-interface-prefix`) would collide with another top-level type in the same namespace. Keeps the prefix so the consumer surface stays compilable. |
 | `MS0018` | `InvalidThis` | `[This]` (from `Metano.Annotations`) was applied outside the first positional parameter, or combined with `ref` / `out` / `params`. |
+| `MS0019` | `GenericNewConstraint` | Instantiating a generic type parameter via the `new()` constraint produces invalid TypeScript because TS erases generics at runtime. |
+| `MS0020` | `ErasableFactoryNameClash` | A `[Erasable]` static method's emitted TS name (after `[Name]` resolution, otherwise camelCase) collides with the TS name of a transpilable type the same emit scope can see, or with another `[Erasable]` factory of the same name across classes. |
 
 ## Reserved Codes
 

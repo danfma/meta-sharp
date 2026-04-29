@@ -184,4 +184,17 @@ public static class DiagnosticCodes
     /// (<c>Func&lt;T&gt;</c>) instead, then call the factory at the use
     /// site.</summary>
     public const string GenericNewConstraint = "MS0019";
+
+    /// <summary>MS0020 — a <c>[Erasable]</c> static method's emitted name
+    /// (after <c>[Name]</c> resolution, otherwise camelCase) collides
+    /// with the TS name of a transpilable type the same emit scope can
+    /// see, or with another <c>[Erasable]</c> factory of the same name
+    /// across classes. The collision silently produces broken TypeScript:
+    /// the import collector resolves the bare identifier to the factory
+    /// instead of the class, the factory body's <c>new ClassName(...)</c>
+    /// becomes a recursive call, and consumer files import the function
+    /// where they meant the type. Rename the factory via
+    /// <c>[Name(\"otherName\")]</c> or drop the override to fall back to
+    /// camelCase.</summary>
+    public const string ErasableFactoryNameClash = "MS0020";
 }
