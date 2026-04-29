@@ -118,7 +118,7 @@ public class ExtensionTranspileTests
         );
 
         var output = result["int-extensions.ts"];
-        await Assert.That(output).Contains("export function isEven(value: number): boolean");
+        await Assert.That(output).Contains("export function isEven$get(value: number): boolean");
         await Assert.That(output).Contains("value % 2 === 0");
     }
 
@@ -140,7 +140,7 @@ public class ExtensionTranspileTests
         );
 
         var output = result["string-extensions.ts"];
-        await Assert.That(output).Contains("export function isBlank(text: string): boolean");
+        await Assert.That(output).Contains("export function isBlank$get(text: string): boolean");
         await Assert
             .That(output)
             .Contains("export function repeat(text: string, times: number): string");

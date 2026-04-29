@@ -154,7 +154,7 @@ public static class IrModuleFunctionExtractor
             .ToList();
 
         return new IrModuleFunction(
-            Name: prop.Name,
+            Name: prop.Name + IrExtensionConventions.PropertyGetterSuffix,
             Parameters: parameters,
             ReturnType: IrTypeRefMapper.Map(prop.Type, originResolver),
             Body: body,
@@ -320,7 +320,7 @@ public static class IrModuleFunctionExtractor
         }
 
         return new IrModuleFunction(
-            Name: prop.Name,
+            Name: prop.Name + IrExtensionConventions.PropertyGetterSuffix,
             Parameters: [receiver],
             ReturnType: IrTypeRefMapper.Map(prop.Type, originResolver),
             Body: body,

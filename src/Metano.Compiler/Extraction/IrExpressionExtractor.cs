@@ -1221,6 +1221,22 @@ public sealed class IrExpressionExtractor
             }
         }
 
+        // Extension property read: `receiver.Prop` against a classic
+        // `(this T)` extension property or a C# 14 `extension(T) { T Prop }`
+        // block lowers to the module-level helper `prop$get(receiver)`.
+        if (
+            symbol is IPropertySymbol propSymbol
+            && TryResolveExtensionPropertyLowering(propSymbol, member) is { } propLowering
+        )
+        {
+            return BuildExtensionHelperCall(
+                propLowering.HelperContainer,
+                propLowering.HelperName,
+                [new IrArgument(Extract(member.Expression))],
+                typeArguments: null
+            );
+        }
+
         var target = Extract(member.Expression);
         var name = member.Name.Identifier.ValueText;
 
@@ -1610,6 +1626,35 @@ public sealed class IrExpressionExtractor
         {
             if (TryExpandInlineMethod(inv, symbol) is { } inlinedBody)
                 return inlinedBody;
+        }
+
+        // Extension method call site (classic `(this T)` reduced form or
+        // C# 14 `extension(T r) { … }` block): `receiver.Method(args)`
+        // lowers to the module-level helper `method(receiver, args)`.
+        // Without the rewrite the receiver carries a phantom property
+        // access (`receiver.method()`) at runtime — there is no such
+        // member on the receiver type because the helper lives on the
+        // extension's static container.
+        if (
+            symbol is IMethodSymbol extensionCallee
+            && inv.Expression is MemberAccessExpressionSyntax extensionAccess
+            && TryResolveExtensionLowering(extensionCallee, extensionAccess) is { } extLowering
+        )
+        {
+            var receiver = Extract(extensionAccess.Expression);
+            var extensionArgs = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+            ApplyParamsSpread(extensionArgs, extLowering.OriginSymbol, inv.ArgumentList.Arguments);
+            IReadOnlyList<IrTypeRef>? extensionTypeArgs = null;
+            if (symbol is { TypeArguments.Length: > 0 })
+                extensionTypeArgs = symbol
+                    .TypeArguments.Select(t => IrTypeRefMapper.Map(t, _originResolver, _target))
+                    .ToList();
+            return BuildExtensionHelperCall(
+                extLowering.HelperContainer,
+                extLowering.HelperName,
+                [new IrArgument(receiver), .. extensionArgs],
+                extensionTypeArgs
+            );
         }
 
         var target = Extract(inv.Expression);
@@ -2112,6 +2157,171 @@ public sealed class IrExpressionExtractor
     /// </summary>
     private IrArgument ExtractArgument(ArgumentSyntax argument) =>
         new(Extract(argument.Expression), argument.NameColon?.Name.Identifier.ValueText);
+
+    /// <summary>
+    /// Builds the canonical IR shape for an extension-helper call:
+    /// <c>helper(receiver, args)</c> emitted as a static call on the
+    /// helper's enclosing container. Carries the
+    /// <see cref="IrMemberOrigin.IsDeclaringTypeErasable"/> invariant so
+    /// the bridge drops the type qualifier and the import collector
+    /// imports the helper directly. Shared by the method-call and
+    /// property-read rewrites so the contract has a single source of
+    /// truth.
+    /// </summary>
+    private static IrCallExpression BuildExtensionHelperCall(
+        INamedTypeSymbol helperContainer,
+        string helperName,
+        IReadOnlyList<IrArgument> arguments,
+        IReadOnlyList<IrTypeRef>? typeArguments
+    )
+    {
+        var origin = new IrMemberOrigin(
+            DeclaringTypeFullName: helperContainer.GetStableFullName(),
+            MemberName: helperName,
+            IsStatic: true,
+            IsDeclaringTypeExternal: SymbolHelper.HasExternal(helperContainer),
+            IsDeclaringTypeErasable: true
+        );
+        return new IrCallExpression(
+            new IrMemberAccess(new IrTypeReference(helperContainer.Name), helperName, origin),
+            arguments,
+            typeArguments,
+            origin
+        );
+    }
+
+    private readonly record struct ExtensionCallLowering(
+        IMethodSymbol OriginSymbol,
+        string HelperName,
+        INamedTypeSymbol HelperContainer
+    );
+
+    private readonly record struct ExtensionPropertyLowering(
+        string HelperName,
+        INamedTypeSymbol HelperContainer
+    );
+
+    private ExtensionPropertyLowering? TryResolveExtensionPropertyLowering(
+        IPropertySymbol prop,
+        MemberAccessExpressionSyntax access
+    )
+    {
+        if (prop.IsIndexer)
+            return null;
+        var containing = prop.ContainingType;
+        if (containing is null)
+            return null;
+
+        // C# 14 extension block property: ContainingType is a synthetic
+        // anonymous type whose own ContainingType is a static class.
+        if (
+            string.IsNullOrEmpty(containing.Name)
+            && containing.ContainingType is { IsStatic: true } parentStatic
+            && IsTranspilableExtensionContainer(parentStatic)
+        )
+        {
+            var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
+            if (receiverSymbol is INamedTypeSymbol)
+                return null;
+            return new ExtensionPropertyLowering(
+                prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+                parentStatic
+            );
+        }
+
+        // Classic extension property — Roslyn surfaces the property with
+        // the receiver in `prop.Parameters[0]` and the property declared
+        // on a static class.
+        if (
+            containing.IsStatic
+            && prop.Parameters.Length > 0
+            && IsTranspilableExtensionContainer(containing)
+        )
+        {
+            var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
+            if (receiverSymbol is INamedTypeSymbol)
+                return null;
+            return new ExtensionPropertyLowering(
+                prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+                containing
+            );
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Detects an extension-style call (classic <c>(this T)</c> reduced
+    /// form or C# 14 <c>extension(T r) { … }</c> block) and returns the
+    /// lowering target — the symbol to import from and the helper name
+    /// at the call site. Returns <c>null</c> when the call is a plain
+    /// instance / static method invocation.
+    /// </summary>
+    private ExtensionCallLowering? TryResolveExtensionLowering(
+        IMethodSymbol callee,
+        MemberAccessExpressionSyntax access
+    )
+    {
+        if (
+            callee.ReducedFrom is { } reduced
+            && IsTranspilableExtensionContainer(reduced.ContainingType)
+        )
+            return new ExtensionCallLowering(reduced, reduced.Name, reduced.ContainingType);
+
+        var containing = callee.ContainingType;
+        if (containing is null)
+            return null;
+
+        // C# 14 extension block: ContainingType is a synthetic anonymous
+        // type whose own ContainingType is the user's static class.
+        if (
+            string.IsNullOrEmpty(containing.Name)
+            && containing.ContainingType is { IsStatic: true } parentStatic
+            && IsTranspilableExtensionContainer(parentStatic)
+        )
+        {
+            var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
+            if (receiverSymbol is INamedTypeSymbol)
+                return null;
+            return new ExtensionCallLowering(callee, callee.Name, parentStatic);
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Skips BCL / external static classes (LINQ, framework helpers) so
+    /// their extension calls keep flowing through the BCL mapper instead
+    /// of getting rewritten to local helper calls. The lowering applies
+    /// only when the extension lives in user-transpilable code.
+    /// </summary>
+    private bool IsTranspilableExtensionContainer(INamedTypeSymbol? container)
+    {
+        if (container is null)
+            return false;
+        if (SymbolHelper.HasNoEmit(container))
+            return false;
+        if (SymbolHelper.HasExternal(container))
+            return false;
+        if (SymbolHelper.HasImport(container))
+            return false;
+        var assembly = container.ContainingAssembly;
+        if (assembly is null)
+            return false;
+        if (
+            !SymbolEqualityComparer.Default.Equals(assembly, _semantic.Compilation.Assembly)
+            && !HasAssemblyTranspileAttribute(assembly)
+        )
+            return false;
+        return true;
+    }
+
+    private static bool HasAssemblyTranspileAttribute(IAssemblySymbol assembly) =>
+        assembly
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
+            );
 
     /// <summary>
     /// Marks the trailing argument as a spread when the C# call passes a

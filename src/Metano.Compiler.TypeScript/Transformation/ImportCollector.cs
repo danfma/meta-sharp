@@ -303,6 +303,30 @@ public sealed class ImportCollector(
                 continue;
             }
 
+            // Extension helper reference: a call site that lowered an
+            // extension method or property (`receiver.Squared()` →
+            // `squared(receiver)`) needs to import the helper from the
+            // static class's emitted file. The frontend doesn't see this
+            // path — the rewrite happens in the IR extractor — so the
+            // resolution is keyed on the camelCase helper name registered
+            // in the per-context module-helpers map.
+            if (
+                valueTypes.Contains(typeName)
+                && _context.ExtensionHelperFunctions.TryGetValue(typeName, out var helperOwner)
+                && importedNames.Add(typeName)
+            )
+            {
+                if (helperOwner.Namespace == currentNs && helperOwner.FileName == currentFileName)
+                    continue;
+                var helperPath = _context.PathNaming.ComputeRelativeImportPath(
+                    currentNs,
+                    helperOwner.Namespace,
+                    helperOwner.FileName
+                );
+                AddLocal(helperPath, typeName, typeOnly: false);
+                continue;
+            }
+
             // Transpilable type within the project
             if (!_context.TranspilableTypes.TryGetValue(typeName, out var referencedRef))
                 continue;

@@ -59,6 +59,107 @@ public sealed class TypeScriptTransformContext(
     public IReadOnlyDictionary<string, IrTranspilableTypeRef> TranspilableTypes { get; } =
         transpilableTypes;
 
+    /// <summary>
+    /// Maps the camelCase emitted name of every transpilable extension
+    /// helper (classic <c>(this T)</c> method, C# 14 <c>extension(T) { … }</c>
+    /// member) to the <see cref="IrTranspilableTypeRef"/> of the static
+    /// class that hosts it. The import collector queries this when a call
+    /// site references a helper unqualified — the lowering pass drops the
+    /// static-class prefix, so the resulting <c>squared(n)</c> needs to
+    /// resolve back to its owning file (<c>./int-ext</c>) at import time.
+    /// Built lazily on first access from <see cref="Compilation"/> against
+    /// <see cref="TranspilableTypes"/> so the registry stays in sync with
+    /// the project's emitted-file layout.
+    /// </summary>
+    public IReadOnlyDictionary<string, IrTranspilableTypeRef> ExtensionHelperFunctions =>
+        _extensionHelperFunctions ??= BuildExtensionHelperFunctions();
+
+    private IReadOnlyDictionary<string, IrTranspilableTypeRef>? _extensionHelperFunctions;
+
+    private IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildExtensionHelperFunctions()
+    {
+        var map = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
+        if (CurrentAssembly is null)
+            return map;
+
+        foreach (var type in EnumerateTopLevelStaticTypes(CurrentAssembly.GlobalNamespace))
+        {
+            if (!TranspilableTypes.TryGetValue(type.Name, out var ownerRef))
+                continue;
+
+            foreach (var member in type.GetMembers())
+                RegisterStaticClassMember(member, ownerRef, map);
+        }
+
+        return map;
+    }
+
+    private static void RegisterStaticClassMember(
+        ISymbol member,
+        IrTranspilableTypeRef ownerRef,
+        Dictionary<string, IrTranspilableTypeRef> map
+    )
+    {
+        switch (member)
+        {
+            case IMethodSymbol method
+                when method.IsExtensionMethod
+                    && method.MethodKind is MethodKind.Ordinary
+                    && method.DeclaredAccessibility == Accessibility.Public:
+                map[TypeScriptNaming.ToCamelCase(method.Name)] = ownerRef;
+                break;
+
+            case INamedTypeSymbol nested
+                when string.IsNullOrEmpty(nested.Name)
+                    && nested.ContainingType is { IsStatic: true }:
+                foreach (var nestedMember in nested.GetMembers())
+                    RegisterExtensionBlockMember(nestedMember, ownerRef, map);
+                break;
+        }
+    }
+
+    private static void RegisterExtensionBlockMember(
+        ISymbol member,
+        IrTranspilableTypeRef ownerRef,
+        Dictionary<string, IrTranspilableTypeRef> map
+    )
+    {
+        switch (member)
+        {
+            case IMethodSymbol method
+                when method.MethodKind is MethodKind.Ordinary
+                    && method.DeclaredAccessibility == Accessibility.Public:
+                map[TypeScriptNaming.ToCamelCase(method.Name)] = ownerRef;
+                break;
+
+            case IPropertySymbol prop
+                when prop.DeclaredAccessibility == Accessibility.Public && !prop.IsIndexer:
+                map[
+                    TypeScriptNaming.ToCamelCase(prop.Name)
+                        + IrExtensionConventions.PropertyGetterSuffix
+                ] = ownerRef;
+                break;
+        }
+    }
+
+    private static IEnumerable<INamedTypeSymbol> EnumerateTopLevelStaticTypes(INamespaceSymbol root)
+    {
+        foreach (var member in root.GetMembers())
+        {
+            switch (member)
+            {
+                case INamespaceSymbol ns:
+                    foreach (var nested in EnumerateTopLevelStaticTypes(ns))
+                        yield return nested;
+                    break;
+
+                case INamedTypeSymbol { IsStatic: true } type:
+                    yield return type;
+                    break;
+            }
+        }
+    }
+
     public IReadOnlyDictionary<string, IrExternalImport> ExternalImportMap { get; } =
         externalImportMap;
     public IReadOnlyDictionary<string, IrBclExport> BclExportMap { get; } = bclExportMap;
