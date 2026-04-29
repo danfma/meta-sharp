@@ -7,8 +7,8 @@ function createAppState() {
 
   const counter = new CounterPresenter({
     displayCounter(counter) {
-      setCount(counter.count)
-    }
+      setCount(counter.count);
+    },
   });
 
   const increment = () => counter.increment();
@@ -18,17 +18,21 @@ function createAppState() {
 }
 
 function App() {
-    const { count, increment, decrement } = createAppState();
+  const { count, increment, decrement } = createAppState();
 
-    return (
-      <div>
-        <div class={styles.counter}>
-          <button class={styles.action} type="button" onclick={decrement}>-</button>
-          <pre class={styles.text}>{count()}</pre>
-          <button class={styles.action} type="button" onclick={increment}>+</button>
-        </div>
+  return (
+    <div>
+      <div class={styles.counter}>
+        <button class={styles.action} type="button" onclick={decrement}>
+          -
+        </button>
+        <pre class={styles.text}>{count()}</pre>
+        <button class={styles.action} type="button" onclick={increment}>
+          +
+        </button>
       </div>
-    )
+    </div>
+  );
 }
 
-export default App
+export default App;
