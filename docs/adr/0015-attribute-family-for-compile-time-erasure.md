@@ -1,7 +1,15 @@
 # ADR-0015 — Attribute family for compile-time erasure and inlining
 
-**Status:** Proposed
+**Status:** Accepted (Phase 2 landed via #106 on 2026-04-29)
 **Date:** 2026-04-23
+
+## Implementation status
+
+- Phase 1 (#97): `[Erasable]`, `[External]` widened, `[NoEmit]` redefinition deferred — landed.
+- Phase 2 (#106): `[NoEmit]` as `.NET-only` painting + MS0013, `[External]` flatten removal, ambient migration, `[ExportedAsModule]` `[Obsolete]` re-enabled — **landed in 2026-04-29 across PR1-PR4** (`e845479`, `af3402b`, `bb2a5dc`, `61c525a`).
+- Phase 3 (#98): `[Constant]` — pending.
+- Phase 4 (#99): `[Branded]` rename of `[InlineWrapper]` — pending.
+
 
 ## Context
 
