@@ -28,7 +28,7 @@ public static class IrToTsExpressionBridge
         {
             IrLiteral lit => MapLiteral(lit),
             IrIdentifier id => new TsIdentifier(TypeScriptNaming.ToCamelCase(id.Name)),
-            IrTypeReference tr => new TsIdentifier(tr.Name),
+            IrTypeReference tr => new TsIdentifier(IrToTsTypeMapper.ResolveAliasedName(tr.Name)),
             IrThisExpression => new TsIdentifier("this"),
             IrBaseExpression => new TsIdentifier("super"),
             IrMemberAccess ma => MapMemberAccess(ma, bclRegistry),

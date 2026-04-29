@@ -1,10 +1,10 @@
-import { Button, Column, Heading, Row, Text } from "#/mvu/widgets";
+import { Button, Column as ColumnWidget, Heading, Row, Text } from "#/mvu/widgets";
 import type { Widget } from "./widget";
 
-export function column(args: { gap: number; children: Widget[] }): Column {
+export function Column(args: { gap: number; children: Widget[] }): ColumnWidget {
   const { gap, children } = args;
 
-  return new Column(gap, children);
+  return new ColumnWidget(gap, children);
 }
 
 export function row(args: { gap: number; children: Widget[] }): Row {

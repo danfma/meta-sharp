@@ -10,5 +10,6 @@ namespace Metano.TypeScript.AST;
 public sealed record TsNamedType(
     string Name,
     IReadOnlyList<TsType>? TypeArguments = null,
-    TsTypeOrigin? Origin = null
+    TsTypeOrigin? Origin = null,
+    string? OriginalName = null
 ) : TsType;

@@ -51,6 +51,30 @@ public sealed class ImportCollector(
             crossPackageOrigins
         );
 
+        // C# `using X = Y;` aliases substitute the canonical type name with
+        // the user's alias on every emitted token. The walker therefore sees
+        // the alias text only; recover the canonical via the per-file scope
+        // so the import line resolves to the canonical and emits the
+        // matching `{ Canonical as Alias }` form.
+        var aliasOverrides = new Dictionary<string, string>(StringComparer.Ordinal);
+        if (IrToTsTypeMapper.UsingAliases is { } activeScope)
+        {
+            foreach (var name in referencedTypes.ToList())
+            {
+                if (
+                    !activeScope.AliasToCanonical.TryGetValue(name, out var canonical)
+                    || aliasOverrides.ContainsKey(canonical)
+                )
+                    continue;
+                referencedTypes.Add(canonical);
+                if (valueTypes.Contains(name))
+                    valueTypes.Add(canonical);
+                aliasOverrides[canonical] = name;
+                referencedTypes.Remove(name);
+                valueTypes.Remove(name);
+            }
+        }
+
         var tsTypeName = _context.ResolveTsName(currentType);
         referencedTypes.Remove(currentType.Name);
         referencedTypes.Remove(tsTypeName);
@@ -187,7 +211,11 @@ public sealed class ImportCollector(
         // rather than per-name `{ type A, type B }`).
         var localByPath = new Dictionary<
             string,
-            (List<string> Names, HashSet<string> TypeOnlyNames)
+            (
+                List<string> Names,
+                HashSet<string> TypeOnlyNames,
+                Dictionary<string, string> Aliases
+            )
         >(StringComparer.Ordinal);
 
         // Per-specifier dedup inside a bucket. The outer `importedNames` set dedupes
@@ -203,7 +231,11 @@ public sealed class ImportCollector(
         {
             if (!localByPath.TryGetValue(importPath, out var bucket))
             {
-                bucket = (new List<string>(), new HashSet<string>(StringComparer.Ordinal));
+                bucket = (
+                    new List<string>(),
+                    new HashSet<string>(StringComparer.Ordinal),
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                );
                 localByPath[importPath] = bucket;
             }
             if (!bucket.Names.Contains(name))
@@ -212,6 +244,8 @@ public sealed class ImportCollector(
                 bucket.TypeOnlyNames.Add(name);
             else
                 bucket.TypeOnlyNames.Remove(name);
+            if (aliasOverrides.TryGetValue(name, out var aliasName))
+                bucket.Aliases[name] = aliasName;
         }
 
         foreach (var typeName in referencedTypes.OrderBy(n => n))
@@ -333,7 +367,16 @@ public sealed class ImportCollector(
             // declaring type's emit metadata so the import points at
             // the right module file with the lowercase function name
             // (NOT the type's TsName) as the imported symbol.
-            if (
+            //
+            // Skip when the name shows up only because a `using` alias
+            // remapped a colliding canonical type — the reference belongs
+            // to the imported type, not to the local factory that happens
+            // to share the same emitted name.
+            if (aliasOverrides.ContainsKey(typeName))
+            {
+                // fall through to the transpilable-type branch
+            }
+            else if (
                 _context.ErasableFunctionExports.TryGetValue(typeName, out var erasableOwner)
                 && importedNames.Add(typeName)
             )
@@ -395,7 +438,8 @@ public sealed class ImportCollector(
                     bucket.Names.ToArray(),
                     importPath,
                     TypeOnly: allTypeOnly,
-                    TypeOnlyNames: !allTypeOnly && anyTypeOnly ? bucket.TypeOnlyNames : null
+                    TypeOnlyNames: !allTypeOnly && anyTypeOnly ? bucket.TypeOnlyNames : null,
+                    Aliases: bucket.Aliases.Count > 0 ? bucket.Aliases : null
                 )
             );
         }

@@ -1,5 +1,5 @@
 import { Counter } from "#/models";
-import { App, StatefulWidget, button, column, heading, row, type BuildContext, type Widget } from "#/mvu";
+import { App, Column, StatefulWidget, button, heading, row, type BuildContext, type Widget } from "#/mvu";
 
 export class CounterApp extends StatefulWidget<Counter> {
   constructor() {
@@ -11,7 +11,7 @@ export class CounterApp extends StatefulWidget<Counter> {
   }
 
   protected build(ctx: BuildContext<Counter>): Widget {
-    return column({
+    return Column({
       gap: 12,
       children: [heading({ content: `Count: ${ctx.state.count}` }), row({
         gap: 8,

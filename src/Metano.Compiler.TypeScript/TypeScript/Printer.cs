@@ -309,26 +309,30 @@ public sealed class Printer(string indent = "  ")
         else
         {
             _sb.Write("{ ");
-            // Per-name `type` qualifier: `import { Foo, type Bar } from "...";`. Only
-            // applied when the statement isn't already wholly type-only — otherwise
-            // the per-name qualifiers would be redundant. The set is empty in the
-            // common case so the join short-circuits to the plain form.
+            // Per-name `type` qualifier and per-name alias: `import { Foo, type Bar,
+            // Baz as BazAlias } from "...";`. The alias renders as `Original as Local`;
+            // the `type` qualifier prefixes the whole token (`type Original as Local`)
+            // when the name is type-only and the statement isn't already wholly
+            // type-only.
             var typeOnlyNames = import.TypeOnlyNames;
-            if (typeOnlyNames is null || typeOnlyNames.Count == 0 || import.TypeOnly)
+            var aliases = import.Aliases;
+            var parts = new string[import.Names.Length];
+            for (var i = 0; i < import.Names.Length; i++)
             {
-                _sb.Write(string.Join(", ", import.Names));
+                var name = import.Names[i];
+                var rendered =
+                    aliases is not null && aliases.TryGetValue(name, out var local)
+                        ? $"{name} as {local}"
+                        : name;
+                if (
+                    typeOnlyNames is { Count: > 0 } qualified
+                    && !import.TypeOnly
+                    && qualified.Contains(name)
+                )
+                    rendered = "type " + rendered;
+                parts[i] = rendered;
             }
-            else
-            {
-                var parts = new string[import.Names.Length];
-                for (var i = 0; i < import.Names.Length; i++)
-                {
-                    parts[i] = typeOnlyNames.Contains(import.Names[i])
-                        ? "type " + import.Names[i]
-                        : import.Names[i];
-                }
-                _sb.Write(string.Join(", ", parts));
-            }
+            _sb.Write(string.Join(", ", parts));
             _sb.Write(" }");
         }
         _sb.Write(" from ");

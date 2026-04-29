@@ -34,5 +34,6 @@ public sealed record TsImport(
     bool TypeOnly = false,
     bool IsDefault = false,
     IReadOnlySet<string>? TypeOnlyNames = null,
-    bool IsNamespace = false
+    bool IsNamespace = false,
+    IReadOnlyDictionary<string, string>? Aliases = null
 ) : TsTopLevel;

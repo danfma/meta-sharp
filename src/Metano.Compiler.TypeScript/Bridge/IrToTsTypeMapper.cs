@@ -66,19 +66,57 @@ public static class IrToTsTypeMapper
         set => _namedTypeRenames.Value = value;
     }
 
+    /// <summary>
+    /// Per-source-file alias map captured from C# <c>using X = Y;</c>
+    /// directives. Set by <c>TypeTransformer</c> per emitted file group so
+    /// every <see cref="MapNamed"/> call inside that file can substitute
+    /// the canonical type name with the user's alias and the import
+    /// collector can render the matching <c>{ Original as Alias }</c>
+    /// form. <see cref="AsyncLocal{T}"/> keeps the slot per execution
+    /// context so parallel test runs don't race.
+    /// </summary>
+    private static readonly AsyncLocal<UsingAliasScope?> _usingAliases = new();
+
+    internal static UsingAliasScope? UsingAliases
+    {
+        get => _usingAliases.Value;
+        set => _usingAliases.Value = value;
+    }
+
+    /// <summary>
+    /// Returns the alias for <paramref name="canonicalName"/> if one is
+    /// active for the current emitted file, otherwise the canonical name
+    /// itself. Used at every emit site that produces a type-name token —
+    /// declarations, body-position identifiers, and static-member access
+    /// roots — so the alias replaces the canonical consistently.
+    /// </summary>
+    public static string ResolveAliasedName(string canonicalName) =>
+        UsingAliases is { } scope && scope.CanonicalToAlias.TryGetValue(canonicalName, out var alias)
+            ? alias
+            : canonicalName;
+
     private static TsType MapNamed(IrNamedTypeRef named, IrToTsTypeOverrides? overrides)
     {
         var name = named.Name;
         if (NamedTypeRenames is { } renames && renames.TryGetValue(name, out var renamed))
             name = renamed;
 
-        TsTypeOrigin? origin = named.Origin is { } o ? BuildTsOrigin(o, name) : null;
+        string? originalName = null;
+        if (UsingAliases is { } aliasScope && aliasScope.CanonicalToAlias.TryGetValue(name, out var aliasName))
+        {
+            originalName = name;
+            name = aliasName;
+        }
+
+        TsTypeOrigin? origin = named.Origin is { } o
+            ? BuildTsOrigin(o, originalName ?? name)
+            : null;
 
         IReadOnlyList<TsType>? args = named.TypeArguments is { Count: > 0 } ta
             ? ta.Select(t => Map(t, overrides)).ToList()
             : null;
 
-        return new TsNamedType(name, args, origin);
+        return new TsNamedType(name, args, origin, originalName);
     }
 
     /// <summary>

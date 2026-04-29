@@ -1,6 +1,6 @@
 using SampleCounterV4.Models;
 using SampleCounterV4.Mvu;
-using static SampleCounterV4.Mvu.UI;
+using static SampleCounterV4.Mvu.Ui;
 
 namespace SampleCounterV4.Components;
 

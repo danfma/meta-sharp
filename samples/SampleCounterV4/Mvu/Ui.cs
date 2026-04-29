@@ -1,5 +1,6 @@
 using Metano.Annotations;
 using SampleCounterV4.Mvu.Widgets;
+using ColumnWidget = SampleCounterV4.Mvu.Widgets.Column;
 
 namespace SampleCounterV4.Mvu;
 
@@ -8,10 +9,10 @@ namespace SampleCounterV4.Mvu;
 // etc. without `new`. A real generator would scan widget classes and emit
 // one factory per public ctor.
 [Erasable]
-public static class UI
+public static class Ui
 {
-    [ObjectArgs]
-    public static Column Column(int gap, Widget[] children) => new(gap, children);
+    [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Column))]
+    public static ColumnWidget Column(int gap, Widget[] children) => new(gap, children);
 
     [ObjectArgs]
     public static Row Row(int gap, Widget[] children) => new(gap, children);

@@ -202,6 +202,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             transpilableTypesDict,
             ir.BclExports,
             ir.ExternalImports,
+            compilation,
             _diagnostics.Add
         );
 
@@ -444,26 +445,52 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         );
         var statements = new List<TsTopLevel>();
         var anyEmitted = false;
-        foreach (var type in group.Types)
+
+        // Per-file C# `using X = Y;` aliases substitute canonical type
+        // names with the user-declared alias for the duration of this
+        // group's emission. Restoring the previous slot in finally keeps
+        // the AsyncLocal state clean across groups (and across parallel
+        // test runs).
+        var primarySyntaxTree = group.Types[0].DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
+        var previousAliases = IrToTsTypeMapper.UsingAliases;
+        IrToTsTypeMapper.UsingAliases = UsingAliasResolver.ResolveForTree(
+            primarySyntaxTree,
+            Context.Compilation
+        );
+
+        try
         {
-            if (BuildTypeStatements(type, statements, irCache))
-                anyEmitted = true;
+            foreach (var type in group.Types)
+            {
+                if (BuildTypeStatements(type, statements, irCache))
+                    anyEmitted = true;
+            }
+
+            if (!anyEmitted)
+                return null;
+
+            // Import collection runs inside the same alias scope: body-side
+            // identifiers like `new ColumnWidget(...)` carry the alias text
+            // only and need the AliasToCanonical map to recover the
+            // imported canonical name.
+            var primaryType = group.Types[0];
+            var irRequirements = ScanIrRuntimeRequirements(group.Types, irCache);
+            var imports = new ImportCollector(Context, irRequirements).Collect(
+                primaryType,
+                statements
+            );
+            statements.InsertRange(0, imports);
+
+            var relativePath = Context.PathNaming.GetRelativePath(
+                group.Namespace,
+                group.FileName
+            );
+            return new TsSourceFile(relativePath, statements, group.Namespace);
         }
-
-        if (!anyEmitted)
-            return null;
-
-        // The import collector takes a "current type" so it can elide self-imports for
-        // a type's own guard function. We pass the first type in the group; for
-        // multi-type files, the elision still works for the primary type, and other
-        // types in the same file aren't imported anyway (they're locally declared).
-        var primaryType = group.Types[0];
-        var irRequirements = ScanIrRuntimeRequirements(group.Types, irCache);
-        var imports = new ImportCollector(Context, irRequirements).Collect(primaryType, statements);
-        statements.InsertRange(0, imports);
-
-        var relativePath = Context.PathNaming.GetRelativePath(group.Namespace, group.FileName);
-        return new TsSourceFile(relativePath, statements, group.Namespace);
+        finally
+        {
+            IrToTsTypeMapper.UsingAliases = previousAliases;
+        }
     }
 
     /// <summary>
@@ -1105,6 +1132,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
         IReadOnlyDictionary<string, IrBclExport> bclExports,
         IReadOnlyDictionary<string, IrExternalImport> externalImports,
+        Compilation compilation,
         Action<MetanoDiagnostic> reportDiagnostic
     )
     {
@@ -1132,7 +1160,15 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
                 var fnName = ResolveErasableFunctionName(member);
 
-                if (TryReportImportNameCollision(member, fnName, reservedNames, reportDiagnostic))
+                if (
+                    TryReportImportNameCollision(
+                        member,
+                        fnName,
+                        reservedNames,
+                        compilation,
+                        reportDiagnostic
+                    )
+                )
                     continue;
                 if (
                     TryReportFactoryCollision(member, fnName, claimedFactoryNames, reportDiagnostic)
@@ -1266,11 +1302,24 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IMethodSymbol factory,
         string factoryName,
         IReadOnlyDictionary<string, ReservedImportName> reservedNames,
+        Compilation compilation,
         Action<MetanoDiagnostic> reportDiagnostic
     )
     {
         if (!reservedNames.TryGetValue(factoryName, out var reserved))
             return false;
+
+        // A C# `using` alias on the colliding canonical name in the
+        // factory's source file remaps the imported symbol to a different
+        // local identifier — the factory's name is then free. Skip the
+        // diagnostic so the user's resolution stays valid.
+        var factoryTree = factory.DeclaringSyntaxReferences.FirstOrDefault()?.SyntaxTree;
+        if (
+            UsingAliasResolver.ResolveForTree(factoryTree, compilation) is { } scope
+            && scope.CanonicalToAlias.ContainsKey(factoryName)
+        )
+            return false;
+
         var owner = factory.ContainingType!.Name;
         reportDiagnostic(
             new MetanoDiagnostic(
