@@ -282,8 +282,22 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
             foreach (var stmt in body)
                 ReportUnsupportedInBody(stmt, type);
 
-        if (irMethod.Overloads is { Count: > 0 })
+        if (irMethod.Overloads is { Count: > 0 } overloads)
         {
+            if (
+                IrToTsObjectArgsBridge.HasObjectArgs(irMethod.Attributes)
+                || overloads.Any(o => IrToTsObjectArgsBridge.HasObjectArgs(o.Attributes))
+            )
+            {
+                _context.ReportUnsupportedBody(
+                    type,
+                    $"Method '{type.Name}.{irMethod.Name}' combines [ObjectArgs] with "
+                        + "overloading, which the transpiler does not yet support; "
+                        + "the overload group was skipped."
+                );
+                return null;
+            }
+
             var dispatcher = TryBuildOverloadDispatcherFromIr(irMethod, type.Name);
             if (dispatcher is null)
             {
@@ -298,6 +312,23 @@ public sealed class IrToTsClassEmitter(TypeScriptTransformContext context)
         }
 
         var (parameters, returnType, typeParameters) = LowerMethodSignature(irMethod, ir);
+
+        if (
+            !irMethod.Semantics.IsAbstract
+            && IrToTsObjectArgsBridge.HasObjectArgs(irMethod.Attributes)
+        )
+        {
+            return
+            [
+                IrToTsClassBridge.BuildObjectArgsMethod(
+                    irMethod,
+                    returnType,
+                    typeParameters,
+                    _context.DeclarativeMappings
+                ),
+            ];
+        }
+
         return
         [
             IrToTsClassBridge.BuildMethod(
