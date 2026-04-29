@@ -274,6 +274,22 @@ public static class SymbolHelper
     /// <c>[Inline]</c> attributes from other libraries are not
     /// mistaken for the Metano variant.
     /// </summary>
+    /// <summary>
+    /// True when the symbol carries <c>[ObjectArgs]</c> from
+    /// <c>Metano.Annotations</c>, asking the transpiler to lower its
+    /// parameter list as a single object literal at the TypeScript
+    /// surface (JSX-style "props as object"). Applies to methods,
+    /// constructors, and classes (class-level form propagates to the
+    /// primary constructor).
+    /// </summary>
+    public static bool HasObjectArgs(this ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .Any(a =>
+                a.AttributeClass?.Name is ("ObjectArgsAttribute" or "ObjectArgs")
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
+            );
+
     public static bool HasInline(this ISymbol symbol) =>
         symbol
             .GetAttributes()

@@ -29,6 +29,42 @@ public sealed class Printer(string indent = "  ")
     }
 
     /// <summary>
+    /// Renders a single <see cref="TsType"/> to text. Used by bridges
+    /// that need to embed a type fragment inside a synthesized raw
+    /// statement (e.g., the <c>[ObjectArgs]</c> destructuring header).
+    /// </summary>
+    public string PrintType(string indent, TsType type)
+    {
+        _sb.Clear();
+        PrintType(type);
+        return _sb.ToString();
+    }
+
+    /// <summary>
+    /// Renders a single <see cref="TsExpression"/> to text. Used by
+    /// bridges that need to embed an expression fragment inside a
+    /// synthesized raw statement.
+    /// </summary>
+    public string PrintExpressionFragment(TsExpression expression)
+    {
+        _sb.Clear();
+        PrintExpression(expression);
+        return _sb.ToString();
+    }
+
+    public static string RenderType(TsType type) => new Printer().PrintTypeOnce(type);
+
+    public static string RenderExpression(TsExpression expression) =>
+        new Printer().PrintExpressionFragment(expression);
+
+    private string PrintTypeOnce(TsType type)
+    {
+        _sb.Clear();
+        PrintType(type);
+        return _sb.ToString();
+    }
+
+    /// <summary>
     /// Decides if a blank line should separate two consecutive top-level statements.
     /// Imports/re-exports are grouped together with no blank lines. Distinct kinds
     /// (types vs functions vs constants) get a blank line between them. Same-kind

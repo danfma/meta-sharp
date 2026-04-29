@@ -1653,7 +1653,46 @@ public sealed class IrExpressionExtractor
         if (symbol is not null && args.Any(a => a.Name is not null))
             args = NormalizeArguments(args, symbol).ToList();
 
+        if (symbol is not null && SymbolHelper.HasObjectArgs(symbol))
+            args = WrapInObjectArgs(args, symbol);
+
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol));
+    }
+
+    /// <summary>
+    /// Collapses an ordered argument list into a single
+    /// <see cref="IrObjectLiteral"/> whose property names come from
+    /// the resolved method's parameter names. Argument slots whose
+    /// value matches the parameter's explicit default literal are
+    /// dropped so the emitted object literal stays minimal.
+    /// </summary>
+    private static List<IrArgument> WrapInObjectArgs(
+        IReadOnlyList<IrArgument> orderedArgs,
+        IMethodSymbol symbol
+    )
+    {
+        var properties = new List<(string Name, IrExpression Value)>();
+        for (var i = 0; i < symbol.Parameters.Length && i < orderedArgs.Count; i++)
+        {
+            var argument = orderedArgs[i];
+            if (
+                symbol.Parameters[i].HasExplicitDefaultValue
+                && argument.Value is IrLiteral literal
+                && IsLiteralEqualToDefault(literal, symbol.Parameters[i].ExplicitDefaultValue)
+            )
+                continue;
+            properties.Add((symbol.Parameters[i].Name, argument.Value));
+        }
+        return new List<IrArgument> { new(new IrObjectLiteral(properties)) };
+    }
+
+    private static bool IsLiteralEqualToDefault(IrLiteral literal, object? defaultValue)
+    {
+        if (literal.Value is null)
+            return defaultValue is null;
+        if (defaultValue is null)
+            return false;
+        return literal.Value.Equals(defaultValue);
     }
 
     /// <summary>

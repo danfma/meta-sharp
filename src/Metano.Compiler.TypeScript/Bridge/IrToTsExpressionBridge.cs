@@ -70,6 +70,10 @@ public static class IrToTsExpressionBridge
                 ye.Value is not null ? $"yield {FormatInner(ye.Value)}" : "yield"
             ),
             IrOptionalChain chain => MapOptionalChain(chain, bclRegistry),
+            IrObjectLiteral obj => new TsObjectLiteral(
+                obj.Properties.Select(p => new TsObjectProperty(p.Name, Map(p.Value, bclRegistry)))
+                    .ToList()
+            ),
             IrThrowExpression th => new TsCallExpression(
                 new TsParenthesized(
                     new TsArrowFunction([], [new TsThrowStatement(Map(th.Expression, bclRegistry))])

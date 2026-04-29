@@ -30,37 +30,56 @@ public static class IrAttributeExtractor
     /// </summary>
     public static IReadOnlyList<IrAttribute>? Extract(ISymbol symbol)
     {
-        Dictionary<string, object?>? args = null;
+        Dictionary<string, object?>? nameArgs = null;
+        var others = new List<IrAttribute>();
         foreach (var attr in symbol.GetAttributes())
         {
-            if (attr.AttributeClass?.Name is not ("NameAttribute" or "Name"))
-                continue;
-            if (attr.ConstructorArguments.Length == 0)
-                continue;
-
-            // `[Name("x")]` — a single string arg → untargeted.
-            if (
-                attr.ConstructorArguments.Length == 1
-                && attr.ConstructorArguments[0].Value is string untargetedName
-            )
+            var attrName = attr.AttributeClass?.Name;
+            if (attrName is "NameAttribute" or "Name")
             {
-                (args ??= new())["Value"] = untargetedName;
+                if (attr.ConstructorArguments.Length == 0)
+                    continue;
+
+                // `[Name("x")]` — a single string arg → untargeted.
+                if (
+                    attr.ConstructorArguments.Length == 1
+                    && attr.ConstructorArguments[0].Value is string untargetedName
+                )
+                {
+                    (nameArgs ??= new())["Value"] = untargetedName;
+                    continue;
+                }
+
+                // `[Name(TargetLanguage.Dart, "x")]` — enum value (int) + string.
+                if (
+                    attr.ConstructorArguments.Length >= 2
+                    && attr.ConstructorArguments[0].Value is int targetValue
+                    && attr.ConstructorArguments[1].Value is string perTargetName
+                    && System.Enum.IsDefined(typeof(TargetLanguage), targetValue)
+                )
+                {
+                    var key = ((TargetLanguage)targetValue).ToString();
+                    (nameArgs ??= new())[key] = perTargetName;
+                }
                 continue;
             }
 
-            // `[Name(TargetLanguage.Dart, "x")]` — enum value (int) + string.
+            // Surface a small set of behavior-shaping attributes so backends
+            // can branch without re-reading the Roslyn symbol. Add to this
+            // list as new attributes need bridge-side dispatch.
             if (
-                attr.ConstructorArguments.Length >= 2
-                && attr.ConstructorArguments[0].Value is int targetValue
-                && attr.ConstructorArguments[1].Value is string perTargetName
-                && System.Enum.IsDefined(typeof(TargetLanguage), targetValue)
+                attr.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
+                && attrName is "ObjectArgsAttribute" or "ObjectArgs"
             )
             {
-                var key = ((TargetLanguage)targetValue).ToString();
-                (args ??= new())[key] = perTargetName;
+                others.Add(new IrAttribute("ObjectArgs"));
             }
         }
 
-        return args is null ? null : [new IrAttribute("Name", args)];
+        var result = new List<IrAttribute>();
+        if (nameArgs is not null)
+            result.Add(new IrAttribute("Name", nameArgs));
+        result.AddRange(others);
+        return result.Count == 0 ? null : result;
     }
 }

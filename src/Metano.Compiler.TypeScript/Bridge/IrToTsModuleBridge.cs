@@ -41,6 +41,11 @@ public static class IrToTsModuleBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
+        var name = IrToTsNamingPolicy.ToFunctionName(fn.Name, fn.Attributes);
+
+        if (HasObjectArgsAttribute(fn.Attributes))
+            return ConvertObjectArgsFunction(fn, name, bclRegistry);
+
         var parameters = fn
             .Parameters.Select(p => new TsParameter(
                 TypeScriptNaming.ToCamelCase(p.Name),
@@ -53,11 +58,6 @@ public static class IrToTsModuleBridge
             ))
             .ToList();
         var body = IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, bclRegistry);
-
-        // [Name] overrides (including the TypeScript-specific form) decide the
-        // emitted function name; IrToTsNamingPolicy encapsulates the
-        // target-aware lookup.
-        var name = IrToTsNamingPolicy.ToFunctionName(fn.Name, fn.Attributes);
 
         return new TsFunction(
             name,
@@ -72,6 +72,66 @@ public static class IrToTsModuleBridge
             TypeParameters: MapTypeParameters(fn.TypeParameters)
         );
     }
+
+    private static TsFunction ConvertObjectArgsFunction(
+        IrModuleFunction fn,
+        string name,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        // Build the synthetic `args: { p1: T1; p2?: T2 }` parameter
+        // shape — every C# parameter becomes a field on the object,
+        // optional ones (those with a default) carry the `?:` suffix
+        // so callers can omit them.
+        var fieldFragments = new List<string>();
+        var destructuringFragments = new List<string>();
+        foreach (var p in fn.Parameters)
+        {
+            var pName = TypeScriptNaming.ToCamelCase(p.Name);
+            var pType = Printer.RenderType(IrToTsTypeMapper.Map(p.Type)).Trim();
+            var isOptional = p.IsOptional || p.HasDefaultValue;
+            fieldFragments.Add($"{pName}{(isOptional ? "?" : "")}: {pType}");
+
+            if (p.HasDefaultValue && p.DefaultValue is not null)
+            {
+                var defaultText = Printer
+                    .RenderExpression(IrToTsExpressionBridge.Map(p.DefaultValue, bclRegistry))
+                    .Trim();
+                destructuringFragments.Add($"{pName} = {defaultText}");
+            }
+            else
+            {
+                destructuringFragments.Add(pName);
+            }
+        }
+
+        var argsType = new TsNamedType("{ " + string.Join("; ", fieldFragments) + " }");
+        var argsParam = new TsParameter("args", argsType);
+
+        var body = new List<TsStatement>
+        {
+            new TsRawStatement(
+                "const { " + string.Join(", ", destructuringFragments) + " } = args;"
+            ),
+        };
+        var loweredBody = IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, bclRegistry);
+        body.AddRange(loweredBody);
+
+        return new TsFunction(
+            name,
+            [argsParam],
+            IrToTsTypeMapper.Map(fn.ReturnType),
+            body,
+            Exported: true,
+            Async: fn.Semantics.IsAsync,
+            Generator: fn.Semantics.IsGenerator,
+            TypeParameters: MapTypeParameters(fn.TypeParameters)
+        );
+    }
+
+    private static bool HasObjectArgsAttribute(IReadOnlyList<IrAttribute>? attributes) =>
+        attributes is { Count: > 0 } list
+        && list.Any(a => a.Name is "ObjectArgsAttribute" or "ObjectArgs");
 
     private static IReadOnlyList<TsTypeParameter>? MapTypeParameters(
         IReadOnlyList<IrTypeParameter>? typeParameters
