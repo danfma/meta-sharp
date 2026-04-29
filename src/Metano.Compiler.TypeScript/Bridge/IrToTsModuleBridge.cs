@@ -43,7 +43,7 @@ public static class IrToTsModuleBridge
     {
         var name = IrToTsNamingPolicy.ToFunctionName(fn.Name, fn.Attributes);
 
-        if (HasObjectArgsAttribute(fn.Attributes))
+        if (IrToTsObjectArgsBridge.HasObjectArgs(fn.Attributes))
             return ConvertObjectArgsFunction(fn, name, bclRegistry);
 
         var parameters = fn
@@ -79,43 +79,13 @@ public static class IrToTsModuleBridge
         DeclarativeMappingRegistry? bclRegistry
     )
     {
-        // Build the synthetic `args: { p1: T1; p2?: T2 }` parameter
-        // shape — every C# parameter becomes a field on the object,
-        // optional ones (those with a default) carry the `?:` suffix
-        // so callers can omit them.
-        var fieldFragments = new List<string>();
-        var destructuringFragments = new List<string>();
-        foreach (var p in fn.Parameters)
-        {
-            var pName = TypeScriptNaming.ToCamelCase(p.Name);
-            var pType = Printer.RenderType(IrToTsTypeMapper.Map(p.Type)).Trim();
-            var isOptional = p.IsOptional || p.HasDefaultValue;
-            fieldFragments.Add($"{pName}{(isOptional ? "?" : "")}: {pType}");
+        var (argsParam, destructure) = IrToTsObjectArgsBridge.BuildArgsParam(
+            fn.Parameters,
+            bclRegistry
+        );
 
-            if (p.HasDefaultValue && p.DefaultValue is not null)
-            {
-                var defaultText = Printer
-                    .RenderExpression(IrToTsExpressionBridge.Map(p.DefaultValue, bclRegistry))
-                    .Trim();
-                destructuringFragments.Add($"{pName} = {defaultText}");
-            }
-            else
-            {
-                destructuringFragments.Add(pName);
-            }
-        }
-
-        var argsType = new TsNamedType("{ " + string.Join("; ", fieldFragments) + " }");
-        var argsParam = new TsParameter("args", argsType);
-
-        var body = new List<TsStatement>
-        {
-            new TsRawStatement(
-                "const { " + string.Join(", ", destructuringFragments) + " } = args;"
-            ),
-        };
-        var loweredBody = IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, bclRegistry);
-        body.AddRange(loweredBody);
+        var body = new List<TsStatement> { destructure };
+        body.AddRange(IrToTsBodyHelpers.LowerOrNotImplemented(fn.Body, fn.Name, bclRegistry));
 
         return new TsFunction(
             name,
@@ -128,10 +98,6 @@ public static class IrToTsModuleBridge
             TypeParameters: MapTypeParameters(fn.TypeParameters)
         );
     }
-
-    private static bool HasObjectArgsAttribute(IReadOnlyList<IrAttribute>? attributes) =>
-        attributes is { Count: > 0 } list
-        && list.Any(a => a.Name is "ObjectArgsAttribute" or "ObjectArgs");
 
     private static IReadOnlyList<TsTypeParameter>? MapTypeParameters(
         IReadOnlyList<IrTypeParameter>? typeParameters

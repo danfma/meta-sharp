@@ -274,6 +274,46 @@ internal static class IrToTsClassBridge
     }
 
     /// <summary>
+    /// Lowers an <c>[ObjectArgs]</c>-annotated method into a TS method whose
+    /// single parameter is the synthesized object literal type produced by
+    /// <see cref="IrToTsObjectArgsBridge.BuildArgsParam"/>; the destructure
+    /// header restores the original parameter names so the lowered body
+    /// keeps working unchanged. Abstract members are not routed through
+    /// this path — the caller filters them out.
+    /// </summary>
+    public static TsMethodMember BuildObjectArgsMethod(
+        IrMethodDeclaration method,
+        TsType returnType,
+        IReadOnlyList<TsTypeParameter>? typeParameters,
+        DeclarativeMappingRegistry? bclRegistry
+    )
+    {
+        var name = IrToTsNamingPolicy.ToMethodName(method.Name, method.Attributes);
+        var (argsParam, destructureHeader) = IrToTsObjectArgsBridge.BuildArgsParam(
+            method.Parameters,
+            bclRegistry
+        );
+
+        var body = new List<TsStatement> { destructureHeader };
+        body.AddRange(
+            IrToTsBodyHelpers.LowerOrNotImplemented(method.Body, method.Name, bclRegistry)
+        );
+
+        return new TsMethodMember(
+            name,
+            [argsParam],
+            returnType,
+            body,
+            Static: method.IsStatic,
+            Async: method.Semantics.IsAsync,
+            Generator: method.Semantics.IsGenerator,
+            Accessibility: MapAccessibility(method.Visibility),
+            TypeParameters: typeParameters,
+            Abstract: false
+        );
+    }
+
+    /// <summary>
     /// Lowers a single user-defined operator into a static method
     /// (<c>__add</c> / <c>__negate</c>) plus a thin instance helper
     /// (<c>$add(other)</c> / <c>$negate()</c>) that delegates to it.
