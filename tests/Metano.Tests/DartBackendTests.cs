@@ -201,6 +201,82 @@ public class DartBackendTests
     }
 
     [Test]
+    public async Task Delegate_LowersToDartTypedef()
+    {
+        // C# delegates lower to Dart typedefs aliasing a function signature.
+        // Asserting the diagnostic CODE (not just the legacy message) catches
+        // any future regression that re-introduces a different fallback warning.
+        var (files, diagnostics) = TranspileDart(
+            """
+            [Transpile]
+            public delegate void ClickHandler(int x, int y);
+            """
+        );
+
+        var dart = files["click_handler.dart"];
+        await Assert.That(dart).Contains("typedef ClickHandler = void Function(int, int);");
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsFalse();
+    }
+
+    [Test]
+    public async Task GenericDelegate_PreservesConstraintBound()
+    {
+        // The collector also walks `extends` bounds on type parameters so a
+        // constraint that references a cross-package type still pulls in the
+        // matching import. Local user-defined constraints round-trip through
+        // the typedef header.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public abstract class Comparable<T> {}
+
+            [Transpile]
+            public delegate T Sorter<T>(T left, T right) where T : Comparable<T>;
+            """
+        );
+
+        var dart = files["sorter.dart"];
+        await Assert.That(dart).Contains("typedef Sorter<T extends Comparable<T>> =");
+    }
+
+    [Test]
+    public async Task GenericDelegate_PreservesTypeParameters()
+    {
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public delegate T Factory<T>();
+            """
+        );
+
+        var dart = files["factory.dart"];
+        await Assert.That(dart).Contains("typedef Factory<T> = T Function();");
+    }
+
+    [Test]
+    public async Task DelegateWithThisAttribute_ReintroducesReceiverAsPositionalParam()
+    {
+        // Dart has no JS-style `this` rebinding, so `[This]` degrades — the
+        // receiver flows through as a regular positional parameter at index 0.
+        // Mirrors the existing widget-delegate behavior the class bridge already
+        // documents.
+        var (files, _) = TranspileDart(
+            """
+            [Transpile]
+            public abstract class Element {}
+
+            [Transpile]
+            public delegate void MouseListener([This] Element self, int x);
+            """
+        );
+
+        var dart = files["mouse_listener.dart"];
+        await Assert.That(dart).Contains("typedef MouseListener = void Function(Element, int);");
+    }
+
+    [Test]
     public async Task DartMethodMapping_RewritesStaticBclCallSite()
     {
         // `[MapMethod(..., DartMethod = "...")]` on a static C# member rewrites

@@ -136,19 +136,30 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                     ScanInto(runtimeRequirements, classIr);
                     break;
 
+                case TypeKind.Delegate:
+                    var delegateIr = IrDelegateExtractor.Extract(type, target: TargetLanguage.Dart);
+                    if (delegateIr is null)
+                    {
+                        _diagnostics.Add(
+                            new MetanoDiagnostic(
+                                MetanoDiagnosticSeverity.Warning,
+                                DiagnosticCodes.UnsupportedFeature,
+                                $"Dart target: failed to extract delegate IR for '{type.Name}'."
+                            )
+                        );
+                        continue;
+                    }
+                    IrToDartDelegateBridge.Convert(delegateIr, statements);
+                    ScanInto(runtimeRequirements, delegateIr);
+                    break;
+
                 default:
-                    var message =
-                        type.TypeKind == TypeKind.Delegate
-                            ? $"Dart target: '{type.Name}' is a transpilable delegate; the Dart "
-                                + "bridge does not yet emit a typedef, so consumers fall back to the "
-                                + "inline function-type form."
-                            : $"Dart target: type kind '{type.TypeKind}' for '{type.Name}' "
-                                + "is not yet supported.";
                     _diagnostics.Add(
                         new MetanoDiagnostic(
                             MetanoDiagnosticSeverity.Warning,
                             DiagnosticCodes.UnsupportedFeature,
-                            message
+                            $"Dart target: type kind '{type.TypeKind}' for '{type.Name}' "
+                                + "is not yet supported."
                         )
                     );
                     continue;

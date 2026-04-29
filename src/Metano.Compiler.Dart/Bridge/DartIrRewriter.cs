@@ -37,11 +37,17 @@ public sealed class DartIrRewriter
         {
             IrReturnStatement r => r.Value is null
                 ? r
-                : r with { Value = RewriteExpression(r.Value) },
+                : r with
+                {
+                    Value = RewriteExpression(r.Value),
+                },
             IrExpressionStatement e => e with { Expression = RewriteExpression(e.Expression) },
             IrVariableDeclaration v => v.Initializer is null
                 ? v
-                : v with { Initializer = RewriteExpression(v.Initializer) },
+                : v with
+                {
+                    Initializer = RewriteExpression(v.Initializer),
+                },
             IrIfStatement i => i with
             {
                 Condition = RewriteExpression(i.Condition),
@@ -90,7 +96,10 @@ public sealed class DartIrRewriter
         };
 
     private IrCatchClause RewriteCatch(IrCatchClause c) =>
-        c with { Body = c.Body.Select(RewriteStatement).ToList() };
+        c with
+        {
+            Body = c.Body.Select(RewriteStatement).ToList(),
+        };
 
     private IrSwitchCase RewriteSwitchCase(IrSwitchCase c) =>
         c with
@@ -121,7 +130,10 @@ public sealed class DartIrRewriter
             IrAwaitExpression a => a with { Expression = RewriteExpression(a.Expression) },
             IrYieldExpression y => y.Value is null
                 ? y
-                : y with { Value = RewriteExpression(y.Value) },
+                : y with
+                {
+                    Value = RewriteExpression(y.Value),
+                },
             IrNewExpression n => n with
             {
                 Arguments = n.Arguments.Select(RewriteArgument).ToList(),
@@ -132,18 +144,12 @@ public sealed class DartIrRewriter
                 Index = RewriteExpression(e.Index),
             },
             IrOptionalChain o => o with { Target = RewriteExpression(o.Target) },
-            IrLambdaExpression l => l with
-            {
-                Body = l.Body.Select(RewriteStatement).ToList(),
-            },
-            IrArrayLiteral a => a with
-            {
-                Elements = a.Elements.Select(RewriteExpression).ToList(),
-            },
+            IrLambdaExpression l => l with { Body = l.Body.Select(RewriteStatement).ToList() },
+            IrArrayLiteral a => a with { Elements = a.Elements.Select(RewriteExpression).ToList() },
             IrObjectLiteral o => o with
             {
-                Properties = o.Properties
-                    .Select(p => (p.Name, Value: RewriteExpression(p.Value)))
+                Properties = o
+                    .Properties.Select(p => (p.Name, Value: RewriteExpression(p.Value)))
                     .ToList(),
             },
             IrSpreadExpression s => s with { Expression = RewriteExpression(s.Expression) },
@@ -160,8 +166,8 @@ public sealed class DartIrRewriter
             IrWithExpression w => w with
             {
                 Source = RewriteExpression(w.Source),
-                Assignments = w.Assignments
-                    .Select(a => a with { Value = RewriteExpression(a.Value) })
+                Assignments = w
+                    .Assignments.Select(a => a with { Value = RewriteExpression(a.Value) })
                     .ToList(),
             },
             IrThrowExpression t => t with { Expression = RewriteExpression(t.Expression) },
@@ -214,5 +220,8 @@ public sealed class DartIrRewriter
     }
 
     private IrArgument RewriteArgument(IrArgument arg) =>
-        arg with { Value = RewriteExpression(arg.Value) };
+        arg with
+        {
+            Value = RewriteExpression(arg.Value),
+        };
 }

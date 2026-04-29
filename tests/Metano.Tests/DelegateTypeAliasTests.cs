@@ -148,7 +148,7 @@ public class DelegateTypeAliasTests
     }
 
     [Test]
-    public async Task DartTarget_TranspileDelegate_FallsBackWithDiagnostic()
+    public async Task DartTarget_TranspileDelegate_EmitsTypedef()
     {
         var (files, diagnostics) = TranspileHelper.TranspileDart(
             """
@@ -161,12 +161,13 @@ public class DelegateTypeAliasTests
             """
         );
 
-        await Assert.That(files).DoesNotContainKey("notifier.dart");
-        var fallback = diagnostics.FirstOrDefault(d =>
-            d.Code == DiagnosticCodes.UnsupportedFeature
-            && d.Message.Contains("Notifier", StringComparison.Ordinal)
-        );
-        await Assert.That(fallback).IsNotNull();
+        await Assert.That(files).ContainsKey("notifier.dart");
+        await Assert
+            .That(files["notifier.dart"])
+            .Contains("typedef Notifier = void Function(String);");
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.UnsupportedFeature))
+            .IsFalse();
     }
 
     [Test]

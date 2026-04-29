@@ -480,19 +480,5 @@ public static class IrToDartClassBridge
 
     private static IReadOnlyList<DartTypeParameter>? ConvertTypeParameters(
         IReadOnlyList<IrTypeParameter>? typeParameters
-    )
-    {
-        if (typeParameters is null || typeParameters.Count == 0)
-            return null;
-
-        return typeParameters
-            .Select(tp =>
-            {
-                var extends = tp.Constraints is { Count: > 0 } c
-                    ? IrToDartTypeMapper.Map(c[0])
-                    : null;
-                return new DartTypeParameter(tp.Name, extends);
-            })
-            .ToList();
-    }
+    ) => IrToDartTypeParameterMapper.Map(typeParameters);
 }

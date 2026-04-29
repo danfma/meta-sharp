@@ -1868,12 +1868,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             }
         }
 
-        if (
-            jsName is null
-            && jsTemplate is null
-            && dartName is null
-            && dartTemplate is null
-        )
+        if (jsName is null && jsTemplate is null && dartName is null && dartTemplate is null)
             return null;
 
         // Mutual-exclusion check is per-target: JsName/JsTemplate fight each
