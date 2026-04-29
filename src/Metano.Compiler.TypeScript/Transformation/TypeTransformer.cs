@@ -199,7 +199,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var erasableFunctionExports = BuildErasableFunctionExports(
             transpilableTypes,
-            transpilableTypesDict
+            transpilableTypesDict,
+            ir.BclExports,
+            ir.ExternalImports,
+            _diagnostics.Add
         );
 
         _context = new TypeScriptTransformContext(
@@ -1099,25 +1102,151 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// </summary>
     private static IReadOnlyDictionary<string, IrTranspilableTypeRef> BuildErasableFunctionExports(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes,
-        IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict
+        IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
+        IReadOnlyDictionary<string, IrBclExport> bclExports,
+        IReadOnlyDictionary<string, IrExternalImport> externalImports,
+        Action<MetanoDiagnostic> reportDiagnostic
     )
     {
+        var reservedNames = BuildReservedImportNames(
+            transpilableTypes,
+            transpilableTypesDict,
+            bclExports,
+            externalImports
+        );
+
         var exports = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
+        var claimedFactoryNames = new Dictionary<string, IMethodSymbol>(StringComparer.Ordinal);
+
         foreach (var type in transpilableTypes)
         {
             if (!SymbolHelper.HasErasable(type))
                 continue;
             if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
                 continue;
+
             foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
             {
                 if (!IsExportableErasableMethod(member))
                     continue;
-                exports.TryAdd(ResolveErasableFunctionName(member), typeRef);
+
+                var fnName = ResolveErasableFunctionName(member);
+
+                if (TryReportImportNameCollision(member, fnName, reservedNames, reportDiagnostic))
+                    continue;
+                if (
+                    TryReportFactoryCollision(member, fnName, claimedFactoryNames, reportDiagnostic)
+                )
+                    continue;
+
+                exports.Add(fnName, typeRef);
+                claimedFactoryNames.Add(fnName, member);
             }
         }
         return exports;
     }
+
+    /// <summary>
+    /// Collects every TS identifier the import collector would already
+    /// reserve in the consuming files: emitted transpilable types, BCL
+    /// exports (decimal → Decimal), and <c>[Import]</c> externals. A
+    /// <c>[Erasable]</c> factory whose emitted name collides with any of
+    /// these would shadow the existing import at the TS surface, breaking
+    /// the consumer file in subtle ways the user would only catch at
+    /// <c>tsc</c> time. <c>[Erasable]</c> owners and <c>[NoEmit]</c>
+    /// types are skipped because they emit no class and contribute no
+    /// surface name.
+    /// </summary>
+    private static IReadOnlyDictionary<string, ReservedImportName> BuildReservedImportNames(
+        IReadOnlyList<INamedTypeSymbol> transpilableTypes,
+        IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
+        IReadOnlyDictionary<string, IrBclExport> bclExports,
+        IReadOnlyDictionary<string, IrExternalImport> externalImports
+    )
+    {
+        var reserved = new Dictionary<string, ReservedImportName>(StringComparer.Ordinal);
+
+        foreach (var type in transpilableTypes)
+        {
+            if (SymbolHelper.HasErasable(type))
+                continue;
+            if (SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript))
+                continue;
+            if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
+                continue;
+            reserved[typeRef.TsName] = new ReservedImportName(
+                ReservedImportKind.TranspilableType,
+                type.ToDisplayString()
+            );
+        }
+
+        foreach (var entry in bclExports.Values)
+        {
+            if (entry.ExportedName.Length == 0)
+                continue;
+            reserved.TryAdd(
+                entry.ExportedName,
+                new ReservedImportName(
+                    ReservedImportKind.BclExport,
+                    $"{entry.ExportedName} (from {entry.FromPackage})"
+                )
+            );
+        }
+
+        foreach (var entry in externalImports.Values)
+        {
+            if (entry.Name.Length == 0)
+                continue;
+            reserved.TryAdd(
+                entry.Name,
+                new ReservedImportName(
+                    ReservedImportKind.ExternalImport,
+                    $"{entry.Name} (from {entry.From})"
+                )
+            );
+        }
+
+        foreach (var helper in WellKnownRuntimeHelpers)
+            reserved.TryAdd(
+                helper,
+                new ReservedImportName(
+                    ReservedImportKind.RuntimeHelper,
+                    $"{helper} (metano-runtime)"
+                )
+            );
+
+        return reserved;
+    }
+
+    /// <summary>
+    /// Names the TS target injects from <c>metano-runtime</c> through the
+    /// import collector. A factory name shadowing one of these would
+    /// produce a duplicate-binding TS error or — worse — silently
+    /// re-route runtime helper references to a user-defined function.
+    /// </summary>
+    private static readonly IReadOnlySet<string> WellKnownRuntimeHelpers = new HashSet<string>(
+        StringComparer.Ordinal
+    )
+    {
+        "Enumerable",
+        "Grouping",
+        "HashCode",
+        "HashSet",
+        "UUID",
+        "bindReceiver",
+        "delegateAdd",
+        "delegateRemove",
+    };
+
+    private enum ReservedImportKind
+    {
+        TranspilableType,
+        BclExport,
+        ExternalImport,
+        RuntimeHelper,
+    }
+
+    private readonly record struct ReservedImportName(ReservedImportKind Kind, string Description);
 
     private static bool IsExportableErasableMethod(IMethodSymbol member) =>
         member.IsStatic
@@ -1127,4 +1256,72 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private static string ResolveErasableFunctionName(IMethodSymbol member) =>
         SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
         ?? TypeScriptNaming.ToCamelCase(member.Name);
+
+    /// <summary>
+    /// Returns <c>true</c> when a diagnostic was reported for
+    /// <paramref name="factory"/> shadowing an import name the consumer
+    /// file already binds, signaling the caller to skip the export.
+    /// </summary>
+    private static bool TryReportImportNameCollision(
+        IMethodSymbol factory,
+        string factoryName,
+        IReadOnlyDictionary<string, ReservedImportName> reservedNames,
+        Action<MetanoDiagnostic> reportDiagnostic
+    )
+    {
+        if (!reservedNames.TryGetValue(factoryName, out var reserved))
+            return false;
+        var owner = factory.ContainingType!.Name;
+        reportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.ErasableFactoryNameClash,
+                $"[Erasable] static method '{owner}.{factory.Name}' resolves to TS factory "
+                    + $"name '{factoryName}', which collides with {DescribeReservedKind(reserved.Kind)} "
+                    + $"'{reserved.Description}'. Drop the [Name] override or pick a name that "
+                    + "does not match an emitted type or imported symbol.",
+                factory.Locations.FirstOrDefault()
+            )
+        );
+        return true;
+    }
+
+    /// <summary>
+    /// Anchored on the second occurrence — same convention as MS0008
+    /// (<c>EmitInFileConflict</c>). Returns <c>true</c> when a diagnostic
+    /// was reported, signaling the caller to skip the export.
+    /// </summary>
+    private static bool TryReportFactoryCollision(
+        IMethodSymbol factory,
+        string factoryName,
+        IReadOnlyDictionary<string, IMethodSymbol> claimedFactoryNames,
+        Action<MetanoDiagnostic> reportDiagnostic
+    )
+    {
+        if (!claimedFactoryNames.TryGetValue(factoryName, out var priorFactory))
+            return false;
+        var priorOwner = priorFactory.ContainingType!.Name;
+        var newOwner = factory.ContainingType!.Name;
+        reportDiagnostic(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.ErasableFactoryNameClash,
+                $"[Erasable] static method '{newOwner}.{factory.Name}' resolves to TS factory "
+                    + $"name '{factoryName}', which is already exported by "
+                    + $"'{priorOwner}.{priorFactory.Name}'. Rename one via [Name(\"...\")].",
+                factory.Locations.FirstOrDefault()
+            )
+        );
+        return true;
+    }
+
+    private static string DescribeReservedKind(ReservedImportKind kind) =>
+        kind switch
+        {
+            ReservedImportKind.TranspilableType => "transpilable type",
+            ReservedImportKind.BclExport => "BCL export",
+            ReservedImportKind.ExternalImport => "[Import] external",
+            ReservedImportKind.RuntimeHelper => "metano-runtime helper",
+            _ => "imported symbol",
+        };
 }
