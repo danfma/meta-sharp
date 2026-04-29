@@ -144,6 +144,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateInlineAttribute(compilation, diagnostics);
             ValidateThisAttribute(compilation, diagnostics);
             ValidateGenericNewConstraint(compilation, assemblyWideTranspile, diagnostics);
+            ValidateNoEmitReferences(compilation, assemblyWideTranspile, target, diagnostics);
         }
 
         return new IrCompilation(
@@ -551,6 +552,240 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// undefined identifier. The diagnostic surfaces the misuse early
     /// and points users at the factory / instance pattern.
     /// </summary>
+    /// <summary>
+    /// Per #106 the <c>[NoEmit]</c> attribute means ".NET-only" — any
+    /// reference to such a type from inside a transpilable type's
+    /// signature OR body raises <c>MS0013</c>. The walker scans every
+    /// reference position the IR/bridges traverse later: signatures
+    /// (params, return, fields, props, base, generic constraints),
+    /// bodies (locals, <c>new</c>, casts, <c>typeof</c>, generic args,
+    /// member access, lambda inferred types). Suppressed when the
+    /// containing type is itself non-transpilable (a <c>[NoEmit]</c>
+    /// type referencing another <c>[NoEmit]</c> type stays silent).
+    /// Target-aware: a <c>[NoEmit(TargetLanguage.Dart)]</c> type does
+    /// not light up under a TS run.
+    /// </summary>
+    private static void ValidateNoEmitReferences(
+        Compilation compilation,
+        bool assemblyWideTranspile,
+        Metano.Annotations.TargetLanguage target,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var currentAssembly = compilation.Assembly;
+        var seen = new HashSet<Location>();
+        CollectTopLevelTypes(
+            currentAssembly.GlobalNamespace,
+            type =>
+            {
+                if (
+                    !SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly)
+                    || SymbolHelper.HasNoEmit(type, target)
+                )
+                    return;
+                ScanTypeReferences(type, target, compilation, diagnostics, seen);
+            }
+        );
+    }
+
+    private static void ScanTypeReferences(
+        INamedTypeSymbol containing,
+        Metano.Annotations.TargetLanguage target,
+        Compilation compilation,
+        List<MetanoDiagnostic> diagnostics,
+        HashSet<Location> seen
+    )
+    {
+        // Signature surface — base, interfaces, generic constraints.
+        if (containing.BaseType is { } baseType)
+            CheckType(baseType, containing.Locations.FirstOrDefault(), target, diagnostics, seen);
+        foreach (var iface in containing.Interfaces)
+            CheckType(iface, containing.Locations.FirstOrDefault(), target, diagnostics, seen);
+        foreach (var typeParam in containing.TypeParameters)
+            foreach (var constraint in typeParam.ConstraintTypes)
+                CheckType(
+                    constraint,
+                    typeParam.Locations.FirstOrDefault(),
+                    target,
+                    diagnostics,
+                    seen
+                );
+
+        foreach (var member in containing.GetMembers())
+        {
+            switch (member)
+            {
+                case IFieldSymbol field when !field.IsImplicitlyDeclared:
+                    CheckType(
+                        field.Type,
+                        field.Locations.FirstOrDefault(),
+                        target,
+                        diagnostics,
+                        seen
+                    );
+                    break;
+                case IPropertySymbol prop when !prop.IsImplicitlyDeclared:
+                    CheckType(
+                        prop.Type,
+                        prop.Locations.FirstOrDefault(),
+                        target,
+                        diagnostics,
+                        seen
+                    );
+                    break;
+                case IMethodSymbol method
+                    when !method.IsImplicitlyDeclared
+                        && method.MethodKind
+                            is MethodKind.Ordinary
+                                or MethodKind.Constructor
+                                or MethodKind.PropertyGet
+                                or MethodKind.PropertySet:
+                    CheckType(
+                        method.ReturnType,
+                        method.Locations.FirstOrDefault(),
+                        target,
+                        diagnostics,
+                        seen
+                    );
+                    foreach (var p in method.Parameters)
+                        CheckType(
+                            p.Type,
+                            p.Locations.FirstOrDefault(),
+                            target,
+                            diagnostics,
+                            seen
+                        );
+                    foreach (var typeParam in method.TypeParameters)
+                        foreach (var constraint in typeParam.ConstraintTypes)
+                            CheckType(
+                                constraint,
+                                typeParam.Locations.FirstOrDefault(),
+                                target,
+                                diagnostics,
+                                seen
+                            );
+                    ScanMethodBody(method, target, compilation, diagnostics, seen);
+                    break;
+            }
+        }
+
+        foreach (var nested in containing.GetTypeMembers())
+            if (
+                SymbolHelper.IsTranspilable(nested, assemblyWideTranspile: false, currentAssembly: containing.ContainingAssembly)
+                && !SymbolHelper.HasNoEmit(nested, target)
+            )
+                ScanTypeReferences(nested, target, compilation, diagnostics, seen);
+    }
+
+    private static void ScanMethodBody(
+        IMethodSymbol method,
+        Metano.Annotations.TargetLanguage target,
+        Compilation compilation,
+        List<MetanoDiagnostic> diagnostics,
+        HashSet<Location> seen
+    )
+    {
+        foreach (var reference in method.DeclaringSyntaxReferences)
+        {
+            var syntax = reference.GetSyntax();
+            var tree = syntax.SyntaxTree;
+            var semantic = compilation.GetSemanticModel(tree);
+            foreach (var node in syntax.DescendantNodesAndSelf())
+            {
+                ITypeSymbol? referenced = null;
+                Location? location = node.GetLocation();
+                switch (node)
+                {
+                    case ObjectCreationExpressionSyntax oc:
+                        referenced = semantic.GetTypeInfo(oc).Type;
+                        break;
+                    case ImplicitObjectCreationExpressionSyntax ioc:
+                        referenced = semantic.GetTypeInfo(ioc).Type;
+                        break;
+                    case CastExpressionSyntax cast:
+                        referenced = semantic.GetTypeInfo(cast.Type).Type;
+                        break;
+                    case TypeOfExpressionSyntax t:
+                        referenced = semantic.GetTypeInfo(t.Type).Type;
+                        break;
+                    case BinaryExpressionSyntax be
+                        when be.IsKind(SyntaxKind.IsExpression)
+                            || be.IsKind(SyntaxKind.AsExpression):
+                        referenced = semantic.GetTypeInfo(be.Right).Type;
+                        break;
+                    case VariableDeclarationSyntax vd:
+                        referenced = semantic.GetTypeInfo(vd.Type).Type;
+                        break;
+                    case ParameterSyntax ps when ps.Type is { } pt:
+                        referenced = semantic.GetTypeInfo(pt).Type;
+                        break;
+                    case GenericNameSyntax g:
+                        foreach (var arg in g.TypeArgumentList.Arguments)
+                        {
+                            var argType = semantic.GetTypeInfo(arg).Type;
+                            CheckType(argType, arg.GetLocation(), target, diagnostics, seen);
+                        }
+                        continue;
+                    case MemberAccessExpressionSyntax ma:
+                        var info = semantic.GetSymbolInfo(ma).Symbol;
+                        if (info?.ContainingType is INamedTypeSymbol owner)
+                            CheckType(owner, ma.Expression.GetLocation(), target, diagnostics, seen);
+                        continue;
+                }
+                if (referenced is not null)
+                    CheckType(referenced, location, target, diagnostics, seen);
+            }
+        }
+    }
+
+    private static void CheckType(
+        ITypeSymbol? candidate,
+        Location? location,
+        Metano.Annotations.TargetLanguage target,
+        List<MetanoDiagnostic> diagnostics,
+        HashSet<Location> seen
+    )
+    {
+        if (candidate is null || location is null)
+            return;
+        // Walk into generic args / array elements so `List<NoEmitType>`
+        // and `NoEmitType[]` light up the same way bare references do.
+        switch (candidate)
+        {
+            case IArrayTypeSymbol arr:
+                CheckType(arr.ElementType, location, target, diagnostics, seen);
+                return;
+            case INamedTypeSymbol named when named.IsGenericType:
+                foreach (var arg in named.TypeArguments)
+                    CheckType(arg, location, target, diagnostics, seen);
+                if (SymbolHelper.HasNoEmit(named, target) && seen.Add(location))
+                    Report(named, location, diagnostics);
+                return;
+            case INamedTypeSymbol named:
+                if (SymbolHelper.HasNoEmit(named, target) && seen.Add(location))
+                    Report(named, location, diagnostics);
+                return;
+        }
+    }
+
+    private static void Report(
+        INamedTypeSymbol target,
+        Location location,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        diagnostics.Add(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.NoEmitReferencedByTranspiledCode,
+                $"Transpilable code references '{target.Name}', which is marked [NoEmit] "
+                    + "(.NET-only per #106). Migrate the type to [External] (ambient TS shape) "
+                    + "or remove the dependency from transpiled code.",
+                location
+            )
+        );
+    }
+
     private static void ValidateGenericNewConstraint(
         Compilation compilation,
         bool assemblyWideTranspile,

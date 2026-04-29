@@ -96,6 +96,15 @@ public static class DiagnosticCodes
     /// (<c>[Optional] string? Name</c>).</summary>
     public const string OptionalRequiresNullable = "MS0010";
 
+    /// <summary>MS0013 — a transpilable type's surface area (signature
+    /// or body) references a type marked <c>[NoEmit]</c>. Per the #106
+    /// redefinition <c>[NoEmit]</c> means ".NET-only"; the transpiler
+    /// refuses to emit code that mentions the type so the contract
+    /// stays explicit. Migrate the reference to use <c>[External]</c>
+    /// (ambient TS shape) or remove the dependency from transpiled
+    /// code.</summary>
+    public const string NoEmitReferencedByTranspiledCode = "MS0013";
+
     /// <summary>MS0011 — <c>[Discriminator("FieldName")]</c> (from
     /// <c>Metano.Annotations.TypeScript</c>) refers to a field that
     /// either doesn't exist on the annotated type, isn't a

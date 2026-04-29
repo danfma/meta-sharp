@@ -1,41 +1,45 @@
 namespace Metano.Annotations;
 
 /// <summary>
-/// Marks a type as <em>declaration-only</em>: it exists in the C# type system so user
-/// code can reference it (parameters, return types, lambdas), but the transpiler does
-/// NOT generate an output file for it AND does NOT emit any import for it in consumers.
-///
-/// Useful for ambient types that describe the structural shape of an external library
-/// without naming an actual export. The canonical example is a callback context type
-/// from a JS framework:
+/// Marks a type as <em>.NET-only</em>: it exists in the C# type system for
+/// internal logic, source-generator scaffolding, or build-time tooling, but
+/// must never cross into transpiled code. Per #106 the transpiler emits
+/// <c>MS0013 NoEmitReferencedByTranspiledCode</c> at every reference from a
+/// transpilable type's surface area (signature or body) so the boundary
+/// stays explicit.
 ///
 /// <code>
-/// [Import(name: "Hono", from: "hono")]
-/// public class Hono
+/// [NoEmit]
+/// public sealed class BuildToolingMarker { }
+///
+/// // .NET-side helper code freely consumes BuildToolingMarker.
+/// public static class InternalBookkeeping
 /// {
-///     public void Get(string path, Action&lt;IHonoContext&gt; handler) =&gt; throw new();
+///     public static List&lt;BuildToolingMarker&gt; Cache { get; } = new();
 /// }
 ///
-/// [NoEmit]
-/// public interface IHonoContext
+/// // A transpilable type referencing it raises MS0013.
+/// [Transpile]
+/// public class Bad
 /// {
-///     IHonoContext Text(string text);
+///     public BuildToolingMarker Field; // ❌ MS0013
 /// }
 /// </code>
 ///
-/// In the generated TS, <c>app.get("/", c =&gt; c.text("Hello"))</c> works because TS
-/// infers <c>c</c>'s type structurally from the real <c>hono</c> .d.ts. Metano never
-/// needs to emit <c>IHonoContext</c> as a TS interface or import it from anywhere.
+/// For ambient TypeScript shapes that <em>do</em> need to be referenced
+/// from transpiled code (DOM types, Hono structural shapes, Inferno
+/// <c>VNode</c>), use <see cref="TypeScript.ExternalAttribute"/>: it
+/// expresses "no emission" without painting transpilable code as broken.
 ///
-/// Contrast with <see cref="NoTranspileAttribute"/>: <c>[NoTranspile]</c> excludes the
-/// type from discovery entirely (the compiler pretends it doesn't exist), while
-/// <c>[NoEmit]</c> keeps the type discoverable so other transpiled code can reference it
-/// — only the emission step is skipped.
+/// Contrast with <see cref="NoTranspileAttribute"/>: <c>[NoTranspile]</c>
+/// excludes the type from discovery entirely (the compiler pretends it
+/// doesn't exist), while <c>[NoEmit]</c> keeps the type discoverable for
+/// .NET-side code while still raising MS0013 if transpiled code reaches it.
 /// <para>
 /// Follows the per-target resolution pattern of <see cref="NameAttribute"/>:
-/// <c>[NoEmit(TargetLanguage.Dart)]</c> skips emission on Dart while letting
-/// the same type emit a TS file, and the parameterless form applies to every
-/// target that lacks a per-target <c>[NoEmit]</c>.
+/// <c>[NoEmit(TargetLanguage.Dart)]</c> paints the type as .NET-only on Dart
+/// while letting it emit a TS file, and the parameterless form applies to every
+/// target.
 /// </para>
 /// </summary>
 [AttributeUsage(
