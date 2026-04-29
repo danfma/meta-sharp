@@ -12,7 +12,7 @@ namespace SampleCounterV4.Mvu;
 public static class Ui
 {
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Column))]
-    public static ColumnWidget Column(int gap, Widget[] children) => new(gap, children);
+    public static ColumnWidget Column(int gap, params Widget[] children) => new(gap, children);
 
     [ObjectArgs]
     public static Row Row(int gap, Widget[] children) => new(gap, children);

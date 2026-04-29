@@ -48,10 +48,7 @@ public static class ImportAliasResolver
                     != "Metano.Annotations"
                 )
                     continue;
-                if (
-                    attribute.AttributeClass.Name
-                    is not ("ImportAliasAttribute" or "ImportAlias")
-                )
+                if (attribute.AttributeClass.Name is not ("ImportAliasAttribute" or "ImportAlias"))
                     continue;
 
                 if (!MatchesTarget(attribute, target))
@@ -79,8 +76,11 @@ public static class ImportAliasResolver
         IReadOnlyDictionary<string, string>? layerB
     )
     {
-        if (layerA is null && (autoSynthesized is null || autoSynthesized.Count == 0)
-            && (layerB is null || layerB.Count == 0))
+        if (
+            layerA is null
+            && (autoSynthesized is null || autoSynthesized.Count == 0)
+            && (layerB is null || layerB.Count == 0)
+        )
             return null;
 
         var merged = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -169,7 +169,8 @@ public static class ImportAliasResolver
                     suffix = suffixValue;
                     break;
                 case "Types" when !named.Value.IsNull:
-                    bulkTypes = named.Value.Values.Select(v => v.Value)
+                    bulkTypes = named
+                        .Value.Values.Select(v => v.Value)
                         .OfType<INamedTypeSymbol>()
                         .ToList();
                     break;

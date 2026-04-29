@@ -316,10 +316,7 @@ public sealed class TypeScriptTransformContext(
     /// user's <c>using</c> aliases (Layer A) and the auto-synthesized
     /// fallback (Stage 2).
     /// </summary>
-    public IReadOnlyDictionary<
-        string,
-        IReadOnlyDictionary<string, string>
-    > ImportAliasOverrides =>
+    public IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> ImportAliasOverrides =>
         _importAliasOverrides ??= ImportAliasResolver.BuildPerFileAliases(
             Compilation,
             TargetLanguage.TypeScript

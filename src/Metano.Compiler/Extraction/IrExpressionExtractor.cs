@@ -2,6 +2,7 @@ using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace Metano.Compiler.Extraction;
 
@@ -1703,13 +1704,126 @@ public sealed class IrExpressionExtractor
             }
         }
 
-        if (symbol is not null && args.Any(a => a.Name is not null))
-            args = NormalizeArguments(args, symbol).ToList();
-
         if (symbol is not null && SymbolHelper.HasObjectArgs(symbol))
-            args = WrapInObjectArgs(args, symbol);
+        {
+            args =
+                TryWrapObjectArgsViaOperation(inv, symbol)
+                ?? WrapInObjectArgsFromArgs(args, symbol);
+        }
+        else if (symbol is not null && args.Any(a => a.Name is not null))
+        {
+            args = NormalizeArguments(args, symbol).ToList();
+        }
 
         return new IrCallExpression(target, args, typeArguments, BuildOrigin(symbol));
+    }
+
+    /// <summary>
+    /// Builds the <c>[ObjectArgs]</c> object-literal payload from the
+    /// Roslyn-bound <see cref="IInvocationOperation"/>. The operation
+    /// already pairs every source argument (positional, named, mixed,
+    /// <c>params</c>-expanded) with its declaring parameter, so the
+    /// expansion sees:
+    /// <list type="bullet">
+    ///   <item><c>params T[]</c> trailing args folded into a synthesized
+    ///   <c>IArrayCreationOperation</c> — we pluck its elements and emit
+    ///   one <see cref="IrArrayLiteral"/>.</item>
+    ///   <item>Default-filled slots (<c>ArgumentKind.DefaultValue</c>)
+    ///   skipped so the emitted object literal stays minimal.</item>
+    ///   <item>Explicit values whose literal matches the parameter's
+    ///   default — same elision rule as the legacy path.</item>
+    /// </list>
+    /// Returns <c>null</c> when the operation isn't available; the
+    /// caller falls back to the args-only path.
+    /// </summary>
+    private List<IrArgument>? TryWrapObjectArgsViaOperation(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol symbol
+    )
+    {
+        if (_semantic.GetOperation(inv) is not IInvocationOperation op)
+            return null;
+        var properties = new List<(string Name, IrExpression Value)>();
+        foreach (var arg in op.Arguments)
+        {
+            if (arg.Parameter is null)
+                continue;
+            if (arg.ArgumentKind == ArgumentKind.DefaultValue)
+                continue;
+
+            IrExpression value;
+            if (
+                arg.ArgumentKind == ArgumentKind.ParamArray
+                && arg.Value is IArrayCreationOperation arrayOp
+            )
+            {
+                var elements = arrayOp.Initializer?.ElementValues ?? default;
+                if (elements.IsDefaultOrEmpty)
+                    continue;
+                value = new IrArrayLiteral(
+                    elements
+                        .Select(e =>
+                            e.Syntax is ExpressionSyntax es
+                                ? Extract(es)
+                                : new IrUnsupportedExpression(e.Kind.ToString())
+                        )
+                        .ToList()
+                );
+            }
+            else if (arg.Value.Syntax is ExpressionSyntax valueSyntax)
+            {
+                value = Extract(valueSyntax);
+            }
+            else
+            {
+                continue;
+            }
+
+            if (
+                arg.Parameter.HasExplicitDefaultValue
+                && value is IrLiteral lit
+                && IsLiteralEqualToDefault(lit, arg.Parameter.ExplicitDefaultValue)
+            )
+                continue;
+
+            properties.Add((arg.Parameter.Name, value));
+        }
+        return new List<IrArgument> { new(new IrObjectLiteral(properties)) };
+    }
+
+    private static List<IrArgument> WrapInObjectArgsFromArgs(
+        IReadOnlyList<IrArgument> args,
+        IMethodSymbol symbol
+    )
+    {
+        var normalized = args.Any(a => a.Name is not null) ? NormalizeForArgs(args, symbol) : args;
+        return WrapInObjectArgs(normalized, symbol);
+    }
+
+    private static IReadOnlyList<IrArgument> NormalizeForArgs(
+        IReadOnlyList<IrArgument> args,
+        IMethodSymbol symbol
+    )
+    {
+        var byName = args.Where(a => a.Name is not null).ToDictionary(a => a.Name!, a => a);
+        var positional = args.TakeWhile(a => a.Name is null).ToList();
+        var result = new List<IrArgument>(symbol.Parameters.Length);
+        for (var i = 0; i < symbol.Parameters.Length; i++)
+        {
+            if (i < positional.Count)
+            {
+                result.Add(positional[i]);
+                continue;
+            }
+            var p = symbol.Parameters[i];
+            if (byName.TryGetValue(p.Name, out var named))
+            {
+                result.Add(named);
+                continue;
+            }
+            result.Add(new IrArgument(BuildDefaultArgument(p)));
+        }
+        return result;
     }
 
     /// <summary>

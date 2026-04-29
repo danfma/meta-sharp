@@ -351,6 +351,86 @@ public class ObjectArgsTranspileTests
     }
 
     [Test]
+    public async Task ObjectArgs_ParamsTrailingArgs_FoldIntoArrayLiteral()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile, ExportedAsModule]
+            public static class UI
+            {
+                [ObjectArgs]
+                public static int Column(int gap, params int[] children) => gap + children.Length;
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                public int Make() => UI.Column(gap: 12, 1, 2, 3);
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("gap: 12,");
+        await Assert.That(output).Contains("children: [1, 2, 3]");
+    }
+
+    [Test]
+    public async Task ObjectArgs_ParamsExplicitArray_KeepsArray()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile, ExportedAsModule]
+            public static class UI
+            {
+                [ObjectArgs]
+                public static int Column(int gap, params int[] children) => gap + children.Length;
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                public int Make() => UI.Column(gap: 12, children: new[] { 1, 2, 3 });
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("gap: 12");
+        await Assert.That(output).Contains("children: [1, 2, 3]");
+    }
+
+    [Test]
+    public async Task ObjectArgs_ParamsEmpty_OmitsChildrenField()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile, ExportedAsModule]
+            public static class UI
+            {
+                [ObjectArgs]
+                public static int Column(int gap, params int[] children) => gap + children.Length;
+            }
+
+            [Transpile]
+            public class Caller
+            {
+                public int Make() => UI.Column(gap: 12);
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("UI.column({ gap: 12 })");
+    }
+
+    [Test]
     public async Task Constructor_ObjectArgs_PreservesTypeArgumentsAtCallSite()
     {
         var result = TranspileHelper.Transpile(
