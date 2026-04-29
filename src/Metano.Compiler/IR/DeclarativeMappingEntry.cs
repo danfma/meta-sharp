@@ -29,10 +29,18 @@ public sealed record DeclarativeMappingEntry(
     string? JsTemplate,
     string? WhenArg0StringEquals = null,
     string? WrapReceiver = null,
-    string? RuntimeImports = null
+    string? RuntimeImports = null,
+    string? DartName = null,
+    string? DartTemplate = null,
+    string? DartRuntimeImports = null
 )
 {
     public bool HasTemplate => JsTemplate is not null;
+
+    public bool HasDartTemplate => DartTemplate is not null;
+
+    /// <summary>True when at least one Dart-target field is populated.</summary>
+    public bool HasDartMapping => DartName is not null || DartTemplate is not null;
 
     public bool HasArgFilter => WhenArg0StringEquals is not null;
 
@@ -41,6 +49,7 @@ public sealed record DeclarativeMappingEntry(
     // Parsed once per entry and reused across every call-site that expands
     // it — template-based mappings are hit many times per compilation.
     private IReadOnlyList<string>? _runtimeImportsList;
+    private IReadOnlyList<string>? _dartRuntimeImportsList;
 
     /// <summary>
     /// Parsed runtime imports (comma-separated identifier list in
@@ -49,6 +58,10 @@ public sealed record DeclarativeMappingEntry(
     /// </summary>
     public IReadOnlyList<string> RuntimeImportsList =>
         _runtimeImportsList ??= ParseRuntimeImports(RuntimeImports);
+
+    /// <summary>Dart-target counterpart of <see cref="RuntimeImportsList"/>.</summary>
+    public IReadOnlyList<string> DartRuntimeImportsList =>
+        _dartRuntimeImportsList ??= ParseRuntimeImports(DartRuntimeImports);
 
     private static IReadOnlyList<string> ParseRuntimeImports(string? raw)
     {

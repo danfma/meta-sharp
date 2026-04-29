@@ -14,14 +14,15 @@ public static class IrToDartModuleBridge
 {
     public static void Convert(
         IReadOnlyList<IrModuleFunction> functions,
-        List<DartTopLevel> statements
+        List<DartTopLevel> statements,
+        DartIrRewriter rewriter
     )
     {
         foreach (var fn in functions)
-            statements.Add(ConvertFunction(fn));
+            statements.Add(ConvertFunction(fn, rewriter));
     }
 
-    private static DartFunction ConvertFunction(IrModuleFunction fn) =>
+    private static DartFunction ConvertFunction(IrModuleFunction fn, DartIrRewriter rewriter) =>
         new(
             Name: IrToDartNamingPolicy.ToMemberName(fn.Name, fn.Attributes),
             Parameters: fn.Parameters.Select(p => new DartParameter(
@@ -34,7 +35,7 @@ public static class IrToDartModuleBridge
                 ))
                 .ToList(),
             ReturnType: IrToDartTypeMapper.Map(fn.ReturnType),
-            Body: fn.Body,
+            Body: rewriter.Rewrite(fn.Body),
             IsAsync: fn.Semantics.IsAsync
         );
 }

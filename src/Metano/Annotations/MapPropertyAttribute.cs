@@ -65,6 +65,25 @@ public sealed class MapPropertyAttribute : Attribute
     /// </summary>
     public string? RuntimeImports { get; init; }
 
+    /// <summary>
+    /// Dart-target counterpart of <see cref="JsProperty"/>. Mutually exclusive with
+    /// <see cref="DartTemplate"/>. A single attribute can declare both <c>Js*</c> and
+    /// <c>Dart*</c> values; each target reads its own pair.
+    /// </summary>
+    public string? DartProperty { get; init; }
+
+    /// <summary>
+    /// Dart-target counterpart of <see cref="JsTemplate"/>. Supports <c>$this</c>
+    /// for the instance receiver. Mutually exclusive with <see cref="DartProperty"/>.
+    /// </summary>
+    public string? DartTemplate { get; init; }
+
+    /// <summary>
+    /// Dart-target counterpart of <see cref="RuntimeImports"/>. Comma-separated list
+    /// of identifiers from <c>package:metano_runtime/metano_runtime.dart</c>.
+    /// </summary>
+    public string? DartRuntimeImports { get; init; }
+
     public MapPropertyAttribute(Type declaringType, string csharpProperty)
     {
         DeclaringType = declaringType;

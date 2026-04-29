@@ -15,7 +15,11 @@ namespace Metano.Dart.Bridge;
 /// </summary>
 public static class IrToDartClassBridge
 {
-    public static void Convert(IrClassDeclaration ir, List<DartTopLevel> statements)
+    public static void Convert(
+        IrClassDeclaration ir,
+        List<DartTopLevel> statements,
+        DartIrRewriter rewriter
+    )
     {
         var name = IrToDartNamingPolicy.ToTypeName(ir.Name, ir.Attributes);
         var modifier = ResolveClassModifier(ir);
@@ -49,16 +53,18 @@ public static class IrToDartClassBridge
                         members.Add(ConvertField(field));
                         break;
                     case IrPropertyDeclaration prop when !promotedParamNames.Contains(prop.Name):
-                        members.Add(ConvertProperty(prop));
+                        members.Add(ConvertProperty(prop, rewriter));
                         break;
                     case IrMethodDeclaration method:
-                        members.Add(ConvertMethod(method));
+                        members.Add(ConvertMethod(method, rewriter));
                         break;
                 }
             }
         }
 
-        var ctor = ir.Constructor is not null ? ConvertConstructor(ir.Constructor, name) : null;
+        var ctor = ir.Constructor is not null
+            ? ConvertConstructor(ir.Constructor, name, rewriter)
+            : null;
 
         // Record types get value-equality semantics synthesized into the class:
         // an `operator ==`, a `hashCode` getter, and a `copyWith` method
@@ -310,7 +316,8 @@ public static class IrToDartClassBridge
 
     private static DartConstructor ConvertConstructor(
         IrConstructorDeclaration ctor,
-        string className
+        string className,
+        DartIrRewriter rewriter
     )
     {
         var parameters = ctor
@@ -324,7 +331,7 @@ public static class IrToDartClassBridge
                 DefaultValue: p.Parameter.DefaultValue
             ))
             .ToList();
-        return new DartConstructor(className, parameters, Body: ctor.Body);
+        return new DartConstructor(className, parameters, Body: rewriter.Rewrite(ctor.Body));
     }
 
     // ── Members ────────────────────────────────────────────────────────────
@@ -368,7 +375,10 @@ public static class IrToDartClassBridge
                 or "IDisposable"
                 or "IAsyncDisposable";
 
-    private static DartClassMember ConvertProperty(IrPropertyDeclaration prop)
+    private static DartClassMember ConvertProperty(
+        IrPropertyDeclaration prop,
+        DartIrRewriter rewriter
+    )
     {
         // Plain auto-property → treated as a field (Dart idiom for data members).
         // Computed getters (HasGetterBody) emit as abstract getters until body extraction lands.
@@ -400,11 +410,14 @@ public static class IrToDartClassBridge
             IrToDartTypeMapper.Map(prop.Type),
             IsStatic: prop.IsStatic,
             IsAbstract: false,
-            Body: prop.GetterBody
+            Body: rewriter.Rewrite(prop.GetterBody)
         );
     }
 
-    private static DartMethodSignature ConvertMethod(IrMethodDeclaration method) =>
+    private static DartMethodSignature ConvertMethod(
+        IrMethodDeclaration method,
+        DartIrRewriter rewriter
+    ) =>
         new(
             Name: IrToDartNamingPolicy.ToMemberName(method.Name, method.Attributes),
             Parameters: method
@@ -418,7 +431,7 @@ public static class IrToDartClassBridge
             IsStatic: method.IsStatic,
             IsAbstract: method.Semantics.IsAbstract,
             IsAsync: method.Semantics.IsAsync,
-            Body: method.Body,
+            Body: rewriter.Rewrite(method.Body),
             OperatorSymbol: method.Semantics.IsOperator
                 ? MapOperatorToDart(method.Semantics.OperatorKind)
                 : null

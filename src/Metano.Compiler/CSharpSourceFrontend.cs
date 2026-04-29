@@ -1824,11 +1824,19 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         List<MetanoDiagnostic> diagnostics
     )
     {
+        // The Dart-target rename arg name mirrors the JS one: `JsMethod` ↔
+        // `DartMethod`, `JsProperty` ↔ `DartProperty`. Strip the `Js` prefix
+        // and prepend `Dart` so the per-target key is symmetric.
+        var dartRenameNamedArg = "Dart" + renameNamedArg[2..];
+
         string? jsName = null;
         string? jsTemplate = null;
         string? whenArg0StringEquals = null;
         string? wrapReceiver = null;
         string? runtimeImports = null;
+        string? dartName = null;
+        string? dartTemplate = null;
+        string? dartRuntimeImports = null;
         foreach (var named in attr.NamedArguments)
         {
             switch (named.Key)
@@ -1848,35 +1856,46 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                 case "RuntimeImports":
                     runtimeImports = named.Value.Value as string;
                     break;
+                case var k when k == dartRenameNamedArg:
+                    dartName = named.Value.Value as string;
+                    break;
+                case "DartTemplate":
+                    dartTemplate = named.Value.Value as string;
+                    break;
+                case "DartRuntimeImports":
+                    dartRuntimeImports = named.Value.Value as string;
+                    break;
             }
         }
 
-        if (jsName is null && jsTemplate is null)
+        if (
+            jsName is null
+            && jsTemplate is null
+            && dartName is null
+            && dartTemplate is null
+        )
             return null;
 
-        // JsName and JsTemplate are mutually exclusive — template takes
-        // precedence (it's the more specific lowering form). Surface MS0004
-        // so a user who meant only one of the two can spot the conflict.
+        // Mutual-exclusion check is per-target: JsName/JsTemplate fight each
+        // other, DartName/DartTemplate fight each other, but the two pairs
+        // coexist freely (a single attribute can declare both targets).
+        // Template wins on conflict — it's the more specific lowering.
         if (jsName is not null && jsTemplate is not null)
         {
-            var target =
-                attr.ConstructorArguments.Length >= 2
-                && attr.ConstructorArguments[0].Value is INamedTypeSymbol owner
-                && attr.ConstructorArguments[1].Value is string memberName
-                    ? $"{owner.ToDisplayString()}.{memberName}"
-                    : attr.AttributeClass?.ToDisplayString() ?? "<unknown>";
-            diagnostics.Add(
-                new MetanoDiagnostic(
-                    MetanoDiagnosticSeverity.Warning,
-                    DiagnosticCodes.ConflictingAttributes,
-                    $"Declarative mapping on '{target}' sets both "
-                        + $"{renameNamedArg} ('{jsName}') and JsTemplate ('{jsTemplate}') — "
-                        + $"these are mutually exclusive. Keeping JsTemplate and ignoring "
-                        + $"{renameNamedArg}.",
-                    attr.ApplicationSyntaxReference?.GetSyntax().GetLocation()
-                )
-            );
+            ReportConflict(attr, renameNamedArg, "JsTemplate", jsName, jsTemplate, diagnostics);
             jsName = null;
+        }
+        if (dartName is not null && dartTemplate is not null)
+        {
+            ReportConflict(
+                attr,
+                dartRenameNamedArg,
+                "DartTemplate",
+                dartName,
+                dartTemplate,
+                diagnostics
+            );
+            dartName = null;
         }
 
         return new DeclarativeMappingEntry(
@@ -1884,7 +1903,38 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             jsTemplate,
             whenArg0StringEquals,
             wrapReceiver,
-            runtimeImports
+            runtimeImports,
+            dartName,
+            dartTemplate,
+            dartRuntimeImports
+        );
+    }
+
+    private static void ReportConflict(
+        AttributeData attr,
+        string renameArg,
+        string templateArg,
+        string nameValue,
+        string templateValue,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var target =
+            attr.ConstructorArguments.Length >= 2
+            && attr.ConstructorArguments[0].Value is INamedTypeSymbol owner
+            && attr.ConstructorArguments[1].Value is string memberName
+                ? $"{owner.ToDisplayString()}.{memberName}"
+                : attr.AttributeClass?.ToDisplayString() ?? "<unknown>";
+        diagnostics.Add(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Warning,
+                DiagnosticCodes.ConflictingAttributes,
+                $"Declarative mapping on '{target}' sets both "
+                    + $"{renameArg} ('{nameValue}') and {templateArg} ('{templateValue}') — "
+                    + $"these are mutually exclusive. Keeping {templateArg} and ignoring "
+                    + $"{renameArg}.",
+                attr.ApplicationSyntaxReference?.GetSyntax().GetLocation()
+            )
         );
     }
 
