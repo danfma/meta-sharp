@@ -1,4 +1,10 @@
-import { Button as ButtonWidget, Column as ColumnWidget, Heading as HeadingWidget, Row as RowWidget, Text as TextWidget } from "#/mvu/widgets";
+import {
+  Button as ButtonWidget,
+  Column as ColumnWidget,
+  Heading as HeadingWidget,
+  Row as RowWidget,
+  Text as TextWidget,
+} from "#/mvu/widgets";
 import type { Widget } from "./widget";
 
 export function Column(args: { gap: number; children: Widget[] }): ColumnWidget {

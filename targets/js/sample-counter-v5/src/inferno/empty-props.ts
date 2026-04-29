@@ -1,2 +1,1 @@
-export interface EmptyProps {
-}
+export interface EmptyProps {}

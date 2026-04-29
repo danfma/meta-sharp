@@ -20,17 +20,25 @@ jobs:
           dotnet-version: "10.0.x"
           dotnet-quality: "preview"
 
+      - uses: oven-sh/setup-bun@v2
+
       - name: Restore tools
         run: dotnet tool restore
 
+      - name: Install JS dependencies
+        run: bun install
+
       - name: Build
         run: dotnet build Metano.slnx -maxcpucount:1
+
+      - name: Format generated samples
+        run: bunx biome format --write targets/
 
       - name: Verify samples are regenerated cleanly
         run: |
           if ! git diff --quiet -- targets/ 2>&1; then
             echo "Generated TS files are out of sync with the C# source."
-            echo "Run 'dotnet build' locally and commit the regenerated files."
+            echo "Run 'dotnet build' locally, then 'bunx biome format --write targets/', and commit."
             git status -- targets/
             git diff -- targets/ | head -100
             exit 1

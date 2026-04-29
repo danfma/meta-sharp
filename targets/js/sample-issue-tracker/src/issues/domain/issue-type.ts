@@ -5,4 +5,4 @@ export const IssueType = {
   Spike: "spike",
 } as const;
 
-export type IssueType = typeof IssueType[keyof typeof IssueType];
+export type IssueType = (typeof IssueType)[keyof typeof IssueType];
