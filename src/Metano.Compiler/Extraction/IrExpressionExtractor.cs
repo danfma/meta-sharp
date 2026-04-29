@@ -1232,6 +1232,7 @@ public sealed class IrExpressionExtractor
             return BuildExtensionHelperCall(
                 propLowering.HelperContainer,
                 propLowering.HelperName,
+                propLowering.EmittedName,
                 [new IrArgument(Extract(member.Expression))],
                 typeArguments: null
             );
@@ -1652,6 +1653,7 @@ public sealed class IrExpressionExtractor
             return BuildExtensionHelperCall(
                 extLowering.HelperContainer,
                 extLowering.HelperName,
+                extLowering.EmittedName,
                 [new IrArgument(receiver), .. extensionArgs],
                 extensionTypeArgs
             );
@@ -2171,6 +2173,7 @@ public sealed class IrExpressionExtractor
     private static IrCallExpression BuildExtensionHelperCall(
         INamedTypeSymbol helperContainer,
         string helperName,
+        string? emittedName,
         IReadOnlyList<IrArgument> arguments,
         IReadOnlyList<IrTypeRef>? typeArguments
     )
@@ -2179,6 +2182,7 @@ public sealed class IrExpressionExtractor
             DeclaringTypeFullName: helperContainer.GetStableFullName(),
             MemberName: helperName,
             IsStatic: true,
+            EmittedName: emittedName,
             IsDeclaringTypeExternal: SymbolHelper.HasExternal(helperContainer),
             IsDeclaringTypeErasable: true
         );
@@ -2193,11 +2197,13 @@ public sealed class IrExpressionExtractor
     private readonly record struct ExtensionCallLowering(
         IMethodSymbol OriginSymbol,
         string HelperName,
+        string? EmittedName,
         INamedTypeSymbol HelperContainer
     );
 
     private readonly record struct ExtensionPropertyLowering(
         string HelperName,
+        string? EmittedName,
         INamedTypeSymbol HelperContainer
     );
 
@@ -2225,6 +2231,7 @@ public sealed class IrExpressionExtractor
                 return null;
             return new ExtensionPropertyLowering(
                 prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+                ResolvePropertyEmittedName(prop),
                 parentStatic
             );
         }
@@ -2243,11 +2250,26 @@ public sealed class IrExpressionExtractor
                 return null;
             return new ExtensionPropertyLowering(
                 prop.Name + IrExtensionConventions.PropertyGetterSuffix,
+                ResolvePropertyEmittedName(prop),
                 containing
             );
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// Mirrors <see cref="ResolveEmittedName(IMethodSymbol)"/> for an
+    /// extension property: the override (when present) is appended with
+    /// the getter suffix so the call site agrees with the helper emitted
+    /// by <see cref="IrModuleFunctionExtractor"/>.
+    /// </summary>
+    private string? ResolvePropertyEmittedName(IPropertySymbol property)
+    {
+        var overrideName = SymbolHelper.GetNameOverride(property, _target);
+        return overrideName is null
+            ? null
+            : overrideName + IrExtensionConventions.PropertyGetterSuffix;
     }
 
     /// <summary>
@@ -2266,7 +2288,12 @@ public sealed class IrExpressionExtractor
             callee.ReducedFrom is { } reduced
             && IsTranspilableExtensionContainer(reduced.ContainingType)
         )
-            return new ExtensionCallLowering(reduced, reduced.Name, reduced.ContainingType);
+            return new ExtensionCallLowering(
+                reduced,
+                reduced.Name,
+                ResolveEmittedName(reduced),
+                reduced.ContainingType
+            );
 
         var containing = callee.ContainingType;
         if (containing is null)
@@ -2283,11 +2310,27 @@ public sealed class IrExpressionExtractor
             var receiverSymbol = _semantic.GetSymbolInfo(access.Expression).Symbol;
             if (receiverSymbol is INamedTypeSymbol)
                 return null;
-            return new ExtensionCallLowering(callee, callee.Name, parentStatic);
+            return new ExtensionCallLowering(
+                callee,
+                callee.Name,
+                ResolveEmittedName(callee),
+                parentStatic
+            );
         }
 
         return null;
     }
+
+    /// <summary>
+    /// Returns the per-target <c>[Name]</c> override for an extension
+    /// helper symbol, or <c>null</c> when the source uses no override.
+    /// The result lands on <see cref="IrMemberOrigin.EmittedName"/> so
+    /// the bridge picks it up at the call site, keeping the rewrite in
+    /// lockstep with module-function emission (which honors the same
+    /// override through <c>IrToTsNamingPolicy.ToFunctionName</c>).
+    /// </summary>
+    private string? ResolveEmittedName(IMethodSymbol method) =>
+        SymbolHelper.GetNameOverride(method, _target);
 
     /// <summary>
     /// Skips BCL / external static classes (LINQ, framework helpers) so

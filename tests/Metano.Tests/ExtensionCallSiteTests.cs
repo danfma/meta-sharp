@@ -87,6 +87,35 @@ public class ExtensionCallSiteTests
     }
 
     [Test]
+    public async Task ClassicExtension_WithNameOverride_CallSiteHonorsRename()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            namespace App;
+
+            [Transpile]
+            public static class IntExt
+            {
+                [Name("twice")]
+                public static int Double(this int x) => x + x;
+            }
+
+            [Transpile]
+            public class Calc
+            {
+                public int Run(int n) => n.Double();
+            }
+            """
+        );
+
+        var caller = result["calc.ts"];
+        await Assert.That(caller).Contains("twice(n)");
+        await Assert.That(caller).DoesNotContain("double(n)");
+        await Assert.That(caller).Contains("import { twice } from \"./int-ext\";");
+    }
+
+    [Test]
     public async Task ExtensionHelper_LandsInSiblingFile_ImportsAtCallSite()
     {
         var result = TranspileHelper.Transpile(
@@ -110,5 +139,40 @@ public class ExtensionCallSiteTests
         var caller = result["calc.ts"];
         await Assert.That(caller).Contains("squared(n)");
         await Assert.That(caller).Contains("import { squared } from \"./int-ext\";");
+    }
+
+    [Test]
+    public async Task TwoExtensionsSameEmittedName_RaisesMs0021()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            using Metano.Annotations;
+            namespace App;
+
+            [Transpile]
+            public static class IntExt
+            {
+                public static int Squared(this int x) => x * x;
+            }
+
+            [Transpile]
+            public static class LongExt
+            {
+                public static long Squared(this long x) => x * x;
+            }
+
+            [Transpile]
+            public class Calc
+            {
+                public int Run(int n) => n.Squared();
+            }
+            """
+        );
+
+        var ms0021 = diagnostics.FirstOrDefault(d =>
+            d.Code == Metano.Compiler.Diagnostics.DiagnosticCodes.ExtensionHelperNameClash
+        );
+        await Assert.That(ms0021).IsNotNull();
+        await Assert.That(ms0021!.Message).Contains("squared");
     }
 }
