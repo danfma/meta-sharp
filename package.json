@@ -5,7 +5,11 @@
   ],
   "devDependencies": {
     "@biomejs/biome": "2.4.4",
-    "@typescript/native-preview": "^7.0.0-dev.20260306.1"
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/exec": "^7.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@typescript/native-preview": "^7.0.0-dev.20260306.1",
+    "semantic-release": "^24.2.0"
   },
   "scripts": {
     "dev": "bun run --parallel ts:watch sample-counter-v1 sample-counter-v2 sample-counter-v3 sample-counter-v4",

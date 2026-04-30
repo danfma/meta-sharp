@@ -1,23 +1,29 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview without publishing"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write
-  id-token: write # Required for npm Trusted Publishing (OIDC)
-  pull-requests: write # dotnet-releaser autolabelers POST labels to merged PRs
-  issues: write # required to create new label definitions on the repo
+  id-token: write # npm Trusted Publishing (OIDC)
+  pull-requests: write
+  issues: write
 
 jobs:
   release:
-    name: Build, Publish & Release
+    name: Release (semantic-release)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          persist-credentials: true
 
       - uses: actions/setup-dotnet@v5
         with:
@@ -25,7 +31,6 @@ jobs:
           dotnet-quality: "preview"
 
       # Trusted Publishing requires npm >= 11.5.1, which ships with Node 24.
-      # No token is needed — the npm CLI detects the OIDC environment.
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
@@ -33,25 +38,43 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: Restore tools
+      - name: Restore .NET tools
         run: dotnet tool restore
 
-      # .NET: build, pack, publish NuGet, create GitHub Release + changelog
-      # (tests are disabled in dotnet-releaser.toml; CI runs them separately)
-      - name: dotnet-releaser
-        run: |
-          dotnet dotnet-releaser run \
-            --nuget-token "${{ secrets.NUGET_TOKEN }}" \
-            --github-token "${{ secrets.GITHUB_TOKEN }}" \
-            dotnet-releaser.toml
+      - name: Install npm dependencies
+        run: bun install
 
-      # Build the npm package before publishing
+      # semantic-release: analyze commits, bump version, update CHANGELOG.md,
+      # commit + tag + push, then run dotnet-releaser via the @semantic-release/exec
+      # plugin to publish NuGet packages and create the GitHub release using the
+      # CHANGELOG section just produced.
+      - name: Run semantic-release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUGET_TOKEN: ${{ secrets.NUGET_TOKEN }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            bunx semantic-release --dry-run
+          else
+            bunx semantic-release
+          fi
+
+      # Resolve the new tag semantic-release just pushed so the npm publish step
+      # picks up the right version. Skipped on dry runs.
+      - name: Resolve published tag
+        if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
+        id: tag
+        run: |
+          git fetch --tags
+          TAG=$(git describe --tags --abbrev=0)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
       - name: Build metano-runtime
-        run: |
-          bun install
-          cd targets/js/metano-runtime && bun run build
+        if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
+        run: cd targets/js/metano-runtime && bun run build
 
-      # Sync version from the tag and publish to npm via Trusted Publishing.
-      # No NPM_TOKEN — the npm CLI uses the OIDC token from id-token: write.
       - name: Publish metano-runtime to npm
+        if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
+        env:
+          GITHUB_REF_NAME: ${{ steps.tag.outputs.tag }}
         run: bash scripts/sync-npm-version.sh
