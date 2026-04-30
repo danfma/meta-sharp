@@ -75,5 +75,5 @@ jobs:
       - name: Publish metano-runtime to npm
         if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
         env:
-          GITHUB_REF_NAME: ${{ steps.tag.outputs.tag }}
+          RELEASE_TAG: ${{ steps.tag.outputs.tag }}
         run: bash scripts/sync-npm-version.sh

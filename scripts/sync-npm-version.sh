@@ -8,18 +8,21 @@ set -euo pipefail
 # Must be run from the repository root.
 #
 # Expects:
-#   GITHUB_REF_NAME — the tag name (e.g., "v1.2.3")
+#   RELEASE_TAG     — the tag name (e.g., "v1.2.3"). Use a custom name
+#                     (not GITHUB_REF_NAME) because GitHub Actions reserves
+#                     the GITHUB_* env vars and refuses overrides at step
+#                     scope when the workflow ran on a non-tag ref.
 #   NODE_AUTH_TOKEN — npm auth token
 
-if [ -z "${GITHUB_REF_NAME:-}" ]; then
-  echo "ERROR: GITHUB_REF_NAME is not set" >&2
+if [ -z "${RELEASE_TAG:-}" ]; then
+  echo "ERROR: RELEASE_TAG is not set" >&2
   exit 1
 fi
 
-VERSION="${GITHUB_REF_NAME#v}"
+VERSION="${RELEASE_TAG#v}"
 
-if [ -z "$VERSION" ] || [ "$VERSION" = "$GITHUB_REF_NAME" ]; then
-  echo "ERROR: GITHUB_REF_NAME does not look like a version tag: $GITHUB_REF_NAME" >&2
+if [ -z "$VERSION" ] || [ "$VERSION" = "$RELEASE_TAG" ]; then
+  echo "ERROR: RELEASE_TAG does not look like a version tag: $RELEASE_TAG" >&2
   exit 1
 fi
 
