@@ -1480,6 +1480,13 @@ public sealed class IrExpressionExtractor
             return null;
         try
         {
+            // A method symbol reaching this path is being used as a value
+            // (delegate conversion, method-group reference, etc.) — never as
+            // a direct invocation. Materialize the body as a lambda so the
+            // call site has something to pass around.
+            if (symbol is IMethodSymbol method)
+                return TryMaterializeInlineMethodAsLambda(method);
+
             var initializer = TryFindInlineInitializer(symbol);
             if (initializer is null)
                 return null;
@@ -2093,6 +2100,21 @@ public sealed class IrExpressionExtractor
         }
 
         return new IrCallExpression(lambda, args);
+    }
+
+    private IrExpression? TryMaterializeInlineMethodAsLambda(IMethodSymbol method)
+    {
+        var declaringMethod = method.ReducedFrom ?? method.OriginalDefinition;
+        var bodyExpr = TryFindInlineMethodBody(declaringMethod);
+        if (bodyExpr is null)
+            return null;
+        var semanticModel = SymbolHelper.TryGetSemanticModel(
+            _semantic.Compilation,
+            bodyExpr.SyntaxTree
+        );
+        if (semanticModel is null)
+            return null;
+        return BuildInlineLambda(declaringMethod, bodyExpr, semanticModel);
     }
 
     private IrLambdaExpression? BuildInlineLambda(

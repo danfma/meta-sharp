@@ -117,7 +117,8 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
                     if (
                         type.IsStatic
                         && (
-                            SymbolHelper.HasExportedAsModule(type) || SymbolHelper.HasNoContainer(type)
+                            SymbolHelper.HasExportedAsModule(type)
+                            || SymbolHelper.HasNoContainer(type)
                         )
                     )
                     {

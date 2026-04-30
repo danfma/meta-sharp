@@ -638,6 +638,37 @@ public class InlineAttributeTranspileTests
     }
 
     [Test]
+    public async Task Inline_MethodPassedAsDelegate_MaterializesAsLambda()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            using System;
+            [assembly: TranspileAssembly]
+
+            public static class MathHelpers
+            {
+                [Inline]
+                public static int Squared(int x) => x * x;
+            }
+
+            public class Caller
+            {
+                public int Run(int n)
+                {
+                    Func<int, int> f = MathHelpers.Squared;
+                    return f(n);
+                }
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("(x: number) => x * x");
+        await Assert.That(output).DoesNotContain("MathHelpers.");
+    }
+
+    [Test]
     public async Task Inline_SubstituteMode_BetaReducesArgsTextually()
     {
         var result = TranspileHelper.Transpile(
