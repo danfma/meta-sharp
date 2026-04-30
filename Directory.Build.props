@@ -20,6 +20,11 @@
 
   <ItemGroup>
     <PackageReference Include="MinVer" PrivateAssets="All" />
-    <None Include="$(MSBuildThisFileDirectory)README.md" Pack="true" PackagePath="/" Visible="false" />
+    <None
+      Include="$(MSBuildThisFileDirectory)README.md"
+      Pack="true"
+      PackagePath="/"
+      Visible="false"
+    />
   </ItemGroup>
 </Project>
