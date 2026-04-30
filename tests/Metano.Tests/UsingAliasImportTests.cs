@@ -56,7 +56,7 @@ public class UsingAliasImportTests
 
             namespace App
             {
-                [Transpile, Erasable]
+                [Transpile, NoContainer]
                 public static class Ui
                 {
                     [Name(TargetLanguage.TypeScript, "Column")]
@@ -73,7 +73,7 @@ public class UsingAliasImportTests
     }
 
     [Test]
-    public async Task ErasableFactoryNameClash_AutoAliasesAndEmitsInfo()
+    public async Task NoContainerFactoryNameClash_AutoAliasesAndEmitsInfo()
     {
         var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -91,7 +91,7 @@ public class UsingAliasImportTests
 
             namespace App
             {
-                [Transpile, Erasable]
+                [Transpile, NoContainer]
                 public static class Ui
                 {
                     [Name(TargetLanguage.TypeScript, "Column")]
@@ -138,7 +138,7 @@ public class UsingAliasImportTests
 
             namespace App
             {
-                [Transpile, Erasable]
+                [Transpile, NoContainer]
                 public static class Ui
                 {
                     [Name(TargetLanguage.TypeScript, "Column")]
@@ -183,7 +183,7 @@ public class UsingAliasImportTests
                 [ImportAlias(typeof(App.Widgets.Column), "ColumnW")]
                 file class TsModule;
 
-                [Transpile, Erasable]
+                [Transpile, NoContainer]
                 public static class Ui
                 {
                     [Name(TargetLanguage.TypeScript, "Column")]

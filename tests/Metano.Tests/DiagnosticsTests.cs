@@ -141,12 +141,12 @@ public class DiagnosticsTests
     [Test]
     public async Task UncoveredModuleFunction_ReportsDiagnosticInsteadOfSilentDrop()
     {
-        // [Erasable] static class — when one of its public methods
+        // [NoContainer] static class — when one of its public methods
         // has an uncovered body, TypeTransformer must surface the gap as a
         // diagnostic instead of producing zero output for the type.
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Helpers
             {
                 private static readonly object _gate = new();

@@ -2,7 +2,7 @@ using Metano.Annotations;
 
 namespace Metano.TypeScript.DOM;
 
-[Transpile, Erasable]
+[Transpile, NoContainer]
 public static class HtmlElementType
 {
     [PlainObject]

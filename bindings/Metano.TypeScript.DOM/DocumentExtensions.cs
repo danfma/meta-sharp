@@ -2,12 +2,12 @@ using Metano.Annotations;
 
 namespace Metano.TypeScript.DOM;
 
-[Transpile, Erasable]
+[Transpile, NoContainer]
 public static class DocumentExtensions
 {
     extension(Document document)
     {
-        [Inline]
+        [Inline(InlineMode.Substitute)]
         public TElement CreateElement<TElement>(HtmlElementType.Of<TElement> type)
             where TElement : HtmlElement
         {

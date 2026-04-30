@@ -1,3 +1,4 @@
+using Metano.Annotations;
 using Metano.Compiler.IR;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -1937,15 +1938,11 @@ public sealed class IrExpressionExtractor
             if (semanticModel is null)
                 return null;
 
-            // [Erasable] on the declaring (or any enclosing) type opts the
-            // inline call into textual β-reduction — caller arguments
-            // substitute directly into the body, and the declaration
-            // vanishes. The caller takes the single-evaluation responsibility.
-            // Default path materializes the body as an IIFE so every argument
-            // evaluates exactly once. C# 14 `extension(R r) { … }` members
-            // make the immediate ContainingType a synthetic empty-name type;
-            // walk up to reach the user's static class.
-            if (HasErasableInChain(declaringMethod.ContainingType))
+            // [Inline(InlineMode.Substitute)] opts into textual β-reduction:
+            // caller arguments substitute directly into the body. The default
+            // [Inline] (Materialize) wraps the body as an IIFE so every
+            // argument evaluates exactly once.
+            if (SymbolHelper.GetInlineMode(declaringMethod) == InlineMode.Substitute)
                 return ExpandInlineAsTextualSubstitution(
                     inv,
                     symbol,
@@ -2098,16 +2095,6 @@ public sealed class IrExpressionExtractor
         return new IrCallExpression(lambda, args);
     }
 
-    private static bool HasErasableInChain(INamedTypeSymbol? type)
-    {
-        for (var current = type; current is not null; current = current.ContainingType)
-        {
-            if (SymbolHelper.HasErasable(current))
-                return true;
-        }
-        return false;
-    }
-
     private IrLambdaExpression? BuildInlineLambda(
         IMethodSymbol declaringMethod,
         ExpressionSyntax bodyExpr,
@@ -2139,11 +2126,7 @@ public sealed class IrExpressionExtractor
             ? null
             : IrTypeRefMapper.Map(declaringMethod.ReturnType, _originResolver, _target);
 
-        return new IrLambdaExpression(
-            parameters,
-            returnType,
-            [new IrReturnStatement(bodyIr)]
-        );
+        return new IrLambdaExpression(parameters, returnType, [new IrReturnStatement(bodyIr)]);
     }
 
     private static ExpressionSyntax? TryFindInlineMethodBody(IMethodSymbol method)
@@ -2226,7 +2209,7 @@ public sealed class IrExpressionExtractor
         // `[Name("x")]` (target-aware) is resolved once here so backends
         // consult the emitted name instead of re-scanning attributes.
         var emittedName = SymbolHelper.GetNameOverride(symbol, _target);
-        // `[External]` (TS-specific) and `[Erasable]`
+        // `[External]` (TS-specific) and `[NoContainer]`
         // (cross-target) both cause static member access to flatten
         // to a bare identifier at the call site, but they express
         // different intents (runtime-provided stub vs. compile-time
@@ -2234,7 +2217,7 @@ public sealed class IrExpressionExtractor
         // can diverge their lowering paths without churn; today's
         // bridge honors either to drop the enclosing type reference.
         var isDeclaringTypeExternal = SymbolHelper.HasExternal(symbol.ContainingType);
-        var isDeclaringTypeErasable = SymbolHelper.HasErasable(symbol.ContainingType);
+        var isDeclaringTypeNoContainer = SymbolHelper.HasNoContainer(symbol.ContainingType);
         return new IrMemberOrigin(
             declaringTypeName,
             symbol.Name,
@@ -2245,7 +2228,7 @@ public sealed class IrExpressionExtractor
             IsPlainObjectInstanceMethod: isPlainObjectInstanceMethod,
             IsStringEnumMember: isStringEnumMember,
             IsDeclaringTypeExternal: isDeclaringTypeExternal,
-            IsDeclaringTypeErasable: isDeclaringTypeErasable
+            IsDeclaringTypeNoContainer: isDeclaringTypeNoContainer
         );
     }
 
@@ -2509,7 +2492,7 @@ public sealed class IrExpressionExtractor
     /// Builds the canonical IR shape for an extension-helper call:
     /// <c>helper(receiver, args)</c> emitted as a static call on the
     /// helper's enclosing container. Carries the
-    /// <see cref="IrMemberOrigin.IsDeclaringTypeErasable"/> invariant so
+    /// <see cref="IrMemberOrigin.IsDeclaringTypeNoContainer"/> invariant so
     /// the bridge drops the type qualifier and the import collector
     /// imports the helper directly. Shared by the method-call and
     /// property-read rewrites so the contract has a single source of
@@ -2529,7 +2512,7 @@ public sealed class IrExpressionExtractor
             IsStatic: true,
             EmittedName: emittedName,
             IsDeclaringTypeExternal: SymbolHelper.HasExternal(helperContainer),
-            IsDeclaringTypeErasable: true
+            IsDeclaringTypeNoContainer: true
         );
         return new IrCallExpression(
             new IrMemberAccess(new IrTypeReference(helperContainer.Name), helperName, origin),

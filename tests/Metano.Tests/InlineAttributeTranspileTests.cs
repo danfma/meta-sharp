@@ -7,7 +7,7 @@ namespace Metano.Tests;
 /// attribute expands a member access into the member's initializer
 /// (or expression-bodied getter) at every call site, so the
 /// declaration itself never materializes in the generated output.
-/// Combines with <c>[Erasable]</c> on the container and
+/// Combines with <c>[NoContainer]</c> on the container and
 /// <c>[PlainObject]</c>/<c>[Branded]</c> on the initializer type to
 /// replicate TypeScript's literal-type dispatch without a helper
 /// indirection.
@@ -22,7 +22,7 @@ public class InlineAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable]
+            [NoContainer]
             public static class Constants
             {
                 [Inline]
@@ -50,7 +50,7 @@ public class InlineAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable]
+            [NoContainer]
             public static class Constants
             {
                 [Inline]
@@ -83,7 +83,7 @@ public class InlineAttributeTranspileTests
             [PlainObject]
             public sealed record Tag(string TagName);
 
-            [Erasable]
+            [NoContainer]
             public static class HtmlElementType
             {
                 [Inline]
@@ -111,14 +111,14 @@ public class InlineAttributeTranspileTests
         // referenced assembly carries a SyntaxTree that belongs to
         // the declaring compilation, not ours. Calling
         // GetSemanticModel on that tree used to throw ArgumentException
-        // or fall back to the Erasable member identifier. Source
+        // or fall back to the NoContainer member identifier. Source
         // ProjectReferences should now inline through the referenced
         // compilation.
         var result = TranspileHelper.TranspileWithLibrary(
             """
             using Metano.Annotations;
 
-            [Erasable]
+            [NoContainer]
             public static class Constants
             {
                 [Inline]
@@ -170,12 +170,12 @@ public class InlineAttributeTranspileTests
                 public HtmlElement CreateElement(string elementName) => throw null!;
             }
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class DocumentExtensions
             {
                 extension(Document document)
                 {
-                    [Inline]
+                    [Inline(InlineMode.Substitute)]
                     public TElement CreateElement<TElement>(HtmlElementType.Of<TElement> type)
                         where TElement : HtmlElement
                     {
@@ -184,7 +184,7 @@ public class InlineAttributeTranspileTests
                 }
             }
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class HtmlElementType
             {
                 [PlainObject]
@@ -360,7 +360,7 @@ public class InlineAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable]
+            [NoContainer]
             public static class Colors
             {
                 [Inline]
@@ -422,10 +422,10 @@ public class InlineAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable]
+            [NoContainer]
             public static class Math2
             {
-                [Inline]
+                [Inline(InlineMode.Substitute)]
                 public static int Sub(int a, int b) => a - b;
             }
 
@@ -451,10 +451,10 @@ public class InlineAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable]
+            [NoContainer]
             public static class Math2
             {
-                [Inline]
+                [Inline(InlineMode.Substitute)]
                 public static int Bump(int a, int b = 5) => a + b;
             }
 
@@ -479,7 +479,7 @@ public class InlineAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable, Inline]
+            [NoContainer, Inline(InlineMode.Substitute)]
             public static class Catalog
             {
                 public static readonly int Pi = 3;
@@ -508,7 +508,7 @@ public class InlineAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable, Inline]
+            [NoContainer, Inline(InlineMode.Substitute)]
             public static class Catalog
             {
                 public static readonly int Pi = 3;
@@ -558,7 +558,7 @@ public class InlineAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable, Inline]
+            [NoContainer, Inline(InlineMode.Substitute)]
             public static class Counters
             {
                 public static int Value = 1;
@@ -586,7 +586,7 @@ public class InlineAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable, Inline]
+            [NoContainer, Inline(InlineMode.Substitute)]
             public static class Catalog
             {
                 public static readonly int Pi = 3;
@@ -609,7 +609,7 @@ public class InlineAttributeTranspileTests
     }
 
     [Test]
-    public async Task Inline_NonErasableMethod_LowersAsIifeAtCallSite()
+    public async Task Inline_DefaultMethod_LowersAsIifeAtCallSite()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -638,17 +638,16 @@ public class InlineAttributeTranspileTests
     }
 
     [Test]
-    public async Task Inline_ErasableMethod_StillSubstitutesTextually()
+    public async Task Inline_SubstituteMode_BetaReducesArgsTextually()
     {
         var result = TranspileHelper.Transpile(
             """
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable]
             public static class MathHelpers
             {
-                [Inline]
+                [Inline(InlineMode.Substitute)]
                 public static int Squared(int x) => x * x;
             }
 

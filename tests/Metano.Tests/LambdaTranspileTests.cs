@@ -10,7 +10,7 @@ public class LambdaTranspileTests
             using System.Collections.Generic;
             using System.Linq;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Filters
             {
                 public static bool HasPositive(List<int> items)
@@ -40,7 +40,7 @@ public class LambdaTranspileTests
                 [Transpile]
                 public record Item(string Name, bool Active);
 
-                [Transpile, Erasable]
+                [Transpile, NoContainer]
                 public static class ItemFilter
                 {
                     public static int CountActive(List<Item> items)
@@ -65,7 +65,7 @@ public class LambdaTranspileTests
             using System.Collections.Generic;
             using System.Linq;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Logic
             {
                 public static bool NoneNegative(List<int> items)
@@ -88,7 +88,7 @@ public class LambdaTranspileTests
             """
             using System;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class MathUtils
             {
                 public static int Apply(Func<int, int, int> fn, int a, int b)
@@ -117,7 +117,7 @@ public class LambdaTranspileTests
             using System.Collections.Generic;
             using System.Linq;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Projection
             {
                 public static List<string> GetNames(List<string> items)
@@ -141,7 +141,7 @@ public class LambdaTranspileTests
             using System.Collections.Generic;
             using System.Linq;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Check
             {
                 public static bool HasAny(List<int> items)

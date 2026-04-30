@@ -3,7 +3,7 @@ using Metano.TypeScript.DOM;
 
 namespace SampleCounterV3.Mvu;
 
-[Transpile, Erasable]
+[Transpile, NoContainer]
 public static class StyleSupport
 {
     [Emit("$0.setAttribute('style', $1)")]

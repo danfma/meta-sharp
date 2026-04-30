@@ -40,7 +40,7 @@ public class DefaultParameterValueTests
             namespace App;
 
             [Transpile]
-            [Erasable]
+            [NoContainer]
             public static class Builder
             {
                 public static string Create(string tag, bool attached = true) =>

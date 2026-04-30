@@ -14,7 +14,7 @@ namespace Metano.Annotations.TypeScript;
 /// <c>document</c> in TypeScript. This matches the shipped behavior
 /// in #94. Scope-erasure-without-runtime semantics — the compile-time
 /// sugar container — live on
-/// <see cref="Metano.Annotations.ErasableAttribute"/>; classes that
+/// <see cref="Metano.Annotations.NoContainerAttribute"/>; classes that
 /// need both attach the two attributes.
 /// </para>
 /// <para>

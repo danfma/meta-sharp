@@ -9,7 +9,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 [ObjectArgs]
@@ -32,7 +32,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 [ObjectArgs]
@@ -68,7 +68,7 @@ public class ObjectArgsTranspileTests
                 public abstract string Render();
             }
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 [ObjectArgs]
@@ -90,7 +90,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 [ObjectArgs]
@@ -262,7 +262,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 public static int Plain(int gap = 0, int width = 100) => gap + width;
@@ -357,7 +357,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 [ObjectArgs]
@@ -384,7 +384,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 [ObjectArgs]
@@ -411,7 +411,7 @@ public class ObjectArgsTranspileTests
             """
             namespace App;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 [ObjectArgs]

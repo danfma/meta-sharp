@@ -9,18 +9,18 @@ namespace Metano.Tests.IR;
 
 /// <summary>
 /// Exercises <see cref="IrToTsModuleBridge"/> end-to-end: compiles a C#
-/// static class (with or without <c>[Erasable]</c>), runs the IR
+/// static class (with or without <c>[NoContainer]</c>), runs the IR
 /// module-function extractor, feeds the functions through the bridge, and
 /// prints the resulting file so we can pin the top-level function shape.
 /// </summary>
 public class IrToTsModuleBridgeTests
 {
     [Test]
-    public async Task Erasable_StaticMethods_BecomeTopLevelFunctions()
+    public async Task NoContainer_StaticMethods_BecomeTopLevelFunctions()
     {
         var output = BuildModule(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class MathUtils
             {
                 public static int Double(int x) => x * 2;
@@ -30,7 +30,7 @@ public class IrToTsModuleBridgeTests
             "MathUtils"
         );
 
-        // A `[Erasable]` static class renders as a flat file of
+        // A `[NoContainer]` static class renders as a flat file of
         // exported functions — no `class MathUtils { … }` wrapper.
         await Assert.That(output).Contains("export function double(x: number): number");
         await Assert.That(output).Contains("export function increment(x: number): number");
@@ -42,7 +42,7 @@ public class IrToTsModuleBridgeTests
     {
         var output = BuildModule(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class IO
             {
                 public static async System.Threading.Tasks.Task<int> LoadAsync() => await System.Threading.Tasks.Task.FromResult(42);
@@ -82,7 +82,7 @@ public class IrToTsModuleBridgeTests
         // types reference an undeclared T and the TS fails to compile.
         var output = BuildModule(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class GenericsModule
             {
                 public static T Identity<T>(T value) => value;
@@ -101,7 +101,7 @@ public class IrToTsModuleBridgeTests
         // the IR → TS round-trip; otherwise renames on module functions regress.
         var output = BuildModule(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class MathUtils
             {
                 [Name("sum")]
@@ -123,7 +123,7 @@ public class IrToTsModuleBridgeTests
         // single method can't be both a generator and async on this backend.
         var output = BuildModule(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Iterators
             {
                 public static System.Collections.Generic.IEnumerable<int> OneTwo()
@@ -145,7 +145,7 @@ public class IrToTsModuleBridgeTests
     {
         var output = BuildModule(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Empty { }
             """,
             "Empty"

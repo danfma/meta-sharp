@@ -90,7 +90,7 @@ public class ExternalMappingTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Helpers
             {
                 [Emit("$0.toFixed($1)")]
@@ -111,7 +111,7 @@ public class ExternalMappingTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Utils
             {
                 [Emit("typeof $0")]
@@ -134,7 +134,7 @@ public class ExternalMappingTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Fmt
             {
                 [Emit("$0.slice($1, $2)")]
@@ -165,7 +165,7 @@ public class ExternalMappingTranspileTests
                 [Transpile]
                 public class Widget { }
 
-                [Transpile, Erasable]
+                [Transpile, NoContainer]
                 public static class Factory
                 {
                     [Emit("make($T0, $0)")]
@@ -201,7 +201,7 @@ public class ExternalMappingTranspileTests
             """
             namespace App
             {
-                [Transpile, Erasable]
+                [Transpile, NoContainer]
                 public static class H
                 {
                     [Emit("createElement($T0, $0)"), Import(name: "createElement", from: "react")]
@@ -242,7 +242,7 @@ public class ExternalMappingTranspileTests
             """
             namespace App
             {
-                [Transpile, Erasable]
+                [Transpile, NoContainer]
                 public static class Inferno
                 {
                     [Import(name: "createElement", from: "inferno-create-element"), Name("createElement")]
@@ -276,7 +276,7 @@ public class ExternalMappingTranspileTests
             """
             namespace App
             {
-                [Transpile, Erasable]
+                [Transpile, NoContainer]
                 public static class Inferno
                 {
                     [Import(name: "createElement", from: "inferno-create-element")]

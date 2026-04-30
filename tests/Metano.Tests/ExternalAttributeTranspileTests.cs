@@ -8,7 +8,7 @@ namespace Metano.Tests;
 /// an ambient runtime-provided shape: no file is emitted, but static
 /// member access stays class-qualified at the call site
 /// (<c>Js.Document</c> in C# becomes <c>Js.document</c> in TS — the
-/// flatten now lives exclusively on <c>[Erasable]</c>). The widened
+/// flatten now lives exclusively on <c>[NoContainer]</c>). The widened
 /// surface accepts <c>class</c>, <c>abstract class</c>, <c>interface</c>,
 /// and <c>struct</c> targets so ambient structural shapes (DOM types,
 /// Hono-style context interfaces) can use <c>[External]</c> directly.
@@ -318,19 +318,19 @@ public class ExternalAttributeTranspileTests
             .IsFalse();
     }
 
-    // ─── Erasable retains the flatten behavior ───────────────
+    // ─── NoContainer retains the flatten behavior ───────────────
 
     [Test]
-    public async Task Erasable_StaticMethod_CallFlattens()
+    public async Task NoContainer_StaticMethod_CallFlattens()
     {
         // Counterpart to External_StaticMethod_CallStaysClassQualified.
-        // After #106, only `[Erasable]` flattens at the call site.
+        // After #106, only `[NoContainer]` flattens at the call site.
         var result = TranspileHelper.Transpile(
             """
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable]
+            [NoContainer]
             public static class Constants
             {
                 public static int Pi => 3;
@@ -348,20 +348,20 @@ public class ExternalAttributeTranspileTests
         await Assert.That(output).DoesNotContain("Constants.");
     }
 
-    // ─── Erasable flattens vs plain static class ───────────
+    // ─── NoContainer flattens vs plain static class ───────────
 
     [Test]
-    public async Task ErasableStaticClass_AccessFlattens()
+    public async Task NoContainerStaticClass_AccessFlattens()
     {
         // Baseline counterpart to External_StaticMethod_CallStaysClassQualified:
-        // `[Erasable]` is the lone flatten anchor after #106. A consumer
+        // `[NoContainer]` is the lone flatten anchor after #106. A consumer
         // calling `Helpers.Zero()` lowers to a bare `zero()` because the
         // class scope vanishes at the call site.
         var result = TranspileHelper.Transpile(
             """
             [assembly: TranspileAssembly]
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Helpers
             {
                 public static int Zero() => 0;

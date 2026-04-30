@@ -79,7 +79,7 @@ public class NullableTranspileTests
         var result = TranspileHelper.Transpile(
             """
             #nullable enable
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Finder
             {
                 public static string? Find(string key)
@@ -100,7 +100,7 @@ public class NullableTranspileTests
         var result = TranspileHelper.Transpile(
             """
             #nullable enable
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Formatter
             {
                 public static string Format(string? input)
@@ -123,7 +123,7 @@ public class NullableTranspileTests
         var result = TranspileHelper.Transpile(
             """
             #nullable enable
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Utils
             {
                 public static string OrDefault(string? value)
@@ -146,7 +146,7 @@ public class NullableTranspileTests
         var result = TranspileHelper.Transpile(
             """
             #nullable enable
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Helper
             {
                 public static int? GetLength(string? value)

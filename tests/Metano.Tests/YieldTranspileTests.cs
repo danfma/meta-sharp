@@ -28,11 +28,11 @@ public class YieldTranspileTests
     }
 
     [Test]
-    public async Task Erasable_WithYield_EmitsGeneratorFunction()
+    public async Task NoContainer_WithYield_EmitsGeneratorFunction()
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class SequenceModule
             {
                 public static System.Collections.Generic.IEnumerable<string> Names()

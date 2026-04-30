@@ -197,7 +197,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         var declarativeMappings = DeclarativeMappingRegistry.FromIr(ir);
 
-        var (erasableFunctionExports, synthesizedAliasesByFile) = BuildErasableFunctionExports(
+        var (erasableFunctionExports, synthesizedAliasesByFile) = BuildNoContainerFunctionExports(
             transpilableTypes,
             transpilableTypesDict,
             ir.BclExports,
@@ -222,7 +222,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             TypeMapping = typeMappingContext,
             UseIrBodiesWhenCovered = UseIrBodiesWhenCovered,
-            ErasableFunctionExports = erasableFunctionExports,
+            NoContainerFunctionExports = erasableFunctionExports,
             SynthesizedAliasesByFile = synthesizedAliasesByFile,
         };
 
@@ -387,7 +387,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         else if (
             (
                 SymbolHelper.HasExportedAsModule(type)
-                || SymbolHelper.HasErasable(type)
+                || SymbolHelper.HasNoContainer(type)
                 || HasExtensionMembers(type)
             ) && type.IsStatic
         )
@@ -1137,7 +1137,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
     /// <summary>
     /// Builds the camelCase-name → declaring-type lookup the import collector
-    /// uses to resolve cross-module references to <c>[Erasable]</c> static
+    /// uses to resolve cross-module references to <c>[NoContainer]</c> static
     /// methods. Without it the collector — which keys imports off
     /// <see cref="IrTranspilableTypeRef.TsName"/> — cannot bridge a flattened
     /// call site (<c>column(args)</c>) back to the file the function was
@@ -1148,7 +1148,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     private static (
         IReadOnlyDictionary<string, IrTranspilableTypeRef> Exports,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> SynthesizedAliasesByFile
-    ) BuildErasableFunctionExports(
+    ) BuildNoContainerFunctionExports(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes,
         IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
         IReadOnlyDictionary<string, IrBclExport> bclExports,
@@ -1172,17 +1172,17 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var type in transpilableTypes)
         {
-            if (!SymbolHelper.HasErasable(type))
+            if (!SymbolHelper.HasNoContainer(type))
                 continue;
             if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
                 continue;
 
             foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
             {
-                if (!IsExportableErasableMethod(member))
+                if (!IsExportableNoContainerMethod(member))
                     continue;
 
-                var fnName = ResolveErasableFunctionName(member);
+                var fnName = ResolveNoContainerFunctionName(member);
 
                 if (
                     TryResolveImportNameCollision(
@@ -1218,10 +1218,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// Collects every TS identifier the import collector would already
     /// reserve in the consuming files: emitted transpilable types, BCL
     /// exports (decimal → Decimal), and <c>[Import]</c> externals. A
-    /// <c>[Erasable]</c> factory whose emitted name collides with any of
+    /// <c>[NoContainer]</c> factory whose emitted name collides with any of
     /// these would shadow the existing import at the TS surface, breaking
     /// the consumer file in subtle ways the user would only catch at
-    /// <c>tsc</c> time. <c>[Erasable]</c> owners and <c>[NoEmit]</c>
+    /// <c>tsc</c> time. <c>[NoContainer]</c> owners and <c>[NoEmit]</c>
     /// types are skipped because they emit no class and contribute no
     /// surface name.
     /// </summary>
@@ -1236,7 +1236,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var type in transpilableTypes)
         {
-            if (SymbolHelper.HasErasable(type))
+            if (SymbolHelper.HasNoContainer(type))
                 continue;
             if (SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript))
                 continue;
@@ -1321,12 +1321,12 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         IrTranspilableTypeRef? OwnerRef = null
     );
 
-    private static bool IsExportableErasableMethod(IMethodSymbol member) =>
+    private static bool IsExportableNoContainerMethod(IMethodSymbol member) =>
         member.IsStatic
         && member.MethodKind == MethodKind.Ordinary
         && member.DeclaredAccessibility == Accessibility.Public;
 
-    private static string ResolveErasableFunctionName(IMethodSymbol member) =>
+    private static string ResolveNoContainerFunctionName(IMethodSymbol member) =>
         SymbolHelper.GetNameOverride(member, TargetLanguage.TypeScript)
         ?? TypeScriptNaming.ToCamelCase(member.Name);
 
@@ -1336,7 +1336,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// file already binds, signaling the caller to skip the export.
     /// </summary>
     /// <summary>
-    /// Detects a clash between an <c>[Erasable]</c> factory name and a
+    /// Detects a clash between an <c>[NoContainer]</c> factory name and a
     /// reserved import slot. Layered resolution:
     /// <list type="number">
     ///   <item>If the factory's source file already aliases the colliding
@@ -1391,7 +1391,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 new MetanoDiagnostic(
                     MetanoDiagnosticSeverity.Info,
                     DiagnosticCodes.AliasedImportConflict,
-                    $"[Erasable] static method '{owner}.{factory.Name}' resolves to TS factory "
+                    $"[NoContainer] static method '{owner}.{factory.Name}' resolves to TS factory "
                         + $"name '{factoryName}', which collides with transpilable type "
                         + $"'{reserved.Description}'. Imported as '{alias}' inside this file. "
                         + $"Pin the alias deterministically with a 'using {alias} = …;' "
@@ -1406,8 +1406,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         reportDiagnostic(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.ErasableFactoryNameClash,
-                $"[Erasable] static method '{ownerName}.{factory.Name}' resolves to TS factory "
+                DiagnosticCodes.NoContainerFactoryNameClash,
+                $"[NoContainer] static method '{ownerName}.{factory.Name}' resolves to TS factory "
                     + $"name '{factoryName}', which collides with {DescribeReservedKind(reserved.Kind)} "
                     + $"'{reserved.Description}'. Drop the [Name] override or pick a name that "
                     + "does not match an emitted type or imported symbol.",
@@ -1455,8 +1455,8 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         reportDiagnostic(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.ErasableFactoryNameClash,
-                $"[Erasable] static method '{newOwner}.{factory.Name}' resolves to TS factory "
+                DiagnosticCodes.NoContainerFactoryNameClash,
+                $"[NoContainer] static method '{newOwner}.{factory.Name}' resolves to TS factory "
                     + $"name '{factoryName}', which is already exported by "
                     + $"'{priorOwner}.{priorFactory.Name}'. Rename one via [Name(\"...\")].",
                 factory.Locations.FirstOrDefault()

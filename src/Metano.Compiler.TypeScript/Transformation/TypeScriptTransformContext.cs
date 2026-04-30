@@ -293,7 +293,7 @@ public sealed class TypeScriptTransformContext(
     public Action<MetanoDiagnostic> ReportDiagnostic { get; } = reportDiagnostic;
 
     /// <summary>
-    /// Per-export lookup for <c>[Erasable]</c> static methods: the
+    /// Per-export lookup for <c>[NoContainer]</c> static methods: the
     /// emitted (camelCase) function name maps back to its declaring
     /// type's <see cref="IrTranspilableTypeRef"/>. Populated by
     /// <see cref="TypeTransformer.TransformAll"/> after type discovery
@@ -307,12 +307,12 @@ public sealed class TypeScriptTransformContext(
     public IReadOnlyDictionary<
         string,
         IrTranspilableTypeRef
-    > ErasableFunctionExports { get; init; } =
+    > NoContainerFunctionExports { get; init; } =
         new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
 
     /// <summary>
     /// Per-source-file synthesized alias map keyed by the absolute file
-    /// path. Populated when <c>BuildErasableFunctionExports</c> detects a
+    /// path. Populated when <c>BuildNoContainerFunctionExports</c> detects a
     /// factory shadowing an imported transpilable type and falls back to
     /// auto-aliasing (Stage 2 of #181). Consumed by
     /// <c>TransformGroup</c> when seeding <c>UsingAliasScope</c> so the

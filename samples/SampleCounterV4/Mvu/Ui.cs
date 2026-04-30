@@ -5,14 +5,14 @@ using static SampleCounterV4.Inferno.Inferno;
 namespace SampleCounterV4.Mvu;
 
 /// <summary>
-/// JSX-flavored widget facade. <c>[Erasable]</c> flattens the qualifier
+/// JSX-flavored widget facade. <c>[NoContainer]</c> flattens the qualifier
 /// at the call site (<c>Ui.Column(...)</c> → <c>Column(...)</c>) while
 /// <c>[ObjectArgs]</c> on each factory turns positional + named C#
 /// arguments into a single TS object-literal — the call surface looks
 /// just like JSX (<c>Column({ gap: 12, children: [...] })</c>).
 /// Internally each factory routes to Inferno's <c>createElement</c>.
 /// </summary>
-[Erasable]
+[NoContainer]
 public static class Ui
 {
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Column))]

@@ -3,11 +3,11 @@ using Metano.Annotations.TypeScript;
 
 namespace Metano.TypeScript.DOM;
 
-// `[Erasable]` flattens `Js.Document` → `document` at the call site so
+// `[NoContainer]` flattens `Js.Document` → `document` at the call site so
 // the emitted TS reaches the runtime globals directly. `[External]` on
 // each member keeps the ambient stub contract: no declaration is
 // emitted for the property since the runtime itself owns the binding.
-[Erasable]
+[NoContainer]
 public static class Js
 {
     [External, Name("window")]

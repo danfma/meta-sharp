@@ -255,9 +255,9 @@ public static class IrToTsExpressionBridge
             memberName = TypeScriptNaming.ToCamelCase(ma.MemberName);
         else
             memberName = TypeScriptNaming.ToCamelCaseMember(ma.MemberName);
-        // `[External]` and `[Erasable]` declaring types: the class
+        // `[External]` and `[NoContainer]` declaring types: the class
         // vanishes at the call site. `[External]` groups runtime
-        // `[Erasable]` marks a compile-time sugar container — its scope
+        // `[NoContainer]` marks a compile-time sugar container — its scope
         // vanishes at the call site, so `Constants.Pi` lowers to just
         // `Pi`. `[External]` no longer participates in this flatten
         // (per #106): an `[External]` static class stays
@@ -267,7 +267,7 @@ public static class IrToTsExpressionBridge
         // global). Instance access (ill-formed on a static class)
         // falls through to the normal property-access path.
         if (
-            ma.Origin is { IsStatic: true, IsDeclaringTypeErasable: true }
+            ma.Origin is { IsStatic: true, IsDeclaringTypeNoContainer: true }
             && ma.Target is IrTypeReference
         )
             return new TsIdentifier(memberName);

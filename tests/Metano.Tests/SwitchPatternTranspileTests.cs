@@ -9,7 +9,7 @@ public class SwitchPatternTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Mapper
             {
                 public static string Map(int code)
@@ -39,7 +39,7 @@ public class SwitchPatternTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Grader
             {
                 public static string Grade(int score)
@@ -71,7 +71,7 @@ public class SwitchPatternTranspileTests
         var result = TranspileHelper.Transpile(
             """
             #nullable enable
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Checker
             {
                 public static bool IsEmpty(string? value)
@@ -96,7 +96,7 @@ public class SwitchPatternTranspileTests
         var result = TranspileHelper.Transpile(
             """
             #nullable enable
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Checker
             {
                 public static bool HasValue(string? value)
@@ -116,7 +116,7 @@ public class SwitchPatternTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Checker
             {
                 public static bool IsZero(int x)
@@ -141,7 +141,7 @@ public class SwitchPatternTranspileTests
                 [Transpile]
                 public record Money(int Cents);
 
-                [Transpile, Erasable]
+                [Transpile, NoContainer]
                 public static class Checker
                 {
                     public static bool IsMoney(object value)
@@ -162,7 +162,7 @@ public class SwitchPatternTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Validator
             {
                 public static bool IsPositive(int x)
@@ -182,7 +182,7 @@ public class SwitchPatternTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Range
             {
                 public static bool InRange(int x)
@@ -202,7 +202,7 @@ public class SwitchPatternTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class StatusCheck
             {
                 public static bool IsSpecial(int x)
@@ -224,7 +224,7 @@ public class SwitchPatternTranspileTests
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Grader
             {
                 public static string Classify(int score)

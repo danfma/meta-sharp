@@ -3,7 +3,7 @@ using Metano.Compiler.Diagnostics;
 namespace Metano.Tests;
 
 /// <summary>
-/// Tests for <c>[Erasable]</c> from <c>Metano.Annotations</c>. The
+/// Tests for <c>[NoContainer]</c> from <c>Metano.Annotations</c>. The
 /// attribute marks a static class whose scope vanishes at the call
 /// site: static member access flattens to a bare identifier and the
 /// class's members project as top-level exports in a file named
@@ -11,22 +11,22 @@ namespace Metano.Tests;
 /// flatten, the module-style emission, and the MS0015 validation
 /// surface.
 /// </summary>
-public class ErasableAttributeTranspileTests
+public class NoContainerAttributeTranspileTests
 {
     // ─── Emission flatten ────────────────────────────────────
 
     [Test]
-    public async Task Erasable_StaticMember_AccessFlattensToIdentifier()
+    public async Task NoContainer_StaticMember_AccessFlattensToIdentifier()
     {
         // `Constants.Pi` on the C# side should lower to a bare `pi`
         // identifier on the TS side (camelCased per the TS naming
-        // policy) because `Constants` is `[Erasable]` — the enclosing
+        // policy) because `Constants` is `[NoContainer]` — the enclosing
         // class qualifier is dropped at the call site.
         var result = TranspileHelper.TranspileWithLibrary(
             """
             using Metano.Annotations;
 
-            [Erasable]
+            [NoContainer]
             public static class Constants
             {
                 public static double Pi => 3.14;
@@ -48,9 +48,9 @@ public class ErasableAttributeTranspileTests
     }
 
     [Test]
-    public async Task Erasable_Methods_EmitAsTopLevelExports()
+    public async Task NoContainer_Methods_EmitAsTopLevelExports()
     {
-        // Plain methods on an `[Erasable]` static class lower to
+        // Plain methods on an `[NoContainer]` static class lower to
         // top-level `export function` declarations inside a file named
         // after the class. The TypeScript class wrapper is dropped so
         // the call-site flatten (`MathUtils.Add` → `add`) references
@@ -60,7 +60,7 @@ public class ErasableAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable]
+            [NoContainer]
             public static class MathUtils
             {
                 public static int Add(int a, int b) => a + b;
@@ -75,7 +75,7 @@ public class ErasableAttributeTranspileTests
     }
 
     [Test]
-    public async Task Erasable_MethodCall_AccessFlattensAtCallSite()
+    public async Task NoContainer_MethodCall_AccessFlattensAtCallSite()
     {
         // `MathUtils.Add(1, 2)` on the C# side lowers to `add(1, 2)`
         // at the call site — the enclosing class qualifier is dropped
@@ -85,7 +85,7 @@ public class ErasableAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable]
+            [NoContainer]
             public static class MathUtils
             {
                 public static int Add(int a, int b) => a + b;
@@ -104,9 +104,9 @@ public class ErasableAttributeTranspileTests
     }
 
     [Test]
-    public async Task Erasable_CrossModuleCall_EmitsFunctionImport()
+    public async Task NoContainer_CrossModuleCall_EmitsFunctionImport()
     {
-        // Cross-file consumer of an `[Erasable]` static method must
+        // Cross-file consumer of an `[NoContainer]` static method must
         // import the camelCased function name (NOT the type name) from
         // the file the function was emitted into. Without the export
         // registry the import collector keys off type names only, and
@@ -117,7 +117,7 @@ public class ErasableAttributeTranspileTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [Erasable]
+            [NoContainer]
             public static class MathUtils
             {
                 public static int Add(int a, int b) => a + b;
@@ -137,27 +137,27 @@ public class ErasableAttributeTranspileTests
     // ─── Diagnostics (MS0015) ────────────────────────────────
 
     [Test]
-    public async Task Erasable_OnNonStaticClass_EmitsMs0015()
+    public async Task NoContainer_OnNonStaticClass_EmitsMs0015()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations;
 
-            [Erasable]
+            [NoContainer]
             public class NotStatic {}
             """
         );
 
-        var ms0015 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidErasable);
+        var ms0015 = diagnostics.FirstOrDefault(d => d.Code == DiagnosticCodes.InvalidNoContainer);
         await Assert.That(ms0015).IsNotNull();
         await Assert.That(ms0015!.Message).Contains("static");
     }
 
     [Test]
-    public async Task Erasable_WithTranspile_EmitsModuleStyle()
+    public async Task NoContainer_WithTranspile_EmitsModuleStyle()
     {
         // `[Transpile]` forces discovery inside binding projects that
-        // do not opt into assembly-wide transpilation; `[Erasable]`
+        // do not opt into assembly-wide transpilation; `[NoContainer]`
         // still dictates call-site scope erasure + module-style
         // emission. The combo is valid so catalog/extension helpers
         // shipped from a referenced binding project can be authored
@@ -167,7 +167,7 @@ public class ErasableAttributeTranspileTests
             using Metano.Annotations;
 
             [Transpile]
-            [Erasable]
+            [NoContainer]
             public static class Bridge
             {
                 public static int Double(int value) => value * 2;
@@ -176,7 +176,7 @@ public class ErasableAttributeTranspileTests
         );
 
         await Assert
-            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidErasable))
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidNoContainer))
             .IsFalse();
         var output = files["bridge.ts"];
         await Assert.That(output).Contains("export function double(value: number): number");

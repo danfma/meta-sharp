@@ -3,17 +3,17 @@ using Metano.Compiler.Diagnostics;
 namespace Metano.Tests;
 
 /// <summary>
-/// Tests for <c>MS0020 ErasableFactoryNameClash</c>. The diagnostic
-/// fires when an <c>[Erasable]</c> static method's emitted TS name —
+/// Tests for <c>MS0020 NoContainerFactoryNameClash</c>. The diagnostic
+/// fires when an <c>[NoContainer]</c> static method's emitted TS name —
 /// after <c>[Name]</c> resolution, otherwise camelCase — collides with
 /// the TS name of a transpilable type the same emit scope can see, or
-/// with another <c>[Erasable]</c> factory across classes. Without the
+/// with another <c>[NoContainer]</c> factory across classes. Without the
 /// diagnostic the import collector silently resolves the bare
 /// identifier to the factory instead of the class, the factory body's
 /// <c>new ClassName(...)</c> becomes a recursive call, and consumer
 /// files import the function where they meant the type.
 /// </summary>
-public class ErasableFactoryNameClashTests
+public class NoContainerFactoryNameClashTests
 {
     [Test]
     public async Task NameOverride_MatchingTranspilableType_AutoAliasesAndEmitsMs0022()
@@ -37,7 +37,7 @@ public class ErasableFactoryNameClashTests
                 public Column(int gap) { }
             }
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 [ObjectArgs, Name("Column")]
@@ -47,7 +47,7 @@ public class ErasableFactoryNameClashTests
         );
 
         await Assert
-            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.ErasableFactoryNameClash))
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.NoContainerFactoryNameClash))
             .IsFalse();
 
         var ms0022 = diagnostics.FirstOrDefault(d =>
@@ -74,7 +74,7 @@ public class ErasableFactoryNameClashTests
                 public Column(int gap) { }
             }
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 [ObjectArgs, Name("makeColumn")]
@@ -84,7 +84,7 @@ public class ErasableFactoryNameClashTests
         );
 
         await Assert
-            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.ErasableFactoryNameClash))
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.NoContainerFactoryNameClash))
             .IsFalse();
     }
 
@@ -104,7 +104,7 @@ public class ErasableFactoryNameClashTests
                 public Column(int gap) { }
             }
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class UI
             {
                 [ObjectArgs]
@@ -114,11 +114,11 @@ public class ErasableFactoryNameClashTests
         );
 
         await Assert
-            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.ErasableFactoryNameClash))
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.NoContainerFactoryNameClash))
             .IsFalse();
     }
 
-    // Cross-assembly clash detection follows the cross-assembly Erasable
+    // Cross-assembly clash detection follows the cross-assembly NoContainer
     // discovery work in issue #178; today the detector scans only the
     // current assembly's transpilable type table.
 
@@ -132,7 +132,7 @@ public class ErasableFactoryNameClashTests
 
             namespace App;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Codecs
             {
                 [Name("Enumerable")]
@@ -142,14 +142,14 @@ public class ErasableFactoryNameClashTests
         );
 
         var ms0020 = diagnostics.FirstOrDefault(d =>
-            d.Code == DiagnosticCodes.ErasableFactoryNameClash
+            d.Code == DiagnosticCodes.NoContainerFactoryNameClash
         );
         await Assert.That(ms0020).IsNotNull();
         await Assert.That(ms0020!.Message).Contains("metano-runtime");
     }
 
     [Test]
-    public async Task TwoErasableFactoriesSameName_RaisesMs0020()
+    public async Task TwoNoContainerFactoriesSameName_RaisesMs0020()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -158,14 +158,14 @@ public class ErasableFactoryNameClashTests
 
             namespace App;
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Containers
             {
                 [Name("box")]
                 public static int OneBox(int x) => x;
             }
 
-            [Transpile, Erasable]
+            [Transpile, NoContainer]
             public static class Wrappers
             {
                 [Name("box")]
@@ -175,7 +175,7 @@ public class ErasableFactoryNameClashTests
         );
 
         var ms0020 = diagnostics.FirstOrDefault(d =>
-            d.Code == DiagnosticCodes.ErasableFactoryNameClash
+            d.Code == DiagnosticCodes.NoContainerFactoryNameClash
         );
         await Assert.That(ms0020).IsNotNull();
         await Assert.That(ms0020!.Message).Contains("box");

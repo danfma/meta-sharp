@@ -299,6 +299,34 @@ public static class SymbolHelper
             );
 
     /// <summary>
+    /// Reads the <see cref="Metano.Annotations.InlineMode"/> argument from a
+    /// member's <c>[Inline]</c> attribute. Returns
+    /// <see cref="Metano.Annotations.InlineMode.Materialize"/> when the
+    /// attribute is absent or its constructor argument is missing — matching
+    /// the attribute's own default.
+    /// </summary>
+    public static Metano.Annotations.InlineMode GetInlineMode(this ISymbol symbol)
+    {
+        var attr = FindInlineAttribute(symbol);
+        if (attr is null && symbol.ContainingType is { } containing)
+            attr = FindInlineAttribute(containing);
+        if (attr is null || attr.ConstructorArguments.Length == 0)
+            return Metano.Annotations.InlineMode.Materialize;
+        var raw = attr.ConstructorArguments[0].Value;
+        return raw is int value
+            ? (Metano.Annotations.InlineMode)value
+            : Metano.Annotations.InlineMode.Materialize;
+    }
+
+    private static AttributeData? FindInlineAttribute(ISymbol symbol) =>
+        symbol
+            .GetAttributes()
+            .FirstOrDefault(a =>
+                a.AttributeClass?.Name is ("InlineAttribute" or "Inline")
+                && a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
+            );
+
+    /// <summary>
     /// True when the member is effectively inline-marked — either
     /// directly via <c>[Inline]</c> or because its containing static
     /// class carries <c>[Inline]</c> as a propagation directive
@@ -424,7 +452,7 @@ public static class SymbolHelper
             );
 
     /// <summary>
-    /// Reads <c>[Erasable]</c> from <c>Metano.Annotations</c>. Static
+    /// Reads <c>[NoContainer]</c> from <c>Metano.Annotations</c>. Static
     /// class whose scope vanishes at every call site — no
     /// <c>.ts</c> file, and static member access drops the enclosing
     /// class name (<c>HtmlElementType.Div</c> → <c>Div</c>). Members
@@ -434,11 +462,11 @@ public static class SymbolHelper
     /// Subsumes <c>[ExportedAsModule]</c> (deprecated) and fixes the
     /// latent call-site flatten bug.
     /// </summary>
-    public static bool HasErasable(this ISymbol symbol) =>
+    public static bool HasNoContainer(this ISymbol symbol) =>
         symbol
             .GetAttributes()
             .Any(a =>
-                a.AttributeClass?.Name is ("ErasableAttribute" or "Erasable")
+                a.AttributeClass?.Name is ("NoContainerAttribute" or "NoContainer")
                 && a.AttributeClass?.ContainingNamespace?.ToDisplayString() == "Metano.Annotations"
             );
 
@@ -675,7 +703,7 @@ public static class SymbolHelper
             return false;
         // `[External]` is emission-scope "no emit": the class is a
         // stub for runtime globals and must never produce a .ts file.
-        // `[Erasable]` participates in transpilation instead — its
+        // `[NoContainer]` participates in transpilation instead — its
         // members project as top-level exports in a file named after
         // the class, while static member access flattens at the call
         // site. Both are kept separate from `[NoEmit]` so the

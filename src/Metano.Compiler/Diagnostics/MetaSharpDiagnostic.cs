@@ -172,7 +172,7 @@ public static class DiagnosticCodes
     /// downstream substitution stays bounded.</summary>
     public const string InvalidInline = "MS0016";
 
-    /// <summary>MS0015 — <c>[Erasable]</c> (from
+    /// <summary>MS0015 — <c>[NoContainer]</c> (from
     /// <c>Metano.Annotations</c>) was applied to a non-static class,
     /// or combined with <c>[Transpile]</c>. The attribute marks a
     /// static class whose scope vanishes at the call site — the
@@ -180,11 +180,11 @@ public static class DiagnosticCodes
     /// identifier. Non-static targets have no static surface to
     /// flatten, and <c>[Transpile]</c> asks for full emission which
     /// is incompatible with the no-file contract. Member-level
-    /// emission contracts inside an <c>[Erasable]</c> class (plain
+    /// emission contracts inside an <c>[NoContainer]</c> class (plain
     /// bodies projected as top-level exports, <c>[Inline]</c>
     /// expansion) are enforced in a follow-up slice; this code does
     /// not yet surface them.</summary>
-    public const string InvalidErasable = "MS0015";
+    public const string InvalidNoContainer = "MS0015";
 
     /// <summary>MS0019 — instantiating a generic type parameter via the
     /// <c>new()</c> constraint produces invalid TypeScript because TS
@@ -194,10 +194,10 @@ public static class DiagnosticCodes
     /// site.</summary>
     public const string GenericNewConstraint = "MS0019";
 
-    /// <summary>MS0020 — a <c>[Erasable]</c> static method's emitted name
+    /// <summary>MS0020 — a <c>[NoContainer]</c> static method's emitted name
     /// (after <c>[Name]</c> resolution, otherwise camelCase) collides
     /// with the TS name of a transpilable type the same emit scope can
-    /// see, or with another <c>[Erasable]</c> factory of the same name
+    /// see, or with another <c>[NoContainer]</c> factory of the same name
     /// across classes. The collision silently produces broken TypeScript:
     /// the import collector resolves the bare identifier to the factory
     /// instead of the class, the factory body's <c>new ClassName(...)</c>
@@ -205,7 +205,7 @@ public static class DiagnosticCodes
     /// where they meant the type. Rename the factory via
     /// <c>[Name(\"otherName\")]</c> or drop the override to fall back to
     /// camelCase.</summary>
-    public const string ErasableFactoryNameClash = "MS0020";
+    public const string NoContainerFactoryNameClash = "MS0020";
 
     /// <summary>MS0021 — two extension members (classic <c>(this T)</c>
     /// methods or C# 14 <c>extension(T) { … }</c> block members) declared

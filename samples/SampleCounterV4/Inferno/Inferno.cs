@@ -3,7 +3,7 @@ using Metano.Annotations;
 namespace SampleCounterV4.Inferno;
 
 /// <summary>
-/// Thin facade over <c>inferno-create-element</c>. <c>[Erasable]</c>
+/// Thin facade over <c>inferno-create-element</c>. <c>[NoContainer]</c>
 /// flattens the static qualifier (<c>Inferno.H(args)</c> →
 /// <c>createElement(args)</c>); <c>[Import]</c> + <c>[Name]</c> resolve
 /// the emitted call to Inferno's real export.
@@ -14,7 +14,7 @@ namespace SampleCounterV4.Inferno;
 /// <c>params</c> so component creation passes only props.
 /// </para>
 /// </summary>
-[Erasable]
+[NoContainer]
 public static class Inferno
 {
     [

@@ -73,7 +73,7 @@ public class ParamsParameterTests
             namespace App;
 
             [Transpile]
-            [Erasable]
+            [NoContainer]
             public static class Logger
             {
                 public static void Log(string format, params object[] args) { }

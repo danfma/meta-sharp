@@ -11,7 +11,7 @@ namespace SampleCounterV3.Mvu;
 // `using static SampleCounterV3.Mvu.UI;` and write `Column(...)`, `Row(...)`,
 // etc. without `new`. A real generator would scan widget classes and emit
 // one factory per public ctor.
-[Erasable]
+[NoContainer]
 public static class Ui
 {
     [ObjectArgs, Name(TargetLanguage.TypeScript, nameof(Column))]

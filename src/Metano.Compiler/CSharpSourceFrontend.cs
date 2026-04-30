@@ -254,7 +254,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         if (
             SymbolHelper.HasExportedAsModule(containingType)
-            || SymbolHelper.HasErasable(containingType)
+            || SymbolHelper.HasNoContainer(containingType)
         )
         {
             programType = null!;
@@ -337,7 +337,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                                 || SymbolHelper.HasNoEmit(sym)
                                 || SymbolHelper.HasNoEmit(sym, target)
                                 || SymbolHelper.HasExternal(sym)
-                                || SymbolHelper.HasErasable(sym)
+                                || SymbolHelper.HasNoContainer(sym)
                             )
                         )
                             RegisterSymbol(sym);
@@ -1121,18 +1121,18 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             }
         }
 
-        if (SymbolHelper.HasErasable(type))
+        if (SymbolHelper.HasNoContainer(type))
         {
             if (!type.IsStatic)
             {
                 diagnostics.Add(
                     new MetanoDiagnostic(
                         MetanoDiagnosticSeverity.Error,
-                        DiagnosticCodes.InvalidErasable,
-                        $"[Erasable] on '{type.Name}' requires a static class. The attribute "
+                        DiagnosticCodes.InvalidNoContainer,
+                        $"[NoContainer] on '{type.Name}' requires a static class. The attribute "
                             + $"marks a class whose scope vanishes at the call site — "
                             + $"non-static types carry instance state that cannot be erased. "
-                            + $"Mark the class 'static' or remove [Erasable].",
+                            + $"Mark the class 'static' or remove [NoContainer].",
                         type.Locations.FirstOrDefault()
                     )
                 );

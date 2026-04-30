@@ -399,8 +399,8 @@ public sealed class ImportCollector(
                 continue;
             }
 
-            // Erasable static-method export (e.g., `column` from a
-            // `[Erasable]` UI facade). The call-site flatten already
+            // NoContainer static-method export (e.g., `column` from a
+            // `[NoContainer]` UI facade). The call-site flatten already
             // dropped the type qualifier in the bridge; we look up the
             // declaring type's emit metadata so the import points at
             // the right module file with the lowercase function name
@@ -415,7 +415,7 @@ public sealed class ImportCollector(
                 // fall through to the transpilable-type branch
             }
             else if (
-                _context.ErasableFunctionExports.TryGetValue(typeName, out var erasableOwner)
+                _context.NoContainerFunctionExports.TryGetValue(typeName, out var erasableOwner)
                 && importedNames.Add(typeName)
             )
             {
