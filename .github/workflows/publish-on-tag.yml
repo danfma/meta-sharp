@@ -2,9 +2,9 @@ name: Publish on Tag
 
 # Triggered by `release.yml` pushing a `v*` tag through the
 # RELEASE_PAT (a default GITHUB_TOKEN push would not trigger this).
-# Runs dotnet-releaser in its expected tag-push mode so it publishes
-# NuGet packages and creates the GitHub release with the
-# CHANGELOG section semantic-release just wrote.
+# Two independent jobs publish to .NET / npm in parallel — a failure
+# on one ecosystem does not block the other (a duplicate NuGet push,
+# for example, leaves the npm job free to ship the matching package).
 on:
   push:
     tags: ["v*"]
@@ -16,8 +16,8 @@ permissions:
   issues: write
 
 jobs:
-  publish:
-    name: Build, Publish & Release
+  publish-dotnet:
+    name: Publish NuGet + GitHub Release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -29,6 +29,27 @@ jobs:
           dotnet-version: "10.0.x"
           dotnet-quality: "preview"
 
+      - name: Restore .NET tools
+        run: dotnet tool restore
+
+      # dotnet-releaser: build NuGet packages, push to NuGet.org, and
+      # create the GitHub Release using the CHANGELOG.md section
+      # produced by semantic-release in the upstream `release.yml`.
+      - name: dotnet-releaser
+        run: |
+          dotnet dotnet-releaser run \
+            --nuget-token "${{ secrets.NUGET_TOKEN }}" \
+            --github-token "${{ secrets.GITHUB_TOKEN }}" \
+            dotnet-releaser.toml
+
+  publish-npm:
+    name: Publish metano-runtime to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
       # Trusted Publishing requires npm >= 11.5.1, which ships with Node 24.
       - uses: actions/setup-node@v4
         with:
@@ -37,20 +58,8 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - name: Restore .NET tools
-        run: dotnet tool restore
-
       - name: Install npm dependencies
         run: bun install
-
-      # .NET: build, pack, publish NuGet, create GitHub Release using
-      # the CHANGELOG.md section produced by semantic-release.
-      - name: dotnet-releaser
-        run: |
-          dotnet dotnet-releaser run \
-            --nuget-token "${{ secrets.NUGET_TOKEN }}" \
-            --github-token "${{ secrets.GITHUB_TOKEN }}" \
-            dotnet-releaser.toml
 
       - name: Build metano-runtime
         run: cd targets/js/metano-runtime && bun run build
