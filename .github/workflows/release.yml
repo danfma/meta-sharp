@@ -11,42 +11,69 @@ on:
 
 permissions:
   contents: write
+  id-token: write # npm Trusted Publishing (OIDC)
   pull-requests: write
   issues: write
 
 jobs:
   release:
-    name: Release (semantic-release)
+    name: Release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-          # Use a PAT so the tag push from semantic-release triggers
-          # `publish-on-tag.yml`. Pushes made with the default
-          # GITHUB_TOKEN do NOT trigger other workflows.
-          token: ${{ secrets.RELEASE_PAT }}
           persist-credentials: true
 
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: "10.0.x"
+          dotnet-quality: "preview"
+
+      # Trusted Publishing requires npm >= 11.5.1 (Node 24+).
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
+          registry-url: "https://registry.npmjs.org"
 
       - uses: oven-sh/setup-bun@v2
 
       - name: Install npm dependencies
         run: bun install
 
-      # semantic-release analyzes commits, bumps version, updates
-      # CHANGELOG.md, commits + tags + pushes via PAT. The tag push
-      # triggers `publish-on-tag.yml`, which runs dotnet-releaser
-      # (NuGet + GitHub release) and the npm publish step.
+      # semantic-release: analyze commits → bump version → write CHANGELOG.md →
+      # commit + tag + push → exec `dotnet pack && dotnet nuget push` → create
+      # GitHub Release with notes generated from the commit log.
       - name: Run semantic-release
         env:
-          GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NUGET_TOKEN: ${{ secrets.NUGET_TOKEN }}
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
             bunx semantic-release --dry-run
           else
             bunx semantic-release
           fi
+
+      # Resolve the new tag semantic-release just pushed so the npm publish
+      # step picks up the right version. Skipped on dry runs.
+      - name: Resolve published tag
+        if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
+        id: tag
+        run: |
+          git fetch --tags
+          TAG=$(git describe --tags --abbrev=0)
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Build metano-runtime
+        if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
+        run: cd targets/js/metano-runtime && bun run build
+
+      # Sync npm package version to the tag and publish via npm Trusted
+      # Publishing (OIDC). No NPM_TOKEN — the npm CLI picks up the
+      # id-token: write OIDC token from the workflow.
+      - name: Publish metano-runtime to npm
+        if: ${{ inputs.dry_run != true && inputs.dry_run != 'true' }}
+        env:
+          GITHUB_REF_NAME: ${{ steps.tag.outputs.tag }}
+        run: bash scripts/sync-npm-version.sh
