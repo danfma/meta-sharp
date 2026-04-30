@@ -30,8 +30,8 @@ annotations.
 
 | Attribute | Purpose |
 | --- | --- |
-| `ErasableAttribute` | Marks a static class whose scope vanishes at the call site. The class emits no `.ts` file and static member access flattens to a bare identifier (sole flatten anchor after #106). Members emit per their own attributes — literal returns, `[Emit]` templates, plus `[External]` and `[Inline]` members. |
-| `ExportedAsModuleAttribute` | **Deprecated** (`[Obsolete]`). Use `[Erasable]` instead; will be removed in a future release. |
+| `NoContainerAttribute` | Marks a static class as a pure compile-time container: no `.ts` file emitted and every static member access drops the class qualifier (sole flatten anchor after #106). Effect is local to the decorated type — does not propagate to nested types or to `[Inline]` members. (Previously named `[Erasable]`; renamed in ADR-0017.) |
+| `ExportedAsModuleAttribute` | **Deprecated** (`[Obsolete]`). Use `[NoContainer]` instead; will be removed in a future release. |
 | `ModuleEntryPointAttribute` | Promotes a method body to top-level module statements. |
 | `ModuleAttribute` | Declares module-related emission metadata. |
 | `ExportVarFromBodyAttribute` | Promotes a variable declared in a module entry body into module export surface. |
@@ -42,9 +42,9 @@ annotations.
 | --- | --- |
 | `GenerateGuardAttribute` | Generates a runtime `isT` type guard plus a throwing `assertT(value, message?)` companion that wraps it. |
 | `DiscriminatorAttribute` (TypeScript) | Names a `[StringEnum]` field as the discriminator; the generated `isT` short-circuits on a literal comparison against the type name before walking the remaining shape. |
-| `ExternalAttribute` (TypeScript) | Marks an ambient runtime-provided shape — no file emitted. Per #106 accepts `class`, `abstract class`, `interface`, `struct`, `method`, `property`, `field`. Static member access stays class-qualified (`Js.document`); the flatten contract anchors exclusively on `[Erasable]`. Combine with `[Erasable]` on the same static class to keep the historical "no file + flatten" shape (`Js.cs` runtime-globals). |
+| `ExternalAttribute` (TypeScript) | Marks an ambient runtime-provided shape — no file emitted. Per #106 accepts `class`, `abstract class`, `interface`, `struct`, `method`, `property`, `field`. Static member access stays class-qualified (`Js.document`); the flatten contract anchors exclusively on `[NoContainer]`. Combine with `[NoContainer]` on the same static class to keep the "no file + flatten" shape (`Js.cs` runtime-globals). |
 | `ConstantAttribute` | Applied to a parameter or field; the value must be a compile-time constant literal. Violations surface as MS0014 `InvalidConstant`. Enables literal-type narrowing in `[Emit]` templates and safe `[Inline]` expansion. |
-| `InlineAttribute` | Applied to a `static readonly` field or a `static` property with an expression-bodied getter; every reference substitutes the member's initializer (or getter expression) at the call site. Method / extension inlining and static-class propagation ship in a follow-up slice. Violations surface as MS0016 `InvalidInline`. |
+| `InlineAttribute` | Applied to a `static readonly` field, a `static` property with an expression-bodied getter, or a `static` method whose body is a single expression. Every reference substitutes the member's body at the call site; the declaration itself is not emitted. The optional `InlineMode` argument selects between `Materialize` (default — IIFE wrap, args evaluate once) and `Substitute` (β-reduction — args inline directly into the body, may duplicate). Class-level `[Inline]` propagates to every static member, with `Mode` cascading from the class declaration. Violations surface as MS0016 `InvalidInline`. See ADR-0017. |
 | `ThisAttribute` | Applied to the first parameter of a delegate or inlinable method; promotes the slot to the synthetic JavaScript `this` receiver. The parameter is dropped from the emitted TS positional list and re-introduced as the function type's `this` annotation (`(this: T, …) => R`). Lambda / method-group / body-rewrite emission lands in a follow-up slice. Violations surface as MS0018 `InvalidThis`. |
 
 ## Packaging and Interop

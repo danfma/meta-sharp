@@ -32,12 +32,12 @@ The current stable code range is **`MS0001` through `MS0022`**.
 | `MS0012` | `InvalidExternal` | `[External]` was applied to a concrete non-static class, or combined with `[Transpile]`. Per #106 the attribute accepts class, abstract class, struct, interface, method, property, and field targets. |
 | `MS0013` | `NoEmitReferencedByTranspiledCode` | A transpilable type's signature or body references a type marked `[NoEmit]`. Per the #106 redefinition `[NoEmit]` paints a type as .NET-only; ambient TS shapes belong to `[External]` instead. |
 | `MS0014` | `InvalidConstant` | `[Constant]` argument or initializer is not a compile-time constant literal. |
-| `MS0015` | `InvalidErasable` | `[Erasable]` was applied to a non-static class, or combined with `[Transpile]`. |
+| `MS0015` | `InvalidErasable` | `[NoContainer]` was applied to a non-static class, or combined with `[Transpile]`. (Constant name retained for diagnostic-id stability; the user-facing attribute is `[NoContainer]`.) |
 | `MS0016` | `InvalidInline` | `[Inline]` was applied to an unsupported shape (instance or mutable field, field without initializer, block-bodied property, non-static property, or any other target). |
 | `MS0017` | `InterfacePrefixCollision` | Stripping the `I` prefix from an interface name (under `--strip-interface-prefix`) would collide with another top-level type in the same namespace. Keeps the prefix so the consumer surface stays compilable. |
 | `MS0018` | `InvalidThis` | `[This]` (from `Metano.Annotations`) was applied outside the first positional parameter, or combined with `ref` / `out` / `params`. |
 | `MS0019` | `GenericNewConstraint` | Instantiating a generic type parameter via the `new()` constraint produces invalid TypeScript because TS erases generics at runtime. |
-| `MS0020` | `ErasableFactoryNameClash` | A `[Erasable]` static method's emitted TS name (after `[Name]` resolution, otherwise camelCase) collides with the TS name of a transpilable type the same emit scope can see, or with another `[Erasable]` factory of the same name across classes. |
+| `MS0020` | `ErasableFactoryNameClash` | A `[NoContainer]` static method's emitted TS name (after `[Name]` resolution, otherwise camelCase) collides with the TS name of a transpilable type the same emit scope can see, or with another `[NoContainer]` factory of the same name across classes. |
 | `MS0021` | `ExtensionHelperNameClash` | Two extension members declared on different static classes resolve to the same emitted TS helper name, so the import collector cannot pick which file to import from on a bare call site. |
 | `MS0022` | `AliasedImportConflict` | A local declaration shadows an imported symbol; the transpiler synthesized an alias to keep both surfaces working. Pin the alias deterministically with a `using NewName = T;` directive (or `[ImportAlias]`) to silence this notice (Info severity). |
 
