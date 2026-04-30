@@ -2,9 +2,9 @@ using Metano.TypeScript.DOM;
 
 namespace SampleCounterV3.Mvu.Widgets;
 
-public sealed class Text(string content) : IWidget
+public sealed class Text(string content) : Widget
 {
-    public HtmlElement Build()
+    public override HtmlElement Render()
     {
         var span = Js.Document.CreateElement(HtmlElementType.Span);
         span.TextContent = content;

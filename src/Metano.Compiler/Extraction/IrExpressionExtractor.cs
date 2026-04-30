@@ -1937,84 +1937,213 @@ public sealed class IrExpressionExtractor
             if (semanticModel is null)
                 return null;
 
-            var subs = new Dictionary<ISymbol, IrExpression>(SymbolEqualityComparer.Default);
-            var parameters = declaringMethod.Parameters;
-            var argIndex = 0;
+            // [Erasable] on the declaring (or any enclosing) type opts the
+            // inline call into textual β-reduction — caller arguments
+            // substitute directly into the body, and the declaration
+            // vanishes. The caller takes the single-evaluation responsibility.
+            // Default path materializes the body as an IIFE so every argument
+            // evaluates exactly once. C# 14 `extension(R r) { … }` members
+            // make the immediate ContainingType a synthetic empty-name type;
+            // walk up to reach the user's static class.
+            if (HasErasableInChain(declaringMethod.ContainingType))
+                return ExpandInlineAsTextualSubstitution(
+                    inv,
+                    symbol,
+                    declaringMethod,
+                    bodyExpr,
+                    semanticModel
+                );
 
-            // Reduced extension call: parameter 0 is the receiver;
-            // the remaining parameters line up with the syntactic
-            // argument list. Unreduced calls bind all parameters from
-            // the argument list directly.
-            if (
-                symbol.ReducedFrom is not null
-                && inv.Expression is MemberAccessExpressionSyntax memberAccess
-            )
-            {
-                if (parameters.Length == 0)
-                    return null;
-                subs[parameters[0]] = Extract(memberAccess.Expression);
-                argIndex = 1;
-            }
-
-            // Classify caller arguments into a positional prefix and a
-            // named map so we can resolve each callee parameter by name
-            // (`F(b: 1, a: 2)`) or fall back to its explicit default
-            // (`F(b: 1)` against `void F(int a = 0, int b)`). Without
-            // this, positional substitution produced wrong bindings
-            // whenever the caller mixed names or skipped optionals.
-            var positionalArgs = new List<ArgumentSyntax>();
-            var namedArgs = new Dictionary<string, ArgumentSyntax>(StringComparer.Ordinal);
-            foreach (var arg in inv.ArgumentList.Arguments)
-            {
-                if (arg.NameColon is { } nc)
-                    namedArgs[nc.Name.Identifier.ValueText] = arg;
-                else
-                    positionalArgs.Add(arg);
-            }
-
-            for (var i = argIndex; i < parameters.Length; i++)
-            {
-                var parameter = parameters[i];
-                var syntaxIndex = i - argIndex;
-                ArgumentSyntax? matched =
-                    syntaxIndex < positionalArgs.Count
-                        ? positionalArgs[syntaxIndex]
-                        : namedArgs.GetValueOrDefault(parameter.Name);
-
-                if (matched is not null)
-                {
-                    subs[parameter] = Extract(matched.Expression);
-                    continue;
-                }
-
-                if (parameter.HasExplicitDefaultValue)
-                {
-                    subs[parameter] = BuildLiteralForDefault(
-                        parameter.ExplicitDefaultValue,
-                        parameter.Type
-                    );
-                    continue;
-                }
-
-                // No matching argument and no default — bail rather than
-                // emitting a half-bound body. Roslyn should only let us
-                // reach this branch for an ill-formed call.
-                return null;
-            }
-
-            var extractor = new IrExpressionExtractor(
-                semanticModel,
-                _originResolver,
-                _target,
-                _inlineExpanding,
-                inlineParameterSubs: subs
-            );
-            return extractor.Extract(bodyExpr);
+            return ExpandInlineAsIife(inv, symbol, declaringMethod, bodyExpr, semanticModel);
         }
         finally
         {
             _inlineExpanding.Remove(cycleKey);
         }
+    }
+
+    private IrExpression? ExpandInlineAsTextualSubstitution(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol symbol,
+        IMethodSymbol declaringMethod,
+        ExpressionSyntax bodyExpr,
+        SemanticModel semanticModel
+    )
+    {
+        var subs = new Dictionary<ISymbol, IrExpression>(SymbolEqualityComparer.Default);
+        var parameters = declaringMethod.Parameters;
+        var argIndex = 0;
+
+        if (
+            symbol.ReducedFrom is not null
+            && inv.Expression is MemberAccessExpressionSyntax memberAccess
+        )
+        {
+            if (parameters.Length == 0)
+                return null;
+            subs[parameters[0]] = Extract(memberAccess.Expression);
+            argIndex = 1;
+        }
+
+        var positionalArgs = new List<ArgumentSyntax>();
+        var namedArgs = new Dictionary<string, ArgumentSyntax>(StringComparer.Ordinal);
+        foreach (var arg in inv.ArgumentList.Arguments)
+        {
+            if (arg.NameColon is { } nc)
+                namedArgs[nc.Name.Identifier.ValueText] = arg;
+            else
+                positionalArgs.Add(arg);
+        }
+
+        for (var i = argIndex; i < parameters.Length; i++)
+        {
+            var parameter = parameters[i];
+            var syntaxIndex = i - argIndex;
+            ArgumentSyntax? matched =
+                syntaxIndex < positionalArgs.Count
+                    ? positionalArgs[syntaxIndex]
+                    : namedArgs.GetValueOrDefault(parameter.Name);
+
+            if (matched is not null)
+            {
+                subs[parameter] = Extract(matched.Expression);
+                continue;
+            }
+
+            if (parameter.HasExplicitDefaultValue)
+            {
+                subs[parameter] = BuildLiteralForDefault(
+                    parameter.ExplicitDefaultValue,
+                    parameter.Type
+                );
+                continue;
+            }
+
+            return null;
+        }
+
+        var extractor = new IrExpressionExtractor(
+            semanticModel,
+            _originResolver,
+            _target,
+            _inlineExpanding,
+            inlineParameterSubs: subs
+        );
+        return extractor.Extract(bodyExpr);
+    }
+
+    private IrExpression? ExpandInlineAsIife(
+        InvocationExpressionSyntax inv,
+        IMethodSymbol symbol,
+        IMethodSymbol declaringMethod,
+        ExpressionSyntax bodyExpr,
+        SemanticModel semanticModel
+    )
+    {
+        var lambda = BuildInlineLambda(declaringMethod, bodyExpr, semanticModel);
+        if (lambda is null)
+            return null;
+
+        var args = new List<IrArgument>();
+        var argIndex = 0;
+
+        if (
+            symbol.ReducedFrom is not null
+            && inv.Expression is MemberAccessExpressionSyntax memberAccess
+        )
+        {
+            args.Add(new IrArgument(Extract(memberAccess.Expression)));
+            argIndex = 1;
+        }
+
+        var parameters = declaringMethod.Parameters;
+        var positionalArgs = new List<ArgumentSyntax>();
+        var namedArgs = new Dictionary<string, ArgumentSyntax>(StringComparer.Ordinal);
+        foreach (var arg in inv.ArgumentList.Arguments)
+        {
+            if (arg.NameColon is { } nc)
+                namedArgs[nc.Name.Identifier.ValueText] = arg;
+            else
+                positionalArgs.Add(arg);
+        }
+
+        for (var i = argIndex; i < parameters.Length; i++)
+        {
+            var parameter = parameters[i];
+            var syntaxIndex = i - argIndex;
+            ArgumentSyntax? matched =
+                syntaxIndex < positionalArgs.Count
+                    ? positionalArgs[syntaxIndex]
+                    : namedArgs.GetValueOrDefault(parameter.Name);
+
+            if (matched is not null)
+            {
+                args.Add(new IrArgument(Extract(matched.Expression)));
+                continue;
+            }
+
+            if (parameter.HasExplicitDefaultValue)
+            {
+                args.Add(
+                    new IrArgument(
+                        BuildLiteralForDefault(parameter.ExplicitDefaultValue, parameter.Type)
+                    )
+                );
+                continue;
+            }
+
+            return null;
+        }
+
+        return new IrCallExpression(lambda, args);
+    }
+
+    private static bool HasErasableInChain(INamedTypeSymbol? type)
+    {
+        for (var current = type; current is not null; current = current.ContainingType)
+        {
+            if (SymbolHelper.HasErasable(current))
+                return true;
+        }
+        return false;
+    }
+
+    private IrLambdaExpression? BuildInlineLambda(
+        IMethodSymbol declaringMethod,
+        ExpressionSyntax bodyExpr,
+        SemanticModel semanticModel
+    )
+    {
+        var bodyExtractor = new IrExpressionExtractor(
+            semanticModel,
+            _originResolver,
+            _target,
+            _inlineExpanding,
+            inlineParameterSubs: null
+        );
+        var bodyIr = bodyExtractor.Extract(bodyExpr);
+
+        var parameters = declaringMethod
+            .Parameters.Select(p => new IrParameter(
+                p.Name,
+                IrTypeRefMapper.Map(p.Type, _originResolver, _target),
+                HasDefaultValue: p.HasExplicitDefaultValue,
+                DefaultValue: p.HasExplicitDefaultValue
+                    ? BuildLiteralForDefault(p.ExplicitDefaultValue, p.Type)
+                    : null,
+                IsParams: p.IsParams
+            ))
+            .ToList();
+
+        var returnType = declaringMethod.ReturnsVoid
+            ? null
+            : IrTypeRefMapper.Map(declaringMethod.ReturnType, _originResolver, _target);
+
+        return new IrLambdaExpression(
+            parameters,
+            returnType,
+            [new IrReturnStatement(bodyIr)]
+        );
     }
 
     private static ExpressionSyntax? TryFindInlineMethodBody(IMethodSymbol method)

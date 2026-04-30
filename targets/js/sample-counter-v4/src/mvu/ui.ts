@@ -1,38 +1,32 @@
-import {
-  Button as ButtonWidget,
-  Column as ColumnWidget,
-  Heading as HeadingWidget,
-  Row as RowWidget,
-  Text as TextWidget,
-} from "#/mvu/widgets";
-import type { Widget } from "./widget";
+import { type VNode as InfernoElement } from "inferno";
+import { createElement } from "inferno-create-element";
 
-export function Column(args: { gap: number; children: Widget[] }): ColumnWidget {
-  const { gap, children } = args;
+export function Column(args: { gap?: number; children: InfernoElement[] }): InfernoElement {
+  const { gap = 0, children } = args;
 
-  return new ColumnWidget(gap, children);
+  return createElement("div", { className: `column gap-${gap}` }, children);
 }
 
-export function Row(args: { gap: number; children: Widget[] }): RowWidget {
-  const { gap, children } = args;
+export function Row(args: { gap?: number; children: InfernoElement[] }): InfernoElement {
+  const { gap = 0, children } = args;
 
-  return new RowWidget(gap, children);
+  return createElement("div", { className: `row gap-${gap}` }, children);
 }
 
-export function Text(args: { content: string }): TextWidget {
+export function Text(args: { content: string }): InfernoElement {
   const { content } = args;
 
-  return new TextWidget(content);
+  return createElement("span", { className: "text" }, content as any);
 }
 
-export function Heading(args: { content: string; level?: number }): HeadingWidget {
+export function Heading(args: { content: string; level?: number }): InfernoElement {
   const { content, level = 1 } = args;
 
-  return new HeadingWidget(content, level);
+  return createElement(`h${level}`, { className: "heading" }, content as any);
 }
 
-export function Button(args: { label: string; onPressed: () => void }): ButtonWidget {
-  const { label, onPressed } = args;
+export function Button(args: { label: string; onClick: () => void }): InfernoElement {
+  const { label, onClick } = args;
 
-  return new ButtonWidget(label, onPressed);
+  return createElement("button", { className: "btn", onClick: onClick }, label as any);
 }

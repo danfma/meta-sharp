@@ -1,16 +1,21 @@
-import type { IWidget } from "#/mvu";
+import { Widget } from "#/mvu";
 
-export class Column implements IWidget {
-  private readonly _children: IWidget[];
+export class Column extends Widget {
+  private readonly _gap: number;
 
-  constructor(children: IWidget[]) {
+  private readonly _children: Widget[];
+
+  constructor(gap: number, children: Widget[]) {
+    super();
+    this._gap = gap;
     this._children = children;
   }
 
-  build(): HTMLElement {
+  render(): HTMLElement {
     const div = document.createElement("div");
+    div.setAttribute("style", `display:flex;flex-direction:column;gap:${this._gap}px`);
     for (const child of this._children) {
-      div.append(child.build());
+      div.append(child.render());
     }
 
     return div;

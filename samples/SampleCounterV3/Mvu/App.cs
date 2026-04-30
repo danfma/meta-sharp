@@ -2,31 +2,22 @@ using Metano.TypeScript.DOM;
 
 namespace SampleCounterV3.Mvu;
 
-public delegate IWidget ViewFn<TState>(TState state, Action<TState> setState);
-
 public static class App
 {
-    public static void Mount<TState>(string containerId, TState initialState, ViewFn<TState> view)
+    public static void Run<TState>(string containerId, StatefulWidget<TState> widget)
     {
+        var holder = new StateHolder<TState>(widget.Initial());
         var container = ResolveContainer(containerId);
-        var holder = new StateHolder<TState>(initialState);
+        var render = () =>
+        {
+            widget.Bind(new BuildContext<TState>(holder.State, holder.Update));
 
-        // Bind the setState delegate once. Each `holder.Set` method-group
-        // conversion would otherwise allocate a fresh closure on every
-        // render — captured into a local, both the initial and every
-        // subsequent render reuse the same instance and keep a stable
-        // identity for callers that compare delegates.
-        var setState = holder.Set;
-        var render = () => Apply(view(holder.State, setState), container);
+            container.InnerHtml = "";
+            container.Append(widget.Render());
+        };
 
         holder.OnChange = render;
         render();
-    }
-
-    private static void Apply(IWidget root, HtmlElement container)
-    {
-        container.InnerHtml = "";
-        container.Append(root.Build());
     }
 
     private static HtmlElement ResolveContainer(string containerId)

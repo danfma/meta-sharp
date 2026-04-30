@@ -8,9 +8,9 @@ public sealed class StateHolder<TState>(TState initial)
 
     public Action? OnChange { get; set; }
 
-    public void Set(TState next)
+    public void Update(Func<TState, TState> reducer)
     {
-        _state = next;
+        _state = reducer(_state);
         OnChange?.Invoke();
     }
 }

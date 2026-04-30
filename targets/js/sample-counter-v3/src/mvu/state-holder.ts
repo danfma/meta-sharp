@@ -11,8 +11,8 @@ export class StateHolder<TState> {
     return this._state;
   }
 
-  set(next: TState): void {
-    this._state = next;
+  update(reducer: (arg: TState) => TState): void {
+    this._state = reducer(this._state);
     this.onChange?.();
   }
 }

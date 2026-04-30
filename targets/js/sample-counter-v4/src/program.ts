@@ -1,3 +1,6 @@
 import { CounterApp } from "#/components";
+import { getOrCreateElementById } from "#/inferno";
+import { createElement } from "inferno-create-element";
+import { render } from "inferno";
 
-CounterApp.mount("root");
+render(createElement(CounterApp, {}), getOrCreateElementById(document, "root"));

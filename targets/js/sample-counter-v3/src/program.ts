@@ -1,13 +1,3 @@
-import { Counter } from "#/models";
-import { App } from "#/mvu";
-import { Button, Column, Text } from "#/mvu/widgets";
+import { CounterApp } from "#/components";
 
-App.mount(
-  "root",
-  Counter.zero,
-  (state: Counter, setState: (obj: Counter) => void) =>
-    new Column([
-      new Text(state.count.toString()),
-      new Button("Click me", () => setState(state.increment())),
-    ]),
-);
+CounterApp.mount("root");

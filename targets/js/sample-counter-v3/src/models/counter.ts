@@ -9,6 +9,10 @@ export class Counter {
     return this.with({ count: this.count + 1 });
   }
 
+  decrement(): Counter {
+    return this.with({ count: this.count - 1 });
+  }
+
   equals(other: any): boolean {
     return other instanceof Counter && this.count === other.count;
   }

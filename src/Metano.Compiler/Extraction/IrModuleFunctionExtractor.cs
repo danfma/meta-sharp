@@ -50,6 +50,8 @@ public static class IrModuleFunctionExtractor
                     continue;
                 if (SymbolHelper.GetImport(method) is not null)
                     continue;
+                if (SymbolHelper.IsInlineMember(method))
+                    continue;
                 // Roslyn surfaces C# 14 `extension(R r) { … }` members both
                 // lifted onto the static class and as members of a synthetic
                 // empty-name nested type; the syntax pass below picks them up

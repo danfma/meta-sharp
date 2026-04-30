@@ -1,22 +1,30 @@
+using SampleCounterV4.Inferno;
 using SampleCounterV4.Models;
-using SampleCounterV4.Mvu;
 using static SampleCounterV4.Mvu.Ui;
 
 namespace SampleCounterV4.Components;
 
-public sealed partial class CounterApp : StatefulWidget<Counter>
+/// <summary>
+/// Stateful Inferno component. Subclasses Inferno's <c>Component</c>
+/// (imported from <c>inferno</c>) and overrides <see cref="Render"/>
+/// to project the current state into a virtual-DOM tree built by the
+/// JSX-flavored widget facade.
+/// </summary>
+public sealed class CounterApp : Component<EmptyProps, Counter>
 {
-    public override Counter Initial() => Counter.Zero;
+    public override InfernoElement Render()
+    {
+        var state = State ?? Counter.Zero;
 
-    protected override Widget Build(BuildContext<Counter> ctx) =>
-        Column(
+        return Column(
             gap: 12,
-            Heading($"Count: {ctx.State.Count}", level: 1),
+            Heading($"Count: {state.Count}", level: 1),
             Row(
                 gap: 8,
-                Button("➖", onPressed: () => ctx.SetState(s => s.Decrement())),
-                Button("➕", onPressed: () => ctx.SetState(s => s.Increment())),
-                Button("Reset", onPressed: () => ctx.SetState(_ => Counter.Zero))
+                Button("➖", onClick: () => SetState(state.Decrement())),
+                Button("➕", onClick: () => SetState(state.Increment())),
+                Button("Reset", onClick: () => SetState(Counter.Zero))
             )
         );
+    }
 }

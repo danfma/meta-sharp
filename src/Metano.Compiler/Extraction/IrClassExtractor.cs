@@ -342,7 +342,11 @@ public static class IrClassExtractor
                     // [Import] methods follow the same contract: every call
                     // site is rewritten to the imported identifier, so the
                     // declaration would be unreachable noise.
-                    if (SymbolHelper.HasEmit(method) || SymbolHelper.GetImport(method) is not null)
+                    if (
+                        SymbolHelper.HasEmit(method)
+                        || SymbolHelper.GetImport(method) is not null
+                        || SymbolHelper.IsInlineMember(method)
+                    )
                         break;
                     var groupKey = OverloadGroupKey(method);
                     if (!methodGroups.TryGetValue(groupKey, out var list))

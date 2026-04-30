@@ -1,8 +1,13 @@
-﻿using SampleCounterV2.Models;
-using SampleCounterV2.Presenters;
-using SampleCounterV2.Views;
+using SampleCounterV2.Models;
+using SampleCounterV2.Mvu;
+using SampleCounterV2.Mvu.Widgets;
 
-var view = new CounterView();
-var presenter = new CounterPresenter(view, Counter.Zero);
-
-presenter.StartApplication("root");
+App.Mount(
+    containerId: "root",
+    initialState: Counter.Zero,
+    view: (state, setState) =>
+        new Column([
+            new Text(state.Count.ToString()),
+            new Button("Click me", onPressed: () => setState(state.Increment())),
+        ])
+);

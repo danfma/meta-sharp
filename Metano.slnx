@@ -13,14 +13,14 @@
     <Project Path="bindings/Metano.TypeScript.DOM/Metano.TypeScript.DOM.csproj" />
   </Folder>
   <Folder Name="/samples/">
-    <Project Path="samples/SampleCounter/SampleCounter.csproj" />
-    <Project Path="samples/SampleCounterV3/SampleCounterV3.csproj" />
+    <Project Path="samples/SampleCounterV2/SampleCounterV2.csproj" />
     <Project Path="samples/SampleIssueTracker/SampleIssueTracker.csproj" />
     <Project Path="samples/SampleOperatorOverloading/SampleOperatorOverloading.csproj" />
     <Project Path="samples/SampleTodo.Service/SampleTodo.Service.csproj" />
     <Project Path="samples/SampleTodo/SampleTodo.csproj" />
-    <Project Path="samples\SampleCounterV2\SampleCounterV2.csproj" />
+    <Project Path="samples\HelloWorld\HelloWorld.csproj" />
+    <Project Path="samples\SampleCounterV1\SampleCounterV1.csproj" />
+    <Project Path="samples/SampleCounterV3/SampleCounterV3.csproj" />
     <Project Path="samples/SampleCounterV4/SampleCounterV4.csproj" />
-    <Project Path="samples/SampleCounterV5/SampleCounterV5.csproj" />
   </Folder>
 </Solution>

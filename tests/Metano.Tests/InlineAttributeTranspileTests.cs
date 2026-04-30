@@ -607,4 +607,60 @@ public class InlineAttributeTranspileTests
         await Assert.That(warning).IsNotNull();
         await Assert.That(warning!.Message).Contains("Compute");
     }
+
+    [Test]
+    public async Task Inline_NonErasableMethod_LowersAsIifeAtCallSite()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public static class MathHelpers
+            {
+                [Inline]
+                public static int Squared(int x) => x * x;
+            }
+
+            public class Caller
+            {
+                public int Run(int n) => MathHelpers.Squared(n + 1);
+            }
+            """
+        );
+
+        if (result.TryGetValue("math-helpers.ts", out var helpers))
+            await Assert.That(helpers).DoesNotContain("squared");
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("((x: number) => x * x)(n + 1)");
+        await Assert.That(output).DoesNotContain("(n + 1) * (n + 1)");
+    }
+
+    [Test]
+    public async Task Inline_ErasableMethod_StillSubstitutesTextually()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            [Erasable]
+            public static class MathHelpers
+            {
+                [Inline]
+                public static int Squared(int x) => x * x;
+            }
+
+            public class Caller
+            {
+                public int Run(int n) => MathHelpers.Squared(n + 1);
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("(n + 1) * (n + 1)");
+        await Assert.That(output).DoesNotContain("=> x * x");
+    }
 }

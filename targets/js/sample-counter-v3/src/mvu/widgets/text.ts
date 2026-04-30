@@ -1,13 +1,14 @@
-import type { IWidget } from "#/mvu";
+import { Widget } from "#/mvu";
 
-export class Text implements IWidget {
+export class Text extends Widget {
   private readonly _content: string;
 
   constructor(content: string) {
+    super();
     this._content = content;
   }
 
-  build(): HTMLElement {
+  render(): HTMLElement {
     const span = document.createElement("span");
     span.textContent = this._content;
 

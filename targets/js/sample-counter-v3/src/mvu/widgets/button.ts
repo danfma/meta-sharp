@@ -1,16 +1,17 @@
-import type { IWidget } from "#/mvu";
+import { Widget } from "#/mvu";
 
-export class Button implements IWidget {
+export class Button extends Widget {
   private readonly _label: string;
 
   private readonly _onPressed: () => void;
 
   constructor(label: string, onPressed: () => void) {
+    super();
     this._label = label;
     this._onPressed = onPressed;
   }
 
-  build(): HTMLElement {
+  render(): HTMLElement {
     const btn = document.createElement("button");
     btn.textContent = this._label;
     btn.onclick = (_) => this._onPressed();

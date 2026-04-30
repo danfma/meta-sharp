@@ -21,8 +21,8 @@ dotnet run --project src/Metano.Compiler.TypeScript/ -- \
   -p samples/SampleTodo/SampleTodo.csproj \
   -o targets/js/sample-todo/src --clean               # transpile SampleTodo to TypeScript
 dotnet run --project src/Metano.Compiler.Dart/ -- \
-  -p samples/SampleCounter/SampleCounter.csproj \
-  -o targets/flutter/sample_counter/lib/sample_counter --clean  # transpile SampleCounter to Dart
+  -p samples/SampleCounterV1/SampleCounterV1.csproj \
+  -o targets/flutter/sample_counter/lib/sample_counter --clean  # transpile SampleCounterV1 to Dart
 dotnet csharpier .                                    # format C# code
 ```
 
@@ -37,7 +37,7 @@ cd targets/js/sample-todo && bun run build                # TS build of generate
 cd targets/js/sample-todo && bun test                     # end-to-end tests (18 tests)
 cd targets/js/sample-issue-tracker && bun run build && bun test  # 65 tests
 cd targets/js/sample-todo-service && bun run build && bun test   # 19 tests (cross-package + Hono CRUD + JSON serialization)
-cd targets/js/sample-counter && bun run dev               # Vite + SolidJS counter MVP sample
+cd targets/js/sample-counter-v1 && bun run dev            # Vite + SolidJS counter MVP sample
 ```
 
 Always use **Bun** — never npm, yarn, or pnpm.
@@ -72,19 +72,27 @@ Metano.slnx
 │   └── Metano.Tests/                 # 337 TUnit tests with inline C# compilation
 │       └── Expected/                    # Expected .ts output files for golden tests
 ├── samples/
+│   ├── HelloWorld/                      # Minimal `[ModuleEntryPoint]` sample
 │   ├── SampleTodo/                      # Sample C# project for end-to-end validation
 │   ├── SampleTodo.Service/              # Hono-based service sample (cross-package + [PlainObject] CRUD)
 │   ├── SampleIssueTracker/              # Larger sample exercising LINQ, records, modules, overloads
-│   └── SampleCounter/                   # Counter MVP sample (used by Vite + SolidJS consumer)
+│   ├── SampleCounterV1/                 # Counter MVP — MVP/MVU baseline (Vite + SolidJS consumer)
+│   ├── SampleCounterV2/                 # Counter — MVU pattern with state holder + view fn
+│   ├── SampleCounterV3/                 # Counter — Flutter-style widget DSL via [ObjectArgs]
+│   └── SampleCounterV4/                 # Counter — Inferno virtual-DOM consumer
 └── targets/                             # One subfolder per language target + its samples
     ├── js/                              # Bun workspace (TypeScript target)
     │   ├── metano-runtime/              # metano-runtime (HashCode, HashSet, LINQ, type checks)
-    │   ├── sample-todo/                 # Generated TS from SampleTodo + bun tests (18)
-    │   ├── sample-todo-service/         # Generated TS from SampleTodo.Service + bun tests (9)
-    │   ├── sample-issue-tracker/        # Generated TS from SampleIssueTracker + bun tests (51)
-    │   └── sample-counter/              # Vite + SolidJS MVP consumer of generated SampleCounter TS
+    │   ├── hello-world/                 # Generated TS from HelloWorld
+    │   ├── sample-todo/                 # Generated TS from SampleTodo + bun tests
+    │   ├── sample-todo-service/         # Generated TS from SampleTodo.Service + bun tests
+    │   ├── sample-issue-tracker/        # Generated TS from SampleIssueTracker + bun tests
+    │   ├── sample-counter-v1/           # Vite + SolidJS consumer of SampleCounterV1
+    │   ├── sample-counter-v2/           # Vite + SolidJS consumer of SampleCounterV2
+    │   ├── sample-counter-v3/           # Vite consumer of SampleCounterV3 (widget DSL)
+    │   └── sample-counter-v4/           # Vite + Inferno consumer of SampleCounterV4
     └── flutter/                         # Dart/Flutter target consumers
-        └── sample_counter/              # Flutter app consuming generated Dart from SampleCounter
+        └── sample_counter/              # Flutter app consuming generated Dart from SampleCounterV1
 ```
 
 ### Pipeline

@@ -1,0 +1,27 @@
+{
+  "name": "hello-world",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "module": "src/program.ts",
+  "scripts": {
+    "dev": "vite --port 3000",
+    "build": "tsgo -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "metano-runtime": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.2",
+    "@typescript/native-preview": "^7.0.0-dev.20260412.1"
+  },
+  "sideEffects": false,
+  "imports": {
+    "#/*": {
+      "types": "./dist/*.d.ts",
+      "import": "./dist/*.js",
+      "default": "./src/*.ts"
+    }
+  }
+}

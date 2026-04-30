@@ -1,22 +1,20 @@
-import type { IWidget } from "./i-widget";
+import { BuildContext } from "./build-context";
 import { StateHolder } from "./state-holder";
-import type { ViewFn } from "./view-fn";
+import type { StatefulWidget } from "./stateful-widget";
 
 export class App {
   constructor() {}
 
-  static mount<TState>(containerId: string, initialState: TState, view: ViewFn<TState>): void {
+  static run<TState>(containerId: string, widget: StatefulWidget<TState>): void {
+    const holder = new StateHolder(widget.initial());
     const container = App.resolveContainer(containerId);
-    const holder = new StateHolder(initialState);
-    const setState = holder.set.bind(holder);
-    const render = () => App.apply(view(holder.state, setState), container);
+    const render = () => {
+      widget.bind(new BuildContext(holder.state, holder.update.bind(holder)));
+      container.innerHTML = "";
+      container.append(widget.render());
+    };
     holder.onChange = render;
     render();
-  }
-
-  private static apply(root: IWidget, container: HTMLElement): void {
-    container.innerHTML = "";
-    container.append(root.build());
   }
 
   private static resolveContainer(containerId: string): HTMLElement {

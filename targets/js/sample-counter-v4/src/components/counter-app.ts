@@ -1,51 +1,38 @@
+import { Component, type VNode as InfernoElement } from "inferno";
+import type { EmptyProps } from "#/inferno";
 import { Counter } from "#/models";
-import {
-  App,
-  Button,
-  Column,
-  Heading,
-  Row,
-  StatefulWidget,
-  type BuildContext,
-  type Widget,
-} from "#/mvu";
+import { Button, Column, Heading, Row } from "#/mvu";
 
-export class CounterApp extends StatefulWidget<Counter> {
+export class CounterApp extends Component<EmptyProps, Counter> {
   constructor() {
     super();
   }
 
-  initial(): Counter {
-    return Counter.zero;
-  }
+  render(): InfernoElement {
+    const state = this.state ?? Counter.zero;
 
-  protected build(ctx: BuildContext<Counter>): Widget {
     return Column({
       gap: 12,
       children: [
-        Heading({ content: `Count: ${ctx.state.count}` }),
+        Heading({ content: `Count: ${state.count}` }),
         Row({
           gap: 8,
           children: [
             Button({
               label: "➖",
-              onPressed: () => ctx.setState((s: Counter) => s.decrement()),
+              onClick: () => this.setState(state.decrement()),
             }),
             Button({
               label: "➕",
-              onPressed: () => ctx.setState((s: Counter) => s.increment()),
+              onClick: () => this.setState(state.increment()),
             }),
             Button({
               label: "Reset",
-              onPressed: () => ctx.setState((_: Counter) => Counter.zero),
+              onClick: () => this.setState(Counter.zero),
             }),
           ],
         }),
       ],
     });
-  }
-
-  static mount(containerId: string): void {
-    App.run(containerId, new CounterApp());
   }
 }

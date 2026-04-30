@@ -1,6 +1,3 @@
-export { App } from "./app";
-export { BuildContext } from "./build-context";
-export { StateHolder } from "./state-holder";
-export { StatefulWidget } from "./stateful-widget";
+export type { ButtonProps } from "./button-props";
+export type { DomProps } from "./dom-props";
 export { Button, Column, Heading, Row, Text } from "./ui";
-export { Widget } from "./widget";
