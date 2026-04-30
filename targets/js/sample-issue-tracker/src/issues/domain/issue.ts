@@ -1,11 +1,12 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Temporal } from "@js-temporal/polyfill";
 import { isString } from "metano-runtime";
 import type { UserId } from "#/shared-kernel";
 import { Comment } from "./comment";
 import type { IssueId } from "./issue-id";
-import type { IssuePriority } from "./issue-priority";
+import { IssuePriority } from "./issue-priority";
 import { IssueStatus } from "./issue-status";
-import type { IssueType } from "./issue-type";
+import { IssueType } from "./issue-type";
 import { IssueWorkflow } from "./issue-workflow";
 
 export class Issue {

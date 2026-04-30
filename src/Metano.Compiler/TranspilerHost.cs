@@ -81,7 +81,7 @@ public static class TranspilerHost
 
         var emitSw = Stopwatch.StartNew();
 
-        await EmitFilesAsync(outputDir, output.Files, options.Clean);
+        await EmitFilesAsync(outputDir, output.Files, options.Clean, options.FilePrefix);
         emitSw.Stop();
         totalSw.Stop();
 
@@ -99,7 +99,8 @@ public static class TranspilerHost
     private static async Task EmitFilesAsync(
         string outputDir,
         IReadOnlyList<GeneratedFile> files,
-        bool clean
+        bool clean,
+        string? filePrefix
     )
     {
         if (clean && Directory.Exists(outputDir))
@@ -109,6 +110,8 @@ public static class TranspilerHost
         }
 
         Directory.CreateDirectory(outputDir);
+
+        var prefixBlock = string.IsNullOrEmpty(filePrefix) ? "" : filePrefix + "\n";
 
         foreach (var file in files)
         {
@@ -122,7 +125,7 @@ public static class TranspilerHost
             if (fileDir is not null)
                 Directory.CreateDirectory(fileDir);
 
-            await File.WriteAllTextAsync(filePath, file.Content);
+            await File.WriteAllTextAsync(filePath, prefixBlock + file.Content);
 
             Console.WriteLine($"  Generated: {file.RelativePath}");
         }

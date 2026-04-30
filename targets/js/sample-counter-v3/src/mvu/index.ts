@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 export { App } from "./app";
 export { BuildContext } from "./build-context";
 export { StateHolder } from "./state-holder";

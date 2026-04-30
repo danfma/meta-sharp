@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Enumerable, type Grouping } from "metano-runtime";
 import { IssuePriority, IssueStatus, type Issue } from "#/issues/domain";
 import type { UserId } from "#/shared-kernel";

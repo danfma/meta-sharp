@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { BuildContext } from "./build-context";
 import { StateHolder } from "./state-holder";
 import type { StatefulWidget } from "./stateful-widget";

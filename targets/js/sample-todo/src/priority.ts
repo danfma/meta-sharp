@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 export const Priority = {
   Low: "low",
   Medium: "medium",

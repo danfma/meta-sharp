@@ -8,5 +8,6 @@ public sealed record TranspileOptions(
     string ProjectPath,
     string OutputDir,
     bool ShowTimings = false,
-    bool Clean = false
+    bool Clean = false,
+    string? FilePrefix = null
 );

@@ -5,6 +5,7 @@
     <OutputType>Exe</OutputType>
     <MetanoOutputDir>../../targets/js/sample-todo-service/src</MetanoOutputDir>
     <MetanoClean>true</MetanoClean>
+    <MetanoFilePrefix>/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */</MetanoFilePrefix>
     <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
   </PropertyGroup>
 

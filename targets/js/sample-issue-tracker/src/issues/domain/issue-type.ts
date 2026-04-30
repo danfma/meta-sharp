@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 export const IssueType = {
   Story: "story",
   Bug: "bug",

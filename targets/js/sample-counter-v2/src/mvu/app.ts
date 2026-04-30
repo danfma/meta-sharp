@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { IWidget } from "./i-widget";
 import { StateHolder } from "./state-holder";
 import type { ViewFn } from "./view-fn";

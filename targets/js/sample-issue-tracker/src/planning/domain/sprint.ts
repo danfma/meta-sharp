@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Temporal } from "@js-temporal/polyfill";
 import { HashSet, dayNumber } from "metano-runtime";
 import type { IssueId } from "#/issues/domain";

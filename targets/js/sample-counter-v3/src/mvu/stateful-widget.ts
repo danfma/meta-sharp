@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { BuildContext } from "./build-context";
 import { Widget } from "./widget";
 

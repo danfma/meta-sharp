@@ -18,6 +18,7 @@
       MetanoShowTimings      (optional)  true to print timing info (default: false)
       MetanoNamespaceBarrels (optional)  true to emit a root src/index.ts barrel mirroring C# namespaces (default: false)
       MetanoStripInterfacePrefix (optional)  true to drop the `I` prefix from interface names when the second letter is uppercase (default: false). Collisions with sibling types surface MS0017.
+      MetanoFilePrefix       (optional)  Verbatim text inserted at the top of every generated file, followed by a single newline. Use for formatter / lint directives (Biome `biome-ignore-all`, Prettier `// @prettier-ignore`, `// @generated` markers). Multi-line values are accepted; pass through MSBuild XML escaping.
       MetanoExtraArgs        (optional)  Additional CLI arguments
   -->
 
@@ -52,6 +53,9 @@
       >
       <_MetanoArgs Condition="'$(MetanoStripInterfacePrefix)' == 'true'"
         >$(_MetanoArgs) --strip-interface-prefix</_MetanoArgs
+      >
+      <_MetanoArgs Condition="'$(MetanoFilePrefix)' != ''"
+        >$(_MetanoArgs) --file-prefix "$(MetanoFilePrefix)"</_MetanoArgs
       >
       <_MetanoArgs Condition="'$(MetanoExtraArgs)' != ''"
         >$(_MetanoArgs) $(MetanoExtraArgs)</_MetanoArgs

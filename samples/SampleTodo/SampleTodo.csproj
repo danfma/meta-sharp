@@ -4,6 +4,7 @@
     <IsPackable>false</IsPackable>
     <MetanoOutputDir>../../targets/js/sample-todo/src</MetanoOutputDir>
     <MetanoClean>true</MetanoClean>
+    <MetanoFilePrefix>/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */</MetanoFilePrefix>
     <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
   </PropertyGroup>
 

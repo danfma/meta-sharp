@@ -1,12 +1,13 @@
-import type { Temporal } from "@js-temporal/polyfill";
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { Temporal } from "@js-temporal/polyfill";
 import { HashCode } from "metano-runtime";
-import type { Decimal } from "decimal.js";
+import { Decimal } from "decimal.js";
 import type { UserId } from "#/shared-kernel";
 import type { Comment } from "./comment";
 import type { IssueId } from "./issue-id";
-import type { IssuePriority } from "./issue-priority";
-import type { IssueStatus } from "./issue-status";
-import type { IssueType } from "./issue-type";
+import { IssuePriority } from "./issue-priority";
+import { IssueStatus } from "./issue-status";
+import { IssueType } from "./issue-type";
 
 export class IssueSnapshot {
   constructor(

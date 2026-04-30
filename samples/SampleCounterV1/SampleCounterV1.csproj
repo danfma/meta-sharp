@@ -8,6 +8,7 @@
     <MetanoOutputDir>../../targets/js/sample-counter-v1/src/</MetanoOutputDir>
     <MetanoClean>true</MetanoClean>
     <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
+    <MetanoFilePrefix>/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */</MetanoFilePrefix>
   </PropertyGroup>
 
   <ItemGroup>

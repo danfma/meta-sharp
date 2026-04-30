@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 export { Comment } from "./comment";
 export { IssueId } from "./issue-id";
 export { IssuePriority } from "./issue-priority";

@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode } from "metano-runtime";
 import type { PageRequest } from "./page-request";
 

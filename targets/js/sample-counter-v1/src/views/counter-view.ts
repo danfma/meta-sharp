@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { ICounterView } from "#/presenters";
 
 export class CounterView implements ICounterView {

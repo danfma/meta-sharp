@@ -4,6 +4,7 @@
     <IsPackable>false</IsPackable>
     <MetanoOutputDir>../../targets/js/sample-issue-tracker/src</MetanoOutputDir>
     <MetanoClean>true</MetanoClean>
+    <MetanoFilePrefix>/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */</MetanoFilePrefix>
     <!--
       Opt into the root namespace barrel (ADR-0006 follow-up, issue #22)
       so consumers can import `{ Issues, Planning, SharedKernel }` from

@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Component } from "inferno";
 import { Counter } from "#/models";
 import { Button, Column, Heading, Row } from "#/mvu";

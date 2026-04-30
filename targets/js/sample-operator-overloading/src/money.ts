@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, isBigInt } from "metano-runtime";
 import { Decimal } from "decimal.js";
 import type { Currency } from "./currency";

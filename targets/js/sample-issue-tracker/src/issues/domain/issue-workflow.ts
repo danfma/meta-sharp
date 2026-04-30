@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Enumerable } from "metano-runtime";
 import type { Issue } from "./issue";
 import { IssuePriority } from "./issue-priority";

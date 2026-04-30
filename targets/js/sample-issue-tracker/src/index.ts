@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 export { JsonContext } from "./json-context";
 import * as $Issues_Application from "./issues/application";
 import * as $Issues_Domain from "./issues/domain";

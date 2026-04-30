@@ -1,5 +1,6 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode } from "metano-runtime";
-import type { Priority } from "./priority";
+import { Priority } from "./priority";
 
 export class TodoItem {
   constructor(

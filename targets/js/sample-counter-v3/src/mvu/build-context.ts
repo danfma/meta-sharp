@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 export class BuildContext<TState> {
   private readonly _updater: (obj: (arg: TState) => TState) => void;
 

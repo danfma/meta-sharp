@@ -1,5 +1,6 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Enumerable, isString } from "metano-runtime";
-import type { Priority } from "./priority";
+import { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
 
 export class TodoList {

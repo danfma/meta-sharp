@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import {} from "inferno";
 import { createElement } from "inferno-create-element";
 export function Column(args) {

@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { HashCode, UUID } from "metano-runtime";
 
 export type UserId = string & { readonly __brand: "UserId" };

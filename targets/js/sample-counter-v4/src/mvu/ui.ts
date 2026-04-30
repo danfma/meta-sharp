@@ -1,4 +1,5 @@
-import type { VNode as InfernoElement } from "inferno";
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
+import { type VNode as InfernoElement } from "inferno";
 import { createElement } from "inferno-create-element";
 
 export function Column(args: { gap?: number; children: InfernoElement[] }): InfernoElement {

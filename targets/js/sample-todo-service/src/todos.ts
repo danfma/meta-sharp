@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { Enumerable, UUID, listRemove } from "metano-runtime";
 import { TodoItem, type Priority } from "sample-todo";
 

@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import type { Counter } from "#/models";
 import { Renderer } from "#/views";
 import type { ICounterView } from "./i-counter-view";

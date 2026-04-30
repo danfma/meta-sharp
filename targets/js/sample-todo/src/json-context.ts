@@ -1,3 +1,4 @@
+/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Priority } from "./priority";
 import { TodoItem } from "./todo-item";
@@ -8,7 +9,7 @@ export class JsonContext extends SerializerContext {
   private _todoItem?: TypeSpec<TodoItem>;
 
   static get default(): JsonContext {
-    return JsonContext._default;
+    return this._default;
   }
 
   get todoItem(): TypeSpec<TodoItem> {
