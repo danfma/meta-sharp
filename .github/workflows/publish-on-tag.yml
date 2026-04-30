@@ -40,6 +40,9 @@ jobs:
       - name: Restore .NET tools
         run: dotnet tool restore
 
+      - name: Install npm dependencies
+        run: bun install
+
       # .NET: build, pack, publish NuGet, create GitHub Release using
       # the CHANGELOG.md section produced by semantic-release.
       - name: dotnet-releaser
