@@ -61,12 +61,6 @@
         "assets": ["CHANGELOG.md"],
         "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
-    ],
-    [
-      "@semantic-release/exec",
-      {
-        "publishCmd": "dotnet dotnet-releaser run --nuget-token \"$NUGET_TOKEN\" --github-token \"$GITHUB_TOKEN\" dotnet-releaser.toml"
-      }
     ]
   ]
 }
