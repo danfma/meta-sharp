@@ -25,8 +25,7 @@ public static class IrConstructorExtractor
     {
         var explicitCtors = type
             .Constructors.Where(c =>
-                (!c.IsImplicitlyDeclared || c.Parameters.Length > 0)
-                && !IsRecordCopyConstructor(c)
+                (!c.IsImplicitlyDeclared || c.Parameters.Length > 0) && !IsRecordCopyConstructor(c)
             )
             .ToList();
 
@@ -53,10 +52,7 @@ public static class IrConstructorExtractor
         ctor.IsImplicitlyDeclared
         && ctor.ContainingType.IsRecord
         && ctor.Parameters.Length == 1
-        && SymbolEqualityComparer.Default.Equals(
-            ctor.Parameters[0].Type,
-            ctor.ContainingType
-        );
+        && SymbolEqualityComparer.Default.Equals(ctor.Parameters[0].Type, ctor.ContainingType);
 
     private static IrConstructorDeclaration BuildFromMethod(
         IMethodSymbol ctor,

@@ -330,7 +330,9 @@ public class ExternalMappingTranspileTests
         );
 
         var caller = result["caller.ts"];
-        await Assert.That(caller).Contains("import { createSignal as createRawSignal } from \"solid-js\"");
+        await Assert
+            .That(caller)
+            .Contains("import { createSignal as createRawSignal } from \"solid-js\"");
         await Assert.That(caller).Contains("createRawSignal(seed)");
     }
 
@@ -363,7 +365,9 @@ public class ExternalMappingTranspileTests
         );
 
         var caller = result["caller.ts"];
-        await Assert.That(caller).Contains("import { createSignal as createRawSignal } from \"solid-js\"");
+        await Assert
+            .That(caller)
+            .Contains("import { createSignal as createRawSignal } from \"solid-js\"");
         await Assert.That(caller).Contains("createRawSignal(42)");
         await Assert.That(caller).DoesNotContain("createSignal(42)");
     }

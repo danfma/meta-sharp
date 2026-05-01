@@ -10,26 +10,19 @@ export class CounterApp extends Component {
         const state = this.state ?? Counter.zero;
         return Column({
             gap: 12,
-            children: [
-                Heading({ content: `Count: ${state.count}` }),
-                Row({
+            children: [Heading({ content: `Count: ${state.count}` }), Row({
                     gap: 8,
-                    children: [
-                        Button({
+                    children: [Button({
                             label: "➖",
                             onClick: () => this.setState(state.decrement()),
-                        }),
-                        Button({
+                        }), Button({
                             label: "➕",
                             onClick: () => this.setState(state.increment()),
-                        }),
-                        Button({
+                        }), Button({
                             label: "Reset",
                             onClick: () => this.setState(Counter.zero),
-                        }),
-                    ],
-                }),
-            ],
+                        })],
+                })],
         });
     }
 }

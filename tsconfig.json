@@ -5,8 +5,10 @@
     { "path": "./targets/js/sample-todo/tsconfig.json" },
     { "path": "./targets/js/sample-todo-service/tsconfig.json" },
     { "path": "./targets/js/sample-issue-tracker/tsconfig.json" },
-    { "path": "./targets/js/sample-counter/tsconfig.json" },
+    { "path": "./targets/js/sample-counter-v1/tsconfig.json" },
     { "path": "./targets/js/sample-counter-v2/tsconfig.app.json" },
     { "path": "./targets/js/sample-counter-v3/tsconfig.app.json" },
+    { "path": "./targets/js/sample-counter-v4/tsconfig.app.json" },
+    { "path": "./targets/js/sample-counter-v5/tsconfig.json" },
   ],
 }

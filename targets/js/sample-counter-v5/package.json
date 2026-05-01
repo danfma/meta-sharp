@@ -1,0 +1,46 @@
+{
+  "name": "sample-counter-v5",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --port 3005",
+    "start": "tsgo -b && vite",
+    "build": "tsgo -b && vite build",
+    "serve": "vite preview"
+  },
+  "dependencies": {
+    "metano-runtime": "workspace:*",
+    "solid-js": "^1.9.12"
+  },
+  "devDependencies": {
+    "@types/node": "^24.12.2",
+    "@typescript/native-preview": "^7.0.0-dev.20260412.1",
+    "solid-devtools": "^0.34.5",
+    "vite": "^8.0.10",
+    "vite-plugin-solid": "^2.11.12",
+    "vite-tsconfig-paths": "^6.1.1"
+  },
+  "sideEffects": false,
+  "imports": {
+    "#/*": {
+      "types": "./lib/*",
+      "import": "./lib/*",
+      "default": "./src/*"
+    }
+  },
+  "exports": {
+    "./models": {
+      "types": "./dist/models/index.d.ts",
+      "import": "./dist/models/index.js"
+    },
+    "./stores": {
+      "types": "./dist/stores/index.d.ts",
+      "import": "./dist/stores/index.js"
+    },
+    "./js-interop/solid-js": {
+      "types": "./dist/js-interop/solid-js/index.d.ts",
+      "import": "./dist/js-interop/solid-js/index.js"
+    }
+  }
+}

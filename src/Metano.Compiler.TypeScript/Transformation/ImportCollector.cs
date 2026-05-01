@@ -489,33 +489,22 @@ public sealed class ImportCollector(
         // and skip names already emitted by the main loop above so we don't double-import.
         if (templateExternals.Count > 0)
         {
-            var seenTemplateExternals = new HashSet<(
-                string Name,
-                string From,
-                bool IsDefault,
-                string? EmittedName
-            )>();
+            var seenTemplateExternals =
+                new HashSet<(string Name, string From, bool IsDefault, string? EmittedName)>();
             foreach (var ext in templateExternals)
             {
                 var bindingName = ext.EmittedName ?? ext.Name;
                 if (importedNames.Contains(bindingName))
                     continue;
                 if (
-                    !seenTemplateExternals.Add(
-                        (ext.Name, ext.From, ext.IsDefault, ext.EmittedName)
-                    )
+                    !seenTemplateExternals.Add((ext.Name, ext.From, ext.IsDefault, ext.EmittedName))
                 )
                     continue;
 
                 var aliases = BuildExternalImportAliases(ext);
 
                 imports.Add(
-                    new TsImport(
-                        [ext.Name],
-                        ext.From,
-                        IsDefault: ext.IsDefault,
-                        Aliases: aliases
-                    )
+                    new TsImport([ext.Name], ext.From, IsDefault: ext.IsDefault, Aliases: aliases)
                 );
                 importedNames.Add(bindingName);
                 if (ext.Version is { Length: > 0 } version)

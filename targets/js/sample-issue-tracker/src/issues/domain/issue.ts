@@ -4,9 +4,9 @@ import { isString } from "metano-runtime";
 import type { UserId } from "#/shared-kernel";
 import { Comment } from "./comment";
 import type { IssueId } from "./issue-id";
-import { IssuePriority } from "./issue-priority";
+import type { IssuePriority } from "./issue-priority";
 import { IssueStatus } from "./issue-status";
-import { IssueType } from "./issue-type";
+import type { IssueType } from "./issue-type";
 import { IssueWorkflow } from "./issue-workflow";
 
 export class Issue {
