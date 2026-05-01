@@ -151,43 +151,44 @@ public class NamespaceTranspileTests
     [Test]
     public async Task MultipleTypesFromSameBarrel_MergeIntoSingleImportLine()
     {
-        // Several values from the same foreign namespace should collapse into one
-        // import line pointing at the namespace barrel, not N separate lines.
-        // StringEnums are always imported as values (they generate const objects),
-        // so using three of them keeps the assertion unambiguous.
         var result = TranspileHelper.Transpile(
             """
             namespace App.Domain
             {
-                [Transpile, StringEnum]
-                public enum Priority { Low, High }
+                [Transpile]
+                public class Priority { }
 
-                [Transpile, StringEnum]
-                public enum Status { Open, Closed }
+                [Transpile]
+                public class Status { }
 
-                [Transpile, StringEnum]
-                public enum Category { Bug, Feature }
+                [Transpile]
+                public class Category { }
             }
 
             namespace App.Application
             {
                 [Transpile]
-                public readonly record struct Ticket(
-                    App.Domain.Priority Priority,
-                    App.Domain.Status Status,
-                    App.Domain.Category Category
-                );
+                public sealed class Ticket
+                {
+                    public Ticket()
+                    {
+                        Source = new App.Domain.Priority();
+                        Current = new App.Domain.Status();
+                        Kind = new App.Domain.Category();
+                    }
+
+                    public App.Domain.Priority Source { get; }
+                    public App.Domain.Status Current { get; }
+                    public App.Domain.Category Kind { get; }
+                }
             }
             """
         );
 
         var ticketTs = result["application/ticket.ts"];
-        // Merged into a single value import from the domain barrel. Names sorted
-        // alphabetically within the values group.
         await Assert
             .That(ticketTs)
             .Contains("import { Category, Priority, Status } from \"#/domain\";");
-        // And not split across three lines.
         await Assert.That(ticketTs).DoesNotContain("import { Category } from \"#/domain\"");
         await Assert.That(ticketTs).DoesNotContain("import { Priority } from \"#/domain\"");
         await Assert.That(ticketTs).DoesNotContain("import { Status } from \"#/domain\"");
@@ -248,13 +249,22 @@ public class NamespaceTranspileTests
             namespace App.Application
             {
                 [Transpile]
-                public readonly record struct Job(App.Domain.Priority Priority, App.Domain.IReadable Reader);
+                public sealed class Job
+                {
+                    public Job(App.Domain.IReadable reader)
+                    {
+                        Reader = reader;
+                        Current = App.Domain.Priority.Low;
+                    }
+
+                    public App.Domain.Priority Current { get; }
+                    public App.Domain.IReadable Reader { get; }
+                }
             }
             """
         );
 
         var jobTs = result["application/job.ts"];
-        // Priority is a StringEnum (value); IReadable is an interface (type-only).
         await Assert.That(jobTs).Contains("import { Priority, type IReadable } from \"#/domain\";");
     }
 }

@@ -328,20 +328,13 @@ public sealed class ImportCollector(
                     {
                         [extImport.Name] = typeName,
                     };
-                // Type-only inference: when the consumer only references the
-                // import in type positions (no `new`, no `instanceof`, no
-                // member access on it as a value), mark the named import as
-                // `type` so `verbatimModuleSyntax` consumers stay valid.
                 var isTypeOnly = !extImport.IsDefault && !valueTypes.Contains(typeName);
-                IReadOnlySet<string>? typeOnlyNames = isTypeOnly
-                    ? new HashSet<string>(StringComparer.Ordinal) { extImport.Name }
-                    : null;
                 imports.Add(
                     new TsImport(
                         [extImport.Name],
                         extImport.From,
                         IsDefault: extImport.IsDefault,
-                        TypeOnlyNames: typeOnlyNames,
+                        TypeOnly: isTypeOnly,
                         Aliases: aliases
                     )
                 );
@@ -453,8 +446,7 @@ public sealed class ImportCollector(
                 referencedRef.Namespace,
                 referencedRef.FileName
             );
-            // StringEnums generate const objects — always import as value
-            var typeOnly = !valueTypes.Contains(typeName) && !referencedRef.IsStringEnum;
+            var typeOnly = !valueTypes.Contains(typeName);
             AddLocal(importPath, referencedRef.TsName, typeOnly);
         }
 

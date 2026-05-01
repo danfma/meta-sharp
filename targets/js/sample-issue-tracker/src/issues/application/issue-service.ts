@@ -1,6 +1,6 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
 import { isString } from "metano-runtime";
-import { Issue, IssueId, IssuePriority, IssueStatus, IssueType } from "#/issues/domain";
+import { Issue, IssueId, IssuePriority, type IssueStatus, type IssueType } from "#/issues/domain";
 import { OperationResult, type PageRequest, type PageResult, type UserId } from "#/shared-kernel";
 import type { IIssueRepository } from "./i-issue-repository";
 
