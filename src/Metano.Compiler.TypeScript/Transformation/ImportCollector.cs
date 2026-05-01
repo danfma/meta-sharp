@@ -49,7 +49,7 @@ public sealed class ImportCollector(
         var valueTypes = new HashSet<string>(); // types used via `new` or `extends` (need runtime import)
         var runtimeHelpers = new HashSet<string>(); // identifiers from TsTemplate.RuntimeImports
         var crossPackageOrigins = new Dictionary<string, TsTypeOrigin>(); // name → cross-package origin
-        var templateExternals = new List<IrExternalImport>(); // [Import] declared on [Emit] methods
+        var templateExternals = new List<IrExternalImport>();
         _templateExternals = templateExternals;
         try
         {
@@ -489,21 +489,51 @@ public sealed class ImportCollector(
         // and skip names already emitted by the main loop above so we don't double-import.
         if (templateExternals.Count > 0)
         {
-            var seenTemplateExternals = new HashSet<(string Name, string From, bool IsDefault)>();
+            var seenTemplateExternals = new HashSet<(
+                string Name,
+                string From,
+                bool IsDefault,
+                string? EmittedName
+            )>();
             foreach (var ext in templateExternals)
             {
-                if (importedNames.Contains(ext.Name))
+                var bindingName = ext.EmittedName ?? ext.Name;
+                if (importedNames.Contains(bindingName))
                     continue;
-                if (!seenTemplateExternals.Add((ext.Name, ext.From, ext.IsDefault)))
+                if (
+                    !seenTemplateExternals.Add(
+                        (ext.Name, ext.From, ext.IsDefault, ext.EmittedName)
+                    )
+                )
                     continue;
-                imports.Add(new TsImport([ext.Name], ext.From, IsDefault: ext.IsDefault));
-                importedNames.Add(ext.Name);
+
+                var aliases = BuildExternalImportAliases(ext);
+
+                imports.Add(
+                    new TsImport(
+                        [ext.Name],
+                        ext.From,
+                        IsDefault: ext.IsDefault,
+                        Aliases: aliases
+                    )
+                );
+                importedNames.Add(bindingName);
                 if (ext.Version is { Length: > 0 } version)
                     _typeMappingContext.UsedCrossPackages[ext.From] = version;
             }
         }
 
         return MergeImportsByPath(imports);
+    }
+
+    private static IReadOnlyDictionary<string, string>? BuildExternalImportAliases(
+        IrExternalImport ext
+    )
+    {
+        var divergent = SymbolHelper.NormalizeDivergentName(ext.EmittedName, ext.Name);
+        return divergent is null
+            ? null
+            : new Dictionary<string, string>(StringComparer.Ordinal) { [ext.Name] = divergent };
     }
 
     /// <summary>

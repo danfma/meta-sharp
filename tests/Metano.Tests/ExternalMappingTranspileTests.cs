@@ -269,9 +269,6 @@ public class ExternalMappingTranspileTests
     [Test]
     public async Task Import_StaticMethod_LowersToDirectCallAtCallSite()
     {
-        // Plain [Import] (no [Emit] template) — the call site lowers to a
-        // direct invocation of the imported identifier, and the consumer file
-        // gets the matching import line auto-emitted.
         var result = TranspileHelper.Transpile(
             """
             namespace App
@@ -280,7 +277,7 @@ public class ExternalMappingTranspileTests
                 public static class Inferno
                 {
                     [Import(name: "createElement", from: "inferno-create-element")]
-                    public static object H(string tag, object props) =>
+                    public static object CreateElement(string tag, object props) =>
                         throw new System.NotSupportedException();
                 }
 
@@ -290,7 +287,7 @@ public class ExternalMappingTranspileTests
                     [ModuleEntryPoint]
                     public static void Run()
                     {
-                        var x = Inferno.H("div", new { });
+                        var x = Inferno.CreateElement("div", new { });
                     }
                 }
             }
@@ -300,7 +297,75 @@ public class ExternalMappingTranspileTests
         var caller = result["caller.ts"];
         await Assert.That(caller).Contains("createElement(\"div\",");
         await Assert.That(caller).Contains("from \"inferno-create-element\"");
-        await Assert.That(caller).DoesNotContain(".H(");
+        await Assert.That(caller).DoesNotContain(".CreateElement(");
+    }
+
+    [Test]
+    public async Task Import_CrossAssembly_StaticMethodWithDivergentName_PropagatesAlias()
+    {
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("solid-bindings")]
+
+            namespace App;
+
+            [Transpile, NoContainer]
+            public static class Solid
+            {
+                [Import(name: "createSignal", from: "solid-js")]
+                public static object CreateRawSignal(object value) =>
+                    throw new System.NotSupportedException();
+            }
+            """,
+            """
+            [assembly: TranspileAssembly]
+
+            public class Caller
+            {
+                public object Use(int seed) => App.Solid.CreateRawSignal(seed);
+            }
+            """
+        );
+
+        var caller = result["caller.ts"];
+        await Assert.That(caller).Contains("import { createSignal as createRawSignal } from \"solid-js\"");
+        await Assert.That(caller).Contains("createRawSignal(seed)");
+    }
+
+    [Test]
+    public async Task Import_StaticMethodWithDivergentName_AliasesImportToMethodEmittedName()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App
+            {
+                [Transpile, NoContainer]
+                public static class Solid
+                {
+                    [Import(name: "createSignal", from: "solid-js")]
+                    public static object CreateRawSignal(object value) =>
+                        throw new System.NotSupportedException();
+                }
+
+                [Transpile]
+                public static class Caller
+                {
+                    [ModuleEntryPoint]
+                    public static void Run()
+                    {
+                        var x = Solid.CreateRawSignal(42);
+                    }
+                }
+            }
+            """
+        );
+
+        var caller = result["caller.ts"];
+        await Assert.That(caller).Contains("import { createSignal as createRawSignal } from \"solid-js\"");
+        await Assert.That(caller).Contains("createRawSignal(42)");
+        await Assert.That(caller).DoesNotContain("createSignal(42)");
     }
 
     [Test]

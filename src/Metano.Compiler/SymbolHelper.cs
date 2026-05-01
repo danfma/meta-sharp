@@ -776,6 +776,20 @@ public static class SymbolHelper
         string? Version = null
     );
 
+    public static string ToCamelCase(string name)
+    {
+        if (string.IsNullOrEmpty(name))
+            return name;
+        if (char.IsLower(name[0]))
+            return name;
+        return char.ToLowerInvariant(name[0]) + name[1..];
+    }
+
+    public static string? NormalizeDivergentName(string? candidate, string anchor) =>
+        candidate is not null && !string.Equals(candidate, anchor, StringComparison.Ordinal)
+            ? candidate
+            : null;
+
     /// <summary>
     /// Converts PascalCase to kebab-case for file paths.
     /// Examples: "UserId" → "user-id", "InMemoryIssueRepository" → "in-memory-issue-repository",

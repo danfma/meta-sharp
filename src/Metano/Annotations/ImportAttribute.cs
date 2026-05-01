@@ -14,6 +14,7 @@ namespace Metano.Annotations;
         | AttributeTargets.Struct
         | AttributeTargets.Method
         | AttributeTargets.Property
+        | AttributeTargets.Interface
 )]
 public sealed class ImportAttribute(string name, string from) : Attribute
 {

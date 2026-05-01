@@ -2475,13 +2475,15 @@ public sealed class IrExpressionExtractor
             templateArgs.Add(Extract(instanceAccess.Expression));
         templateArgs.AddRange(args.Select(a => a.Value));
 
-        var template = $"{import.Name}({BuildPositionalPlaceholders(templateArgs.Count)})";
+        var emittedName =
+            SymbolHelper.GetNameOverride(symbol, _target) ?? SymbolHelper.ToCamelCase(symbol.Name);
+        var template = $"{emittedName}({BuildPositionalPlaceholders(templateArgs.Count)})";
 
         return new IrTemplateExpression(
             template,
             Receiver: null,
             templateArgs,
-            ExternalImports: [ToIrExternalImport(import)]
+            ExternalImports: [ToIrExternalImport(import, emittedName)]
         );
     }
 
@@ -2504,8 +2506,17 @@ public sealed class IrExpressionExtractor
         return list;
     }
 
-    private static IrExternalImport ToIrExternalImport(SymbolHelper.ImportInfo import) =>
-        new(import.Name, import.From, import.AsDefault, import.Version);
+    private static IrExternalImport ToIrExternalImport(
+        SymbolHelper.ImportInfo import,
+        string? emittedName = null
+    ) =>
+        new(
+            import.Name,
+            import.From,
+            import.AsDefault,
+            import.Version,
+            EmittedName: SymbolHelper.NormalizeDivergentName(emittedName, import.Name)
+        );
 
     private static string BuildPositionalPlaceholders(int count) =>
         string.Join(", ", Enumerable.Range(0, count).Select(i => $"${i}"));

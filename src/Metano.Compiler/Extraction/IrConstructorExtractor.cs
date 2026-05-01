@@ -25,8 +25,8 @@ public static class IrConstructorExtractor
     {
         var explicitCtors = type
             .Constructors.Where(c =>
-                c.DeclaredAccessibility == Accessibility.Public
-                && (!c.IsImplicitlyDeclared || c.Parameters.Length > 0)
+                (!c.IsImplicitlyDeclared || c.Parameters.Length > 0)
+                && !IsRecordCopyConstructor(c)
             )
             .ToList();
 
@@ -48,6 +48,15 @@ public static class IrConstructorExtractor
 
         return overloads.Count > 0 ? primaryDecl with { Overloads = overloads } : primaryDecl;
     }
+
+    private static bool IsRecordCopyConstructor(IMethodSymbol ctor) =>
+        ctor.IsImplicitlyDeclared
+        && ctor.ContainingType.IsRecord
+        && ctor.Parameters.Length == 1
+        && SymbolEqualityComparer.Default.Equals(
+            ctor.Parameters[0].Type,
+            ctor.ContainingType
+        );
 
     private static IrConstructorDeclaration BuildFromMethod(
         IMethodSymbol ctor,

@@ -226,4 +226,73 @@ public class MethodOverloadTests
         await Assert.That(output).Contains("build(context: number): Widget");
         await Assert.That(output).DoesNotContain("...args: unknown[]");
     }
+
+    [Test]
+    public async Task DelegateOverload_DispatchesOnTypeofFunctionAndArity()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+            namespace App;
+
+            [Transpile]
+            public sealed class Setter<T>
+            {
+                public void Set(T value) { }
+                public void Set(Func<T, T> updater) { }
+            }
+            """
+        );
+
+        var output = result["setter.ts"];
+        await Assert
+            .That(output)
+            .Contains("typeof args[0] === \"function\" && args[0].length === 1");
+    }
+
+    [Test]
+    public async Task DelegateOverload_NullableFunc_ChecksNullOrFunctionShape()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+            namespace App;
+
+            [Transpile]
+            public sealed class Pipe<T>
+            {
+                public void Wire(T value) { }
+                public void Wire(Func<T, T>? mapper) { }
+            }
+            """
+        );
+
+        var output = result["pipe.ts"];
+        await Assert.That(output).Contains("args[0] === null");
+        await Assert
+            .That(output)
+            .Contains("typeof args[0] === \"function\" && args[0].length === 1");
+    }
+
+    [Test]
+    public async Task DelegateOverload_DifferentArity_DistinguishesByArityCheck()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+            namespace App;
+
+            [Transpile]
+            public sealed class Bus
+            {
+                public void Subscribe(Action handler) { }
+                public void Subscribe(Action<int> handler) { }
+            }
+            """
+        );
+
+        var output = result["bus.ts"];
+        await Assert.That(output).Contains("args[0].length === 0");
+        await Assert.That(output).Contains("args[0].length === 1");
+    }
 }

@@ -30,6 +30,7 @@ internal static class IrTypeCheckBuilder
                 Generate(nullable.Inner, value)
             ),
             IrPrimitiveTypeRef primitive => PrimitiveCheck(primitive.Primitive, value),
+            IrFunctionTypeRef func => FunctionCheck(func, value),
             IrArrayTypeRef => new TsCallExpression(
                 new TsPropertyAccess(new TsIdentifier("Array"), "isArray"),
                 [value]
@@ -163,6 +164,24 @@ internal static class IrTypeCheckBuilder
             IrPrimitive.Object or IrPrimitive.Void => TypeofObject(value),
             _ => TypeofObject(value),
         };
+
+    private static TsExpression FunctionCheck(IrFunctionTypeRef func, TsExpression value)
+    {
+        var typeofCheck = new TsBinaryExpression(
+            new TsUnaryExpression("typeof ", value),
+            "===",
+            new TsStringLiteral("function")
+        );
+
+        var arity = func.Parameters.Count;
+        var arityCheck = new TsBinaryExpression(
+            new TsPropertyAccess(value, "length"),
+            "===",
+            new TsLiteral(arity.ToString())
+        );
+
+        return new TsBinaryExpression(typeofCheck, "&&", arityCheck);
+    }
 
     private static TsExpression RuntimeIs(string helper, TsExpression value) =>
         new TsCallExpression(new TsIdentifier(helper), [value]);

@@ -117,4 +117,58 @@ public class ConstructorOverloadTests
         await Assert.That(output).Contains("constructor();");
         await Assert.That(output).Contains("...args: unknown[]");
     }
+
+    [Test]
+    public async Task PrivateConstructor_BodyIsEmitted()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Counter
+            {
+                private readonly int _value;
+
+                private Counter(int initial)
+                {
+                    _value = initial;
+                }
+
+                public int Value => _value;
+
+                public static Counter Create() => new(42);
+            }
+            """
+        );
+
+        var output = result["counter.ts"];
+        await Assert.That(output).Contains("this._value = initial");
+    }
+
+    [Test]
+    public async Task NonRecordClassWithSelfTypedCtor_BodyIsEmitted()
+    {
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile]
+            public sealed class Box
+            {
+                private readonly int _value;
+
+                public Box(int value)
+                {
+                    _value = value;
+                }
+
+                public Box(Box other)
+                {
+                    _value = other._value;
+                }
+            }
+            """
+        );
+
+        var output = result["box.ts"];
+        await Assert.That(output).Contains("this._value = value");
+        await Assert.That(output).Contains("this._value = other._value");
+    }
 }
