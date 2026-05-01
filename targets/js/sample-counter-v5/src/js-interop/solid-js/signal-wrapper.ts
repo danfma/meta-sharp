@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { Signal as IRawSignal } from "solid-js";
+import { type Signal as IRawSignal } from "solid-js";
 import type { ISignal } from "./i-signal";
 
 export class SignalWrapper<T> implements ISignal<T> {

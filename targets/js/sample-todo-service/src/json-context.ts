@@ -15,7 +15,7 @@ export class JsonContext extends SerializerContext {
   private _todoItem?: TypeSpec<TodoItem>;
 
   static get default(): JsonContext {
-    return JsonContext._default;
+    return this._default;
   }
 
   get storedTodo(): TypeSpec<StoredTodo> {

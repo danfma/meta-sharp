@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { Temporal } from "@js-temporal/polyfill";
+import { Temporal } from "@js-temporal/polyfill";
 import { HashCode } from "metano-runtime";
 import { UserId } from "#/shared-kernel";
 

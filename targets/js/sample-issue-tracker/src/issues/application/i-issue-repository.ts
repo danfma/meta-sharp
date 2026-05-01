@@ -1,5 +1,5 @@
 /** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */
-import type { IssuePriority, IssueStatus, Issue, IssueId } from "#/issues/domain";
+import { IssuePriority, IssueStatus, type Issue, type IssueId } from "#/issues/domain";
 import type { PageRequest, PageResult, UserId } from "#/shared-kernel";
 
 export interface IIssueRepository {
