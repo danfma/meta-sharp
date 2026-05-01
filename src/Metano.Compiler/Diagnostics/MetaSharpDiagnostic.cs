@@ -222,4 +222,13 @@ public static class DiagnosticCodes
     /// directive (or the upcoming <c>[ImportAlias]</c> attribute) to
     /// silence this notice.</summary>
     public const string AliasedImportConflict = "MS0022";
+
+    /// <summary>MS0023 — an <c>[Emit]</c>-annotated method declares a
+    /// parameter with <c>ref</c>, <c>out</c>, <c>in</c>, or <c>ref
+    /// readonly</c>. The TypeScript / Dart targets have no notion of
+    /// pass-by-reference at the call boundary, so flowing the argument
+    /// through the template would silently drop the C# mutation contract.
+    /// Drop the modifier and pass / return the value directly, or wrap
+    /// the call in a helper that materializes the result.</summary>
+    public const string InvalidEmit = "MS0023";
 }

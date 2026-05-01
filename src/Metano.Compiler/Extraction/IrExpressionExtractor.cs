@@ -2425,7 +2425,22 @@ public sealed class IrExpressionExtractor
         string emitTemplate
     )
     {
-        var templateArgs = CollectPositionalReceiverAndArgs(symbol, inv);
+        // Run the same normalization the regular invocation path uses so
+        // named args reorder to parameter declaration order, params arrays
+        // spread, and skipped optional parameters surface their explicit
+        // default. The [Emit] template author addresses arguments by index
+        // ($0, $1, …) and expects those indices to align with the C#
+        // parameter slots — bypassing normalization would land named args
+        // positionally and silently corrupt the emitted call.
+        var args = inv.ArgumentList.Arguments.Select(ExtractArgument).ToList();
+        ApplyParamsSpread(args, symbol, inv.ArgumentList.Arguments);
+        if (args.Any(a => a.Name is not null))
+            args = NormalizeArguments(args, symbol).ToList();
+
+        var templateArgs = new List<IrExpression>();
+        if (!symbol.IsStatic && inv.Expression is MemberAccessExpressionSyntax memberAccess)
+            templateArgs.Add(Extract(memberAccess.Expression));
+        templateArgs.AddRange(args.Select(a => a.Value));
 
         IReadOnlyList<IrTypeRef>? typeArgs = null;
         if (symbol is { TypeArguments.Length: > 0 })
@@ -2485,25 +2500,6 @@ public sealed class IrExpressionExtractor
             templateArgs,
             ExternalImports: [ToIrExternalImport(import, emittedName)]
         );
-    }
-
-    /// <summary>
-    /// Collects an invocation's argument list as positional <see cref="IrExpression"/>s,
-    /// promoting the receiver to slot 0 for instance methods. Used by the
-    /// <c>[Emit]</c> template path where the template author addresses arguments
-    /// by index (<c>$0</c>, <c>$1</c>, …) and expects the receiver elision to
-    /// already be applied.
-    /// </summary>
-    private List<IrExpression> CollectPositionalReceiverAndArgs(
-        IMethodSymbol symbol,
-        InvocationExpressionSyntax inv
-    )
-    {
-        var list = new List<IrExpression>();
-        if (!symbol.IsStatic && inv.Expression is MemberAccessExpressionSyntax memberAccess)
-            list.Add(Extract(memberAccess.Expression));
-        list.AddRange(inv.ArgumentList.Arguments.Select(a => Extract(a.Expression)));
-        return list;
     }
 
     private static IrExternalImport ToIrExternalImport(

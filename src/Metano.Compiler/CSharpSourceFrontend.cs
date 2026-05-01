@@ -144,6 +144,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateInlineAttribute(compilation, diagnostics);
             ValidateThisAttribute(compilation, diagnostics);
             ValidateGenericNewConstraint(compilation, assemblyWideTranspile, diagnostics);
+            ValidateEmitAttribute(compilation, diagnostics);
             ValidateIgnoreReferences(compilation, assemblyWideTranspile, target, diagnostics);
         }
 
@@ -1222,6 +1223,52 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             type => VisitTypeForInline(type, diagnostics)
         );
         DetectInlineCycles(compilation, diagnostics);
+    }
+
+    /// <summary>
+    /// Walks every <c>[Emit]</c>-annotated method and rejects parameters
+    /// declared with <c>ref</c>, <c>out</c>, <c>in</c>, or <c>ref
+    /// readonly</c>. The TS / Dart targets pass arguments by value at the
+    /// JS / Dart boundary, so the C# pass-by-reference contract cannot
+    /// survive the lowering — the emitted call would silently drop the
+    /// mutation. Raise <c>MS0023</c> at the parameter site so the misuse
+    /// is caught at compile time.
+    /// </summary>
+    private static void ValidateEmitAttribute(
+        Compilation compilation,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        CollectTopLevelTypes(
+            compilation.Assembly.GlobalNamespace,
+            type =>
+            {
+                foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
+                {
+                    if (!SymbolHelper.HasEmit(member))
+                        continue;
+                    foreach (var parameter in member.Parameters)
+                    {
+                        if (parameter.RefKind == RefKind.None)
+                            continue;
+                        diagnostics.Add(
+                            new MetanoDiagnostic(
+                                MetanoDiagnosticSeverity.Error,
+                                DiagnosticCodes.InvalidEmit,
+                                $"[Emit] on {FormatMemberPath(member)} cannot accept "
+                                    + $"parameter '{parameter.Name}' declared with "
+                                    + $"'{parameter.RefKind.ToString().ToLowerInvariant()}'. "
+                                    + $"The TS / Dart targets pass arguments by value, so "
+                                    + $"the pass-by-reference contract would silently break "
+                                    + $"at the lowered call site. Drop the modifier or move "
+                                    + $"the mutation into a helper.",
+                                parameter.Locations.FirstOrDefault()
+                            )
+                        );
+                    }
+                }
+            }
+        );
     }
 
     /// <summary>

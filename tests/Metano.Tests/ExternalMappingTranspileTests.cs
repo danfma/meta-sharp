@@ -1,3 +1,5 @@
+using Metano.Compiler.Diagnostics;
+
 namespace Metano.Tests;
 
 public class ExternalMappingTranspileTests
@@ -228,6 +230,123 @@ public class ExternalMappingTranspileTests
         await Assert.That(caller).Contains("createElement(Comp,");
         await Assert.That(caller).Contains("from \"react\"");
         await Assert.That(caller).Contains("createElement");
+    }
+
+    [Test]
+    public async Task Emit_NamedArguments_ReorderToParameterDeclarationOrder()
+    {
+        // The [Emit] template author addresses arguments by index ($0, $1, …)
+        // expecting parameter declaration order. Named arguments at the call
+        // site must reorder before placeholder substitution; otherwise
+        // `Slice(end: 3, start: 1)` would land $0=3, $1=1 and silently corrupt
+        // the emitted call.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Fmt
+            {
+                [Emit("$0.slice($1, $2)")]
+                public static extern string Slice(string str, int start, int end);
+
+                public static string Mid(string s)
+                {
+                    return Slice(s, end: 3, start: 1);
+                }
+            }
+            """
+        );
+
+        var output = result["fmt.ts"];
+        await Assert.That(output).Contains("s.slice(1, 3)");
+    }
+
+    [Test]
+    public async Task Emit_ParamsArray_SpreadsAtCallSite()
+    {
+        // `params T[]` at the [Emit] call site must flatten across positional
+        // placeholder slots instead of landing as a single array.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Fmt
+            {
+                [Emit("join($0, $1, $2)")]
+                public static extern string Join(string a, string b, string c);
+
+                public static string Combine()
+                {
+                    return Join("x", "y", "z");
+                }
+            }
+            """
+        );
+
+        var output = result["fmt.ts"];
+        await Assert.That(output).Contains("join(\"x\", \"y\", \"z\")");
+    }
+
+    [Test]
+    public async Task Emit_RefParameter_RaisesMs0023()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Bad
+            {
+                [Emit("inc($0)")]
+                public static extern void Inc(ref int counter);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidEmit))
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task Emit_OutParameter_RaisesMs0023()
+    {
+        var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
+            """
+            [Transpile, NoContainer]
+            public static class Bad
+            {
+                [Emit("compute($0)")]
+                public static extern void Compute(out int result);
+            }
+            """
+        );
+
+        await Assert
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidEmit))
+            .IsTrue();
+    }
+
+    [Test]
+    public async Task Emit_OmittedOptional_FillsExplicitDefault()
+    {
+        // When the caller skips an optional parameter, the declared default
+        // must surface at the matching $N slot — otherwise the emitted call
+        // would shift later args into the empty slot and miscount.
+        var result = TranspileHelper.Transpile(
+            """
+            [Transpile, NoContainer]
+            public static class Fmt
+            {
+                [Emit("$0.slice($1, $2)")]
+                public static extern string Slice(string str, int start = 0, int end = 10);
+
+                public static string Head(string s)
+                {
+                    return Slice(s, end: 5);
+                }
+            }
+            """
+        );
+
+        var output = result["fmt.ts"];
+        await Assert.That(output).Contains("s.slice(0, 5)");
     }
 
     // ─── [Import] on methods/properties ─────────────────────
