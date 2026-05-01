@@ -4,6 +4,54 @@ All notable changes to Metano are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 2.0.0
+
+_2026-05-01_
+
+
+### ⚠ BREAKING CHANGES
+
+* **annotations:** [NoEmit] and [NoTranspile] are removed. Replace any
+[NoEmit] usage with [Ignore] (semantics carry over). Replace any
+[NoTranspile] with [Ignore] when the type is .NET-only, or with [External]
+when it is an ambient TypeScript shape that transpiled code legitimately
+references. Member-level [NoTranspile] without a replacement should switch
+to member-level [Ignore].
+
+Compiler changes:
+
+- ValidateIgnoreReferences now skips members marked [Ignore] (an [Ignore]
+  helper that takes an [Ignore] marker stays silent).
+- Member-level reference validation: invocations and member access on
+  [Ignore] methods/properties/fields/events from transpilable code raise
+  MS0013 with the member's owner.member name in the message.
+- IrTypeRefMapper threads the active TargetLanguage through HasIgnore so a
+  type ignored only for the active backend is correctly marked
+  IsIgnored=true in the IR (and IsTranspilable=false), keeping downstream
+  paths like lambda parameter lowering and runtime guard generation
+  consistent with the per-target contract.
+- IR field IrNamedTypeSemantics.IsNoEmit renamed to IsIgnored.
+- DiagnosticCodes.NoEmitReferencedByTranspiledCode renamed to
+  IgnoreReferencedByTranspiledCode (the MS0013 code itself is unchanged).
+
+Tests:
+
+- New IgnoreDotNetOnlyTests pin the MS0013 contract on every reference
+  position (parameter, return, field type, body, generic argument,
+  per-target gating).
+- Former NoEmitTranspileTests renamed to ExternalAmbientTranspileTests; the
+  ambient cases all reference [External] now, matching the new semantics.
+- Test methods disambiguated (Ignore_ExcludesTypeFromAssemblyWideTranspile,
+  Ignore_OverridesExplicitTranspileAttribute, IgnorePerTarget_*).
+
+### ✨ Features
+
+* **annotations:** collapse [NoEmit]/[NoTranspile]/[Ignore] into single [Ignore] ([06b5e43](https://github.com/danfma/metano/commit/06b5e438abe878819f5e5f0d85ba37a9c9d97f04))
+
+### 🐛 Bug Fixes
+
+* **ts:** align import-type form with Biome's expectation ([5714185](https://github.com/danfma/metano/commit/5714185cfc2bca810e2db72552ca2da322e40b08))
+
 ## 1.1.0
 
 _2026-05-01_
