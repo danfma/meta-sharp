@@ -13,6 +13,7 @@
     -->
     <MetanoNamespaceBarrels>true</MetanoNamespaceBarrels>
     <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
+    <MetanoPostBuildCommand>bunx biome check --write &quot;$(MetanoOutputDir)&quot;</MetanoPostBuildCommand>
   </PropertyGroup>
 
   <ItemGroup>

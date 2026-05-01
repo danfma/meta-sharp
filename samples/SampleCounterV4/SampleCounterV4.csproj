@@ -9,6 +9,7 @@
     <MetanoClean>true</MetanoClean>
     <MetanoFilePrefix>/** biome-ignore-all lint/complexity/noUselessConstructor: explicit shape preserved by transpiler */</MetanoFilePrefix>
     <MetanoCompilerProject>../../src/Metano.Compiler.TypeScript/Metano.Compiler.TypeScript.csproj</MetanoCompilerProject>
+    <MetanoPostBuildCommand>bunx biome check --write &quot;$(MetanoOutputDir)&quot;</MetanoPostBuildCommand>
   </PropertyGroup>
 
   <ItemGroup>

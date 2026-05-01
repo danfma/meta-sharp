@@ -20,6 +20,7 @@
       MetanoStripInterfacePrefix (optional)  true to drop the `I` prefix from interface names when the second letter is uppercase (default: false). Collisions with sibling types surface MS0017.
       MetanoFilePrefix       (optional)  Verbatim text inserted at the top of every generated file, followed by a single newline. Use for formatter / lint directives (Biome `biome-ignore-all`, Prettier `// @prettier-ignore`, `// @generated` markers). Multi-line values are accepted; pass through MSBuild XML escaping.
       MetanoExtraArgs        (optional)  Additional CLI arguments
+      MetanoPostBuildCommand (optional)  Shell command to run after transpilation completes. Receives the consumer's choice of formatter / linter / packager. Stays empty by default so the target ships no tool dependency; consumers opt in per project when they want the post-emit pass.
   -->
 
   <Target Name="MetanoTranspile" AfterTargets="Build" Condition="'$(MetanoOutputDir)' != ''">
@@ -67,5 +68,25 @@
       Text="Metano: Transpiling $(MSBuildProjectName) → $(MetanoOutputDir)"
     />
     <Exec Command="$(_MetanoCmd) $(_MetanoArgs)" />
+  </Target>
+
+  <!--
+    Optional post-emit hook. Runs the consumer-provided command in
+    MetanoPostBuildCommand (a verbatim shell line) after transpilation.
+    Use it to run a formatter / linter / packager on the generated output
+    so the committed state matches whatever the consumer's tooling
+    produces. Stays inert when the property is unset, so the target ships
+    no implicit tool dependency.
+  -->
+  <Target
+    Name="MetanoPostBuild"
+    AfterTargets="MetanoTranspile"
+    Condition="'$(MetanoPostBuildCommand)' != ''"
+  >
+    <Message
+      Importance="high"
+      Text="Metano: Running post-build command for $(MSBuildProjectName)"
+    />
+    <Exec Command="$(MetanoPostBuildCommand)" />
   </Target>
 </Project>
