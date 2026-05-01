@@ -299,9 +299,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        await Assert
-            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidEmit))
-            .IsTrue();
+        await Assert.That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidEmit)).IsTrue();
     }
 
     [Test]
@@ -318,9 +316,7 @@ public class ExternalMappingTranspileTests
             """
         );
 
-        await Assert
-            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidEmit))
-            .IsTrue();
+        await Assert.That(diagnostics.Any(d => d.Code == DiagnosticCodes.InvalidEmit)).IsTrue();
     }
 
     [Test]

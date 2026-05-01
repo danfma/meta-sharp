@@ -34,12 +34,6 @@ public sealed class ImportCollector(
     private readonly IReadOnlySet<IrRuntimeRequirement>? _irRuntimeRequirements =
         irRuntimeRequirements;
 
-    // Per-Collect-call sink for `[Import]` metadata declared on `[Emit]` template
-    // methods. Populated by the TsTemplate walker case (see CollectFromExpression);
-    // drained by the Collect entry point after the walk. Reset on every Collect
-    // invocation so a single ImportCollector instance can serve multiple files.
-    private List<IrExternalImport>? _templateExternals;
-
     public IReadOnlyList<TsImport> Collect(
         INamedTypeSymbol currentType,
         List<TsTopLevel> statements
@@ -50,21 +44,14 @@ public sealed class ImportCollector(
         var runtimeHelpers = new HashSet<string>(); // identifiers from TsTemplate.RuntimeImports
         var crossPackageOrigins = new Dictionary<string, TsTypeOrigin>(); // name → cross-package origin
         var templateExternals = new List<IrExternalImport>();
-        _templateExternals = templateExternals;
-        try
-        {
-            CollectReferencedTypeNames(
-                statements,
-                referencedTypes,
-                valueTypes,
-                runtimeHelpers,
-                crossPackageOrigins
-            );
-        }
-        finally
-        {
-            _templateExternals = null;
-        }
+        var sink = new ImportCollectionSink(
+            referencedTypes,
+            valueTypes,
+            runtimeHelpers,
+            crossPackageOrigins,
+            templateExternals
+        );
+        CollectReferencedTypeNames(statements, sink);
 
         // C# `using X = Y;` aliases substitute the canonical type name with
         // the user's alias on every emitted token. The walker therefore sees
@@ -646,24 +633,19 @@ public sealed class ImportCollector(
 
     private void CollectReferencedTypeNames(
         IEnumerable<TsTopLevel> statements,
-        HashSet<string> names,
-        HashSet<string> valueNames,
-        HashSet<string> runtimeHelpers,
-        Dictionary<string, TsTypeOrigin> crossPackageOrigins
+        ImportCollectionSink sink
     )
     {
         foreach (var stmt in statements)
-            CollectFromTopLevel(stmt, names, valueNames, runtimeHelpers, crossPackageOrigins);
+            CollectFromTopLevel(stmt, sink);
     }
 
-    private void CollectFromTopLevel(
-        TsTopLevel node,
-        HashSet<string> names,
-        HashSet<string> valueNames,
-        HashSet<string> runtimeHelpers,
-        Dictionary<string, TsTypeOrigin> crossPackageOrigins
-    )
+    private void CollectFromTopLevel(TsTopLevel node, ImportCollectionSink sink)
     {
+        var names = sink.Names;
+        var valueNames = sink.ValueNames;
+        var runtimeHelpers = sink.RuntimeHelpers;
+        var crossPackageOrigins = sink.CrossPackageOrigins;
         switch (node)
         {
             case TsTypeAlias alias:
@@ -697,20 +679,14 @@ public sealed class ImportCollector(
                 CollectFromType(func.ReturnType, names, crossPackageOrigins);
                 CollectFromStatements(
                     func.Body,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
             case TsConstObject constObj:
                 foreach (var (_, value) in constObj.Entries)
                     CollectFromExpression(
                         value,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 break;
             case TsNamespaceDeclaration ns:
@@ -721,10 +697,7 @@ public sealed class ImportCollector(
                     CollectFromType(func.ReturnType, names, crossPackageOrigins);
                     CollectFromStatements(
                         func.Body,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 }
                 break;
@@ -745,10 +718,7 @@ public sealed class ImportCollector(
                         CollectFromType(p.Type, names, crossPackageOrigins);
                     CollectFromStatements(
                         cls.Constructor.Body,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 }
                 foreach (var member in cls.Members)
@@ -762,10 +732,7 @@ public sealed class ImportCollector(
                             CollectFromType(m.ReturnType, names, crossPackageOrigins);
                             CollectFromStatements(
                                 m.Body,
-                                names,
-                                valueNames,
-                                runtimeHelpers,
-                                crossPackageOrigins
+                                sink
                             );
                             // Collect from overload signatures too
                             if (m.Overloads is not null)
@@ -784,10 +751,7 @@ public sealed class ImportCollector(
                             CollectFromType(g.ReturnType, names, crossPackageOrigins);
                             CollectFromStatements(
                                 g.Body,
-                                names,
-                                valueNames,
-                                runtimeHelpers,
-                                crossPackageOrigins
+                                sink
                             );
                             break;
                         case TsFieldMember f:
@@ -795,10 +759,7 @@ public sealed class ImportCollector(
                             if (f.Initializer is not null)
                                 CollectFromExpression(
                                     f.Initializer,
-                                    names,
-                                    valueNames,
-                                    runtimeHelpers,
-                                    crossPackageOrigins
+                                    sink
                                 );
                             break;
                     }
@@ -811,10 +772,7 @@ public sealed class ImportCollector(
                 // import emission.
                 CollectFromStatement(
                     topStmt.Inner,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
             case TsModuleExport:
@@ -908,98 +866,70 @@ public sealed class ImportCollector(
 
     private void CollectFromStatements(
         IReadOnlyList<TsStatement> statements,
-        HashSet<string> names,
-        HashSet<string> valueNames,
-        HashSet<string> runtimeHelpers,
-        Dictionary<string, TsTypeOrigin> crossPackageOrigins
+        ImportCollectionSink sink
     )
     {
         foreach (var stmt in statements)
-            CollectFromStatement(stmt, names, valueNames, runtimeHelpers, crossPackageOrigins);
+            CollectFromStatement(stmt, sink);
     }
 
-    private void CollectFromStatement(
-        TsStatement stmt,
-        HashSet<string> names,
-        HashSet<string> valueNames,
-        HashSet<string> runtimeHelpers,
-        Dictionary<string, TsTypeOrigin> crossPackageOrigins
-    )
+    private void CollectFromStatement(TsStatement stmt, ImportCollectionSink sink)
     {
+        var names = sink.Names;
+        var valueNames = sink.ValueNames;
+        var runtimeHelpers = sink.RuntimeHelpers;
+        var crossPackageOrigins = sink.CrossPackageOrigins;
         switch (stmt)
         {
             case TsReturnStatement ret:
                 if (ret.Expression is not null)
                     CollectFromExpression(
                         ret.Expression,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 break;
             case TsThrowStatement thr:
                 CollectFromExpression(
                     thr.Expression,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
             case TsExpressionStatement expr:
                 CollectFromExpression(
                     expr.Expression,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
             case TsIfStatement ifStmt:
                 CollectFromExpression(
                     ifStmt.Condition,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 CollectFromStatements(
                     ifStmt.Then,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 if (ifStmt.Else is not null)
                     CollectFromStatements(
                         ifStmt.Else,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 break;
             case TsVariableDeclaration varDecl:
                 CollectFromExpression(
                     varDecl.Initializer,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
         }
     }
 
-    private void CollectFromExpression(
-        TsExpression expr,
-        HashSet<string> names,
-        HashSet<string> valueNames,
-        HashSet<string> runtimeHelpers,
-        Dictionary<string, TsTypeOrigin> crossPackageOrigins
-    )
+    private void CollectFromExpression(TsExpression expr, ImportCollectionSink sink)
     {
+        var names = sink.Names;
+        var valueNames = sink.ValueNames;
+        var runtimeHelpers = sink.RuntimeHelpers;
+        var crossPackageOrigins = sink.CrossPackageOrigins;
         switch (expr)
         {
             case TsTypeReference typeRef:
@@ -1034,10 +964,7 @@ public sealed class ImportCollector(
                 foreach (var arg in newExpr.Arguments)
                     CollectFromExpression(
                         arg,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 break;
             case TsCallExpression call:
@@ -1065,38 +992,26 @@ public sealed class ImportCollector(
                     valueNames.Add(rootName);
                     CollectFromExpression(
                         call.Callee,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 }
                 else
                 {
                     CollectFromExpression(
                         call.Callee,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 }
                 foreach (var arg in call.Arguments)
                     CollectFromExpression(
                         arg,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 break;
             case TsPropertyAccess access:
                 CollectFromExpression(
                     access.Object,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 // Static member access like IssuePriority.High → collect the type as value
                 if (
@@ -1112,17 +1027,11 @@ public sealed class ImportCollector(
             case TsBinaryExpression bin:
                 CollectFromExpression(
                     bin.Left,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 CollectFromExpression(
                     bin.Right,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 // instanceof uses the type as a value
                 if (bin.Operator == "instanceof" && bin.Right is TsIdentifier instanceId)
@@ -1132,70 +1041,46 @@ public sealed class ImportCollector(
                 foreach (var prop in obj.Properties)
                     CollectFromExpression(
                         prop.Value,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 break;
             case TsTemplateLiteral tmpl:
                 foreach (var e in tmpl.Expressions)
                     CollectFromExpression(
                         e,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 break;
             case TsConditionalExpression cond:
                 CollectFromExpression(
                     cond.Condition,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 CollectFromExpression(
                     cond.WhenTrue,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 CollectFromExpression(
                     cond.WhenFalse,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
             case TsAwaitExpression await_:
                 CollectFromExpression(
                     await_.Expression,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
             case TsParenthesized paren:
                 CollectFromExpression(
                     paren.Expression,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
             case TsSpreadExpression spread:
                 CollectFromExpression(
                     spread.Expression,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
             case TsArrowFunction arrow:
@@ -1203,36 +1088,24 @@ public sealed class ImportCollector(
                     CollectFromType(p.Type, names, crossPackageOrigins);
                 CollectFromStatements(
                     arrow.Body,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
             case TsElementAccess elemAccess:
                 CollectFromExpression(
                     elemAccess.Object,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 CollectFromExpression(
                     elemAccess.Index,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 break;
             case TsArrayLiteral arrayLit:
                 foreach (var e in arrayLit.Elements)
                     CollectFromExpression(
                         e,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 break;
             case TsCastExpression cast:
@@ -1244,10 +1117,7 @@ public sealed class ImportCollector(
                 // case, the walker would miss it entirely.
                 CollectFromExpression(
                     cast.Expression,
-                    names,
-                    valueNames,
-                    runtimeHelpers,
-                    crossPackageOrigins
+                    sink
                 );
                 CollectFromType(cast.Type, names, crossPackageOrigins);
                 break;
@@ -1262,18 +1132,12 @@ public sealed class ImportCollector(
                 if (template.Receiver is not null)
                     CollectFromExpression(
                         template.Receiver,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 foreach (var arg in template.Arguments)
                     CollectFromExpression(
                         arg,
-                        names,
-                        valueNames,
-                        runtimeHelpers,
-                        crossPackageOrigins
+                        sink
                     );
                 // `$T0`/`$T1` placeholders embed generic type-argument names
                 // verbatim into the template body — those names must be
@@ -1303,9 +1167,8 @@ public sealed class ImportCollector(
                 // can't see it inside the opaque template text. The Collect
                 // entry point drains this list into TsImport lines after the
                 // walk finishes.
-                if (_templateExternals is { } externals)
-                    foreach (var ext in template.ExternalImports)
-                        externals.Add(ext);
+                foreach (var ext in template.ExternalImports)
+                    sink.TemplateExternals.Add(ext);
                 break;
         }
     }
@@ -1330,3 +1193,17 @@ public sealed class ImportCollector(
                 or "isBool"
                 or "isBigInt";
 }
+
+/// <summary>
+/// Bundle of collection buckets threaded through the <see cref="ImportCollector"/>
+/// reference walker. Every walker method writes into the same instance; the entry
+/// point (<see cref="ImportCollector.Collect"/>) drains the buckets after the walk
+/// to build the file's import lines.
+/// </summary>
+internal sealed record ImportCollectionSink(
+    HashSet<string> Names,
+    HashSet<string> ValueNames,
+    HashSet<string> RuntimeHelpers,
+    Dictionary<string, TsTypeOrigin> CrossPackageOrigins,
+    List<IrExternalImport> TemplateExternals
+);
