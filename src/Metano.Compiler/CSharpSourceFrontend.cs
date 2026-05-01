@@ -796,7 +796,15 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     {
         if (candidate is null || location is null)
             return;
-        if (candidate.Kind is not (SymbolKind.Method or SymbolKind.Property or SymbolKind.Field or SymbolKind.Event))
+        if (
+            candidate.Kind
+            is not (
+                SymbolKind.Method
+                or SymbolKind.Property
+                or SymbolKind.Field
+                or SymbolKind.Event
+            )
+        )
             return;
         if (!SymbolHelper.HasIgnore(candidate, target))
             return;
