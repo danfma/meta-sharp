@@ -37,7 +37,7 @@ public class AssemblyTranspileTests
     }
 
     [Test]
-    public async Task NoTranspile_ExcludesType()
+    public async Task Ignore_ExcludesTypeFromAssemblyWideTranspile()
     {
         var result = TranspileHelper.Transpile(
             """
@@ -45,7 +45,7 @@ public class AssemblyTranspileTests
 
             public record Included(int X);
 
-            [NoTranspile]
+            [Ignore]
             public record Excluded(int Y);
             """
         );
@@ -68,11 +68,11 @@ public class AssemblyTranspileTests
     }
 
     [Test]
-    public async Task NoTranspile_OverridesExplicitTranspile()
+    public async Task Ignore_OverridesExplicitTranspileAttribute()
     {
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, NoTranspile]
+            [Transpile, Ignore]
             public record Conflicted(int X);
             """
         );

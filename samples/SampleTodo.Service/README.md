@@ -14,7 +14,7 @@ end-to-end flow: **cross-project types**, **external JS module integration**, an
 | `[EmitInFile("todos")]` | Multiple types in one C# namespace → one `todos.ts` | Consolidates related types into a single file |
 | `[Import]` for external JS modules | `[Import(name: "Hono", from: "hono", Version = "^4.6.0")]` on the `Hono` class | Declares a type that's provided by an npm package, not transpiled |
 | `[Name]` method renames | `[Name("get")] public void Get(...)` | Maps C# PascalCase method names to JS camelCase |
-| `[ExportedAsModule]` | Static `Program` class with `Main()` | Emits top-level functions instead of a class |
+| `[NoContainer]` | Static `Program` class with `Main()` | Emits top-level functions instead of a class and flattens call-site access |
 | `[ModuleEntryPoint]` | `public static void Main()` | Method body becomes top-level module code |
 | `[ExportVarFromBody]` | `[ExportVarFromBody("app", AsDefault = true)]` | Promotes a local `var app = new Hono()` to a `default export` |
 | `Guid.NewGuid().ToString()` | ID generation | Lowers to `crypto.randomUUID()` |
@@ -94,7 +94,7 @@ dotnet build samples/SampleTodo.Service/SampleTodo.Service.csproj
 ## How to test
 
 ```bash
-cd js/sample-todo-service
+cd targets/js/sample-todo-service
 bun install
 bun run build
 bun test

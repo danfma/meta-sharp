@@ -427,14 +427,14 @@ public class DartBackendTests
     }
 
     [Test]
-    public async Task NoEmitDartType_DoesNotAppearInConsumerImports()
+    public async Task IgnoredDartType_DoesNotAppearInConsumerImports()
     {
-        // A type marked [NoEmit(TargetLanguage.Dart)] must not leak into
+        // A type marked [Ignore(TargetLanguage.Dart)] must not leak into
         // another Dart file's import list — the target file is never written,
         // so an `import 'shape.dart'` reference would fail to resolve.
         var (files, _) = TranspileDart(
             """
-            [Transpile, NoEmit(TargetLanguage.Dart)]
+            [Transpile, Ignore(TargetLanguage.Dart)]
             public interface IShape
             {
                 int Area();
@@ -551,14 +551,14 @@ public class DartBackendTests
     }
 
     [Test]
-    public async Task TargetSpecificNoEmit_DropsTypeFileOnlyForTarget()
+    public async Task IgnorePerTarget_DropsDartFileOnly()
     {
-        // [NoEmit(TargetLanguage.Dart)] should skip the Dart file emission
+        // [Ignore(TargetLanguage.Dart)] should skip the Dart file emission
         // while the type remains discoverable for the (hypothetical) other
         // target. In this Dart-only test we just verify the file is absent.
         var (files, _) = TranspileDart(
             """
-            [Transpile, NoEmit(TargetLanguage.Dart)]
+            [Transpile, Ignore(TargetLanguage.Dart)]
             public class AmbientShape
             {
                 public int X { get; }

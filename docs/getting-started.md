@@ -4,6 +4,11 @@ This guide walks you through creating your first Metano project from scratch —
 annotating a C# class, running the transpiler, and consuming the generated
 TypeScript from a Bun project.
 
+This is the TypeScript getting-started path. Metano also has an experimental
+Dart/Flutter backend; see [Better Flutter Support Plan](better_flutter_support_plan.md)
+and the [Flutter sample target](../targets/flutter/sample_counter/) for that
+side of the project.
+
 ## Prerequisites
 
 - **.NET SDK 10.0** (preview) — [download](https://dotnet.microsoft.com/download/dotnet/10.0)
@@ -123,9 +128,10 @@ bun init -y
 mkdir src
 ```
 
-You now have `my-domain-ts/package.json`, `my-domain-ts/tsconfig.json`, and
-an empty `my-domain-ts/src/` folder where Metano will write the generated
-files.
+You now have a `my-domain-ts/package.json` and an empty `my-domain-ts/src/`
+folder where Metano will write the generated files. Depending on your Bun
+version/template, you may also get a starter `tsconfig.json`; if not, add the
+TypeScript config that matches your frontend stack.
 
 Add `metano-runtime` as a dependency (most generated code imports from it):
 

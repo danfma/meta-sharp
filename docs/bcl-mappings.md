@@ -1,6 +1,8 @@
 # BCL Type Mappings
 
-Metano maps many C# standard library types to idiomatic TypeScript equivalents.
+Metano maps many C# standard library types to idiomatic target equivalents. This
+reference describes the mature TypeScript backend; the Dart backend has partial
+coverage and is tracked in [Better Flutter Support Plan](better_flutter_support_plan.md).
 This page lists every mapping the transpiler knows about out of the box.
 
 ## Primitives
@@ -67,7 +69,7 @@ export namespace UUID {
 | `Guid.Empty` | `UUID.empty` |
 | `guid.ToString()` | `guid` (identity — already a string) |
 
-**Why branded?** The same rationale as `[InlineWrapper]` on user-defined IDs:
+**Why branded?** The same rationale as `[Branded]` on user-defined IDs:
 you get compile-time type safety without runtime overhead. A random `string`
 can't be passed where a `UUID` is expected, but a `UUID` is still serializable
 as JSON, loggable, and indexable like any other string.

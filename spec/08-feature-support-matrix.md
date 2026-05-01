@@ -27,7 +27,7 @@ TypeScript backend — the normative surface of the product today.
 
 | Area | Feature | Status | Notes |
 | --- | --- | --- | --- |
-| Type selection | `[Transpile]`, `[TranspileAssembly]`, `[NoTranspile]`, `[NoEmit]` | Implemented | Explicit opt-in/out model. |
+| Type selection | `[Transpile]`, `[TranspileAssembly]`, `[Ignore]`, `[Ignore(TargetLanguage.X)]` | Implemented | Explicit opt-in/out model. `[Ignore]` is also the .NET-only boundary: transpilable code may not reference ignored types. |
 | Types | Records | Implemented | Includes structural helpers in emitted output. |
 | Types | Classes and inheritance | Partial | Supported within the current transpilation surface. |
 | Types | Interfaces and generics | Partial | Supported for the current mapped subset. |
@@ -39,7 +39,7 @@ TypeScript backend — the normative surface of the product today.
 | Pattern matching | `switch`, `is`, supported patterns | Partial | Depends on current handler support. |
 | Expressions | Lambdas and interpolated strings | Implemented | |
 | Expressions | Collection expressions (`[]`) | Implemented | Covered by dedicated lowering. |
-| Modules | `[ExportedAsModule]` | Implemented | Static class -> module functions. |
+| Modules | `[NoContainer]` (`[ExportedAsModule]` legacy) | Implemented | Static class -> module functions and flattened call-site access. |
 | Modules | `[ModuleEntryPoint]` | Implemented | Lowers method body to top-level statements. |
 | Modules | C# top-level statements | Implemented | Lowered to module-level code. |
 

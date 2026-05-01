@@ -144,7 +144,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             ValidateInlineAttribute(compilation, diagnostics);
             ValidateThisAttribute(compilation, diagnostics);
             ValidateGenericNewConstraint(compilation, assemblyWideTranspile, diagnostics);
-            ValidateNoEmitReferences(compilation, assemblyWideTranspile, target, diagnostics);
+            ValidateIgnoreReferences(compilation, assemblyWideTranspile, target, diagnostics);
         }
 
         return new IrCompilation(
@@ -272,8 +272,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// (top-level + nested) from the current assembly, transpilable types
     /// from referenced assemblies that declared <c>[EmitPackage]</c> for
     /// the active target, and <c>[Import]</c> placeholders from any public
-    /// top-level symbol in scope. Types carrying <c>[NoTranspile]</c> or
-    /// <c>[NoEmit(target)]</c> are excluded on both sides — the backend
+    /// top-level symbol in scope. Types carrying <c>[Ignore]</c> or
+    /// <c>[Ignore(target)]</c> are excluded on both sides — the backend
     /// never asks for their name since they do not participate in emission.
     /// The resulting dictionary is keyed by
     /// <see cref="SymbolHelper.GetCrossAssemblyOriginKey"/> (the
@@ -312,11 +312,11 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         // Current assembly — every transpilable type (matches the target-side
         // DiscoverTranspilableTypes + nested-emission filter) plus every
         // `[Import]` placeholder the public-only walker would see, PLUS
-        // every `[NoEmit]` public type so `[Name(target, …)]` overrides on
-        // ambient declarations propagate to references. `[NoEmit]` means
+        // every `[Ignore]` public type so `[Name(target, …)]` overrides on
+        // ambient declarations propagate to references. `[Ignore]` means
         // "no .ts file emits" — it does NOT mean "callers should hallucinate
         // the C# name at reference sites." Without this, a DOM binding stub
-        // like `[NoEmit, Name("HTMLElement")] HtmlElement` would surface as
+        // like `[Ignore, Name("HTMLElement")] HtmlElement` would surface as
         // `HtmlElement` in generated TS, losing the rename that makes the
         // stub interoperate with lib.dom.d.ts.
         CollectTopLevelTypes(
@@ -334,8 +334,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                             sym.DeclaredAccessibility == Accessibility.Public
                             && (
                                 SymbolHelper.GetImport(sym) is not null
-                                || SymbolHelper.HasNoEmit(sym)
-                                || SymbolHelper.HasNoEmit(sym, target)
+                                || SymbolHelper.HasIgnore(sym)
+                                || SymbolHelper.HasIgnore(sym, target)
                                 || SymbolHelper.HasExternal(sym)
                                 || SymbolHelper.HasNoContainer(sym)
                             )
@@ -348,8 +348,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         // Referenced assemblies that opted into transpilation with an
         // [EmitPackage] for the active target. Mirrors the
         // BuildCrossAssemblyState filter so the same set of emittable
-        // types ends up in the dict. `[NoTranspile]` types are excluded
-        // (the producer explicitly opted out). `[NoEmit]` types ARE
+        // types ends up in the dict. `[Ignore]` types are excluded
+        // (the producer explicitly opted out). `[Ignore]` types ARE
         // registered so their `[Name]` overrides surface at reference
         // sites on the consumer side — the emission pipeline filters
         // them through its own paths (TranspilableTypeEntries,
@@ -367,7 +367,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                         {
                             if (sym.DeclaredAccessibility != Accessibility.Public)
                                 return;
-                            if (SymbolHelper.HasNoTranspile(sym))
+                            if (SymbolHelper.HasIgnore(sym))
                                 return;
                             RegisterSymbol(sym);
                         }
@@ -539,36 +539,19 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     }
 
     /// <summary>
-    /// Walks every transpilable type in the current assembly and emits
-    /// <c>MS0010</c> for any parameter or property that carries
-    /// <c>[Optional]</c> (from <c>Metano.Annotations.TypeScript</c>) on a
-    /// non-nullable type. The attribute is TS-specific but the check
-    /// runs on every target because a misuse is a bug regardless of the
-    /// active backend — ignoring it under Dart would let a broken
-    /// attribute ship to the TS consumer later.
+    /// The <c>[Ignore]</c> attribute means ".NET-only" — any reference to
+    /// such a type from inside a transpilable type's signature OR body
+    /// raises <c>MS0013</c>. The walker scans every reference position the
+    /// IR/bridges traverse later: signatures (params, return, fields,
+    /// props, base, generic constraints), bodies (locals, <c>new</c>,
+    /// casts, <c>typeof</c>, generic args, member access, lambda inferred
+    /// types). Suppressed when the containing type or member is itself
+    /// <c>[Ignore]</c> — a non-emitted member referencing another
+    /// non-emitted type stays silent. Target-aware: a
+    /// <c>[Ignore(TargetLanguage.Dart)]</c> type does not light up under a
+    /// TS run.
     /// </summary>
-    /// <summary>
-    /// Walks every transpilable type's syntax and emits MS0019 for each
-    /// <c>new T()</c> where <c>T</c> resolves to a generic type parameter.
-    /// TypeScript erases generics at runtime, so the parameter is not a
-    /// callable constructor — the emitted code would reference an
-    /// undefined identifier. The diagnostic surfaces the misuse early
-    /// and points users at the factory / instance pattern.
-    /// </summary>
-    /// <summary>
-    /// Per #106 the <c>[NoEmit]</c> attribute means ".NET-only" — any
-    /// reference to such a type from inside a transpilable type's
-    /// signature OR body raises <c>MS0013</c>. The walker scans every
-    /// reference position the IR/bridges traverse later: signatures
-    /// (params, return, fields, props, base, generic constraints),
-    /// bodies (locals, <c>new</c>, casts, <c>typeof</c>, generic args,
-    /// member access, lambda inferred types). Suppressed when the
-    /// containing type is itself non-transpilable (a <c>[NoEmit]</c>
-    /// type referencing another <c>[NoEmit]</c> type stays silent).
-    /// Target-aware: a <c>[NoEmit(TargetLanguage.Dart)]</c> type does
-    /// not light up under a TS run.
-    /// </summary>
-    private static void ValidateNoEmitReferences(
+    private static void ValidateIgnoreReferences(
         Compilation compilation,
         bool assemblyWideTranspile,
         Metano.Annotations.TargetLanguage target,
@@ -583,7 +566,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             {
                 if (
                     !SymbolHelper.IsTranspilable(type, assemblyWideTranspile, currentAssembly)
-                    || SymbolHelper.HasNoEmit(type, target)
+                    || SymbolHelper.HasIgnore(type, target)
                 )
                     return;
                 ScanTypeReferences(type, target, compilation, diagnostics, seen);
@@ -610,6 +593,12 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
         foreach (var member in containing.GetMembers())
         {
+            // Members marked [Ignore] are not emitted, so references *from*
+            // their signature/body don't reach the target — skip them so
+            // an [Ignore] helper that takes an [Ignore] marker stays silent.
+            if (SymbolHelper.HasIgnore(member, target))
+                continue;
+
             switch (member)
             {
                 case IFieldSymbol field when !field.IsImplicitlyDeclared:
@@ -666,7 +655,7 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                     nested,
                     assemblyWideTranspile: false,
                     currentAssembly: containing.ContainingAssembly
-                ) && !SymbolHelper.HasNoEmit(nested, target)
+                ) && !SymbolHelper.HasIgnore(nested, target)
             )
                 ScanTypeReferences(nested, target, compilation, diagnostics, seen);
     }
@@ -730,6 +719,17 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
                                 diagnostics,
                                 seen
                             );
+                        CheckMember(info, ma.Name.GetLocation(), target, diagnostics, seen);
+                        continue;
+                    case InvocationExpressionSyntax inv:
+                        var invokedSymbol = semantic.GetSymbolInfo(inv).Symbol;
+                        CheckMember(
+                            invokedSymbol,
+                            inv.Expression.GetLocation(),
+                            target,
+                            diagnostics,
+                            seen
+                        );
                         continue;
                 }
                 if (referenced is not null)
@@ -748,8 +748,8 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     {
         if (candidate is null || location is null)
             return;
-        // Walk into generic args / array elements so `List<NoEmitType>`
-        // and `NoEmitType[]` light up the same way bare references do.
+        // Walk into generic args / array elements so `List<IgnoredType>`
+        // and `IgnoredType[]` light up the same way bare references do.
         switch (candidate)
         {
             case IArrayTypeSymbol arr:
@@ -758,11 +758,11 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
             case INamedTypeSymbol named when named.IsGenericType:
                 foreach (var arg in named.TypeArguments)
                     CheckType(arg, location, target, diagnostics, seen);
-                if (SymbolHelper.HasNoEmit(named, target) && seen.Add(location))
+                if (SymbolHelper.HasIgnore(named, target) && seen.Add(location))
                     Report(named, location, diagnostics);
                 return;
             case INamedTypeSymbol named:
-                if (SymbolHelper.HasNoEmit(named, target) && seen.Add(location))
+                if (SymbolHelper.HasIgnore(named, target) && seen.Add(location))
                     Report(named, location, diagnostics);
                 return;
         }
@@ -777,10 +777,48 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
         diagnostics.Add(
             new MetanoDiagnostic(
                 MetanoDiagnosticSeverity.Error,
-                DiagnosticCodes.NoEmitReferencedByTranspiledCode,
-                $"Transpilable code references '{target.Name}', which is marked [NoEmit] "
-                    + "(.NET-only per #106). Migrate the type to [External] (ambient TS shape) "
+                DiagnosticCodes.IgnoreReferencedByTranspiledCode,
+                $"Transpilable code references '{target.Name}', which is marked [Ignore] "
+                    + "(.NET-only). Migrate the type to [External] (ambient TS shape) "
                     + "or remove the dependency from transpiled code.",
+                location
+            )
+        );
+    }
+
+    private static void CheckMember(
+        ISymbol? candidate,
+        Location? location,
+        Metano.Annotations.TargetLanguage target,
+        List<MetanoDiagnostic> diagnostics,
+        HashSet<Location> seen
+    )
+    {
+        if (candidate is null || location is null)
+            return;
+        if (candidate.Kind is not (SymbolKind.Method or SymbolKind.Property or SymbolKind.Field or SymbolKind.Event))
+            return;
+        if (!SymbolHelper.HasIgnore(candidate, target))
+            return;
+        if (!seen.Add(location))
+            return;
+        ReportMember(candidate, location, diagnostics);
+    }
+
+    private static void ReportMember(
+        ISymbol member,
+        Location location,
+        List<MetanoDiagnostic> diagnostics
+    )
+    {
+        var owner = member.ContainingType?.Name ?? "<global>";
+        diagnostics.Add(
+            new MetanoDiagnostic(
+                MetanoDiagnosticSeverity.Error,
+                DiagnosticCodes.IgnoreReferencedByTranspiledCode,
+                $"Transpilable code references '{owner}.{member.Name}', which is marked [Ignore] "
+                    + "(.NET-only). The member is not emitted; remove the reference or drop "
+                    + "[Ignore] from the member.",
                 location
             )
         );
@@ -2210,16 +2248,16 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
     /// (<c>[TranspileAssembly]</c>) into one of two buckets:
     /// <list type="bullet">
     ///   <item>If it also declares <c>[EmitPackage]</c> for the active
-    ///   target, every public top-level type that is not <c>[Import]</c>,
-    ///   <c>[NoEmit]</c>, or <c>[NoTranspile]</c> contributes an
+    ///   target, every public top-level type that is not <c>[Import]</c>
+    ///   or <c>[Ignore]</c> contributes an
     ///   <see cref="IrTypeOrigin"/> keyed by
     ///   <see cref="SymbolHelper.GetCrossAssemblyOriginKey(ITypeSymbol)"/>.</item>
     ///   <item>Otherwise the assembly's metadata name is collected so the
     ///   target can later raise <see cref="DiagnosticCodes.CrossPackageResolution"/>
     ///   (MS0007) at the consumer site.</item>
     /// </list>
-    /// <paramref name="target"/> drives the per-target <c>[NoEmit]</c>
-    /// filter so a Dart-specific <c>[NoEmit]</c> cannot poison the
+    /// <paramref name="target"/> drives the per-target <c>[Ignore]</c>
+    /// filter so a Dart-specific <c>[Ignore]</c> cannot poison the
     /// TypeScript origin table (and vice versa).
     /// </summary>
     private static (
@@ -2250,13 +2288,13 @@ public sealed class CSharpSourceFrontend : ISourceFrontend
 
             // Filter the same way the legacy CollectTypesFromNamespace does — anything
             // that wouldn't be discovered for emission must not influence the assembly
-            // root namespace either, otherwise an [NoEmit] type sitting in an unrelated
+            // root namespace either, otherwise an [Ignore] type sitting in an unrelated
             // namespace would silently shrink the prefix used for import subpaths.
             var emittedAssemblyTypes = assemblyTypes
                 .Where(type =>
                     SymbolHelper.GetImport(type) is null
-                    && !SymbolHelper.HasNoTranspile(type)
-                    && !SymbolHelper.HasNoEmit(type, target)
+                    && !SymbolHelper.HasIgnore(type)
+                    && !SymbolHelper.HasIgnore(type, target)
                 )
                 .ToList();
 

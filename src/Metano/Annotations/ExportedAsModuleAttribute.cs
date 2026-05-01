@@ -1,10 +1,9 @@
 namespace Metano.Annotations;
 
 /// <summary>
-/// <b>Superseded by</b> <see cref="NoContainerAttribute"/>. Migrating
-/// existing callers is scheduled for the follow-up PR that ships the
-/// <c>[NoEmit]</c> redefinition; until then this attribute stays fully
-/// functional.
+/// <b>Superseded by</b> <see cref="NoContainerAttribute"/>. Existing
+/// callers should migrate; this attribute stays fully functional until
+/// it is removed in a future release.
 /// <para>
 /// <c>[NoContainer]</c> produces the same top-level emission and
 /// additionally flattens call-site access (<c>ClassName.member</c> →

@@ -29,8 +29,8 @@ The current stable code range is **`MS0001` through `MS0022`**.
 | `MS0009` | `FrontendLoadFailure` | Source frontend failed to load or compile the project. |
 | `MS0010` | `OptionalRequiresNullable` | `[Optional]` was applied to a non-nullable parameter or property. |
 | `MS0011` | `InvalidDiscriminator` | `[Discriminator("FieldName")]` references a field that is missing, not a `[StringEnum]`, or nullable. |
-| `MS0012` | `InvalidExternal` | `[External]` was applied to a concrete non-static class, or combined with `[Transpile]`. Per #106 the attribute accepts class, abstract class, struct, interface, method, property, and field targets. |
-| `MS0013` | `NoEmitReferencedByTranspiledCode` | A transpilable type's signature or body references a type marked `[NoEmit]`. Per the #106 redefinition `[NoEmit]` paints a type as .NET-only; ambient TS shapes belong to `[External]` instead. |
+| `MS0012` | `InvalidExternal` | `[External]` was applied to a concrete non-static class, or combined with `[Transpile]`. The attribute accepts static classes, abstract classes, structs, interfaces, methods, properties, and fields. |
+| `MS0013` | `IgnoreReferencedByTranspiledCode` | A transpilable type's signature or body references a type marked `[Ignore]` for the active target. `[Ignore]` paints the symbol as .NET-only; ambient TS shapes belong to `[External]` instead. |
 | `MS0014` | `InvalidConstant` | `[Constant]` argument or initializer is not a compile-time constant literal. |
 | `MS0015` | `InvalidErasable` | `[NoContainer]` was applied to a non-static class, or combined with `[Transpile]`. (Constant name retained for diagnostic-id stability; the user-facing attribute is `[NoContainer]`.) |
 | `MS0016` | `InvalidInline` | `[Inline]` was applied to an unsupported shape (instance or mutable field, field without initializer, block-bodied property, non-static property, or any other target). |

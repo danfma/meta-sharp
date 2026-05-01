@@ -46,12 +46,12 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
         var seenTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         foreach (var type in transpilable)
         {
-            // [NoEmit(TargetLanguage.Dart)] declares the type for C# use but
+            // [Ignore(TargetLanguage.Dart)] declares the type for C# use but
             // skips Dart file emission. It must not make it into the local
             // import map either — otherwise a consumer referencing the type
             // would emit `import 'foo.dart';` pointing at a file that never
             // got written, breaking the build.
-            if (SymbolHelper.HasNoEmit(type, TargetLanguage.Dart))
+            if (SymbolHelper.HasIgnore(type, TargetLanguage.Dart))
                 continue;
 
             var emittedName = GetEmittedTypeName(type);
@@ -78,7 +78,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
 
         foreach (var type in transpilable)
         {
-            if (SymbolHelper.HasNoEmit(type, TargetLanguage.Dart))
+            if (SymbolHelper.HasIgnore(type, TargetLanguage.Dart))
                 continue;
             // A duplicate simple name already surfaced a diagnostic; skip the
             // late-arriving sibling so we don't produce two files targeting the
@@ -256,7 +256,7 @@ public sealed class DartTransformer(IrCompilation ir, Compilation compilation)
 
     private static bool IsTranspilable(INamedTypeSymbol type, bool assemblyWide)
     {
-        if (SymbolHelper.HasNoTranspile(type))
+        if (SymbolHelper.HasIgnore(type))
             return false;
         if (SymbolHelper.HasTranspile(type))
             return true;

@@ -358,7 +358,7 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
-    public async Task CrossAssemblyOrigins_SkipsImportAndNoEmitTypes()
+    public async Task CrossAssemblyOrigins_SkipsImportAndIgnoredTypes()
     {
         var lib = TranspileHelper.CompileLibrary(
             """
@@ -375,7 +375,7 @@ public class CSharpSourceFrontendTests
                 [Import("Hono", from: "hono")]
                 public class HonoStub {}
 
-                [NoEmit]
+                [Ignore]
                 public class Ambient {}
             }
             """,
@@ -408,13 +408,13 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
-    public async Task CrossAssemblyOrigins_RootNamespaceIgnoresNoEmitAndNoTranspileTypes()
+    public async Task CrossAssemblyOrigins_RootNamespaceIgnoresIgnoredTypes()
     {
         // The reference declares emitted types under Acme.Mixed.* but also has
-        // [NoEmit] / [NoTranspile] types in an unrelated `Zeta.Hidden` namespace.
-        // The legacy discovery filters those out before computing the assembly
-        // root namespace, so the prefix must stay at "Acme.Mixed" — without the
-        // filter it would shrink to "" and break import subpath generation.
+        // [Ignore] types in an unrelated `Zeta.Hidden` namespace. The discovery
+        // filter drops those before computing the assembly root namespace, so
+        // the prefix must stay at "Acme.Mixed" — without the filter it would
+        // shrink to "" and break import subpath generation.
         var lib = TranspileHelper.CompileLibrary(
             """
             using Metano.Annotations;
@@ -436,10 +436,10 @@ public class CSharpSourceFrontendTests
 
             namespace Zeta.Hidden
             {
-                [NoEmit]
+                [Ignore]
                 public class Ambient {}
 
-                [NoTranspile]
+                [Ignore]
                 public class Ignored {}
             }
             """,
@@ -777,11 +777,11 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
-    public async Task LocalRootNamespace_IgnoresNoTranspileAndNoEmit()
+    public async Task LocalRootNamespace_IgnoresIgnoredTypes()
     {
-        // [NoTranspile] / [NoEmit] types live under a wildly different
-        // namespace. If the filter leaked them, the common prefix would
-        // collapse to the empty string.
+        // [Ignore] types live under a wildly different namespace. If the
+        // filter leaked them, the common prefix would collapse to the empty
+        // string.
         var compilation = IrTestHelper.Compile(
             """
             namespace Acme.Shared.Domain
@@ -792,10 +792,10 @@ public class CSharpSourceFrontendTests
 
             namespace Unrelated.Zeta
             {
-                [NoTranspile]
+                [Ignore]
                 public class Ignored {}
 
-                [NoEmit]
+                [Ignore]
                 public class Ambient {}
             }
             """
@@ -1326,20 +1326,17 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
-    public async Task TypeNamesBySymbol_HonorsNameOverrideOnNoEmitType()
+    public async Task TypeNamesBySymbol_HonorsNameOverrideOnIgnoredType()
     {
-        // `[NoEmit]` suppresses file emission but should NOT block
+        // `[Ignore]` suppresses file emission but should NOT block
         // name-resolution — a `[Name(target, …)]` override on the same
-        // symbol must still reach the dict so references to the type
-        // use the renamed identifier. Previous behavior skipped NoEmit
-        // types entirely, leaking the C# name into generated TS for
-        // ambient bindings like `[NoEmit, Name("HTMLElement")]
-        // HtmlElement`.
+        // symbol must still reach the dict so references to the type use
+        // the renamed identifier.
         var compilation = IrTestHelper.Compile(
             """
             #nullable enable
 
-            [NoEmit]
+            [Ignore]
             [Name(TargetLanguage.TypeScript, "HTMLElement")]
             public abstract class HtmlElement {}
             """
@@ -1356,14 +1353,14 @@ public class CSharpSourceFrontendTests
     }
 
     [Test]
-    public async Task TypeNamesBySymbol_RegistersNoEmitTypeEvenWithoutNameOverride()
+    public async Task TypeNamesBySymbol_RegistersIgnoredTypeEvenWithoutNameOverride()
     {
         // Without an override the name falls back to the C# symbol
         // name — still registered so references resolve through the
         // dict instead of going through a separate hallucination path.
         var compilation = IrTestHelper.Compile(
             """
-            [NoEmit]
+            [Ignore]
             public abstract class EventTarget {}
             """
         );

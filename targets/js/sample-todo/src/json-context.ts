@@ -13,10 +13,9 @@ export class JsonContext extends SerializerContext {
   }
 
   get todoItem(): TypeSpec<TodoItem> {
-    return (this._todoItem ??= this.createSpec({
+    return this._todoItem ??= this.createSpec({
       type: TodoItem,
-      factory: (p: Record<string, unknown>) =>
-        new TodoItem(p.title as string, p.completed as boolean, p.priority as Priority),
+      factory: (p: Record<string, unknown>) => new TodoItem(p.title as string, p.completed as boolean, p.priority as Priority),
       properties: [
         {
           ts: "title",
@@ -34,6 +33,6 @@ export class JsonContext extends SerializerContext {
           type: { kind: "enum", values: Priority },
         },
       ],
-    }));
+    });
   }
 }

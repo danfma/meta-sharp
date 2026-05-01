@@ -133,7 +133,7 @@ const parsed = JsonSerializer.deserialize(json, JsonContext.default.todoItem);
 - `map` — `Map<K,V>` ↔ plain object
 - `array` — `T[]` with recursive element handling
 - `hashSet` — `HashSet<T>` ↔ array
-- `branded` — `[InlineWrapper]` types (passthrough + `.create()`)
+- `branded` — `[Branded]` / `[InlineWrapper]` types (passthrough + `.create()`)
 - `enum` — string enum validation
 - `numericEnum` — numeric enum validation
 - `nullable` — wraps inner descriptor with null handling

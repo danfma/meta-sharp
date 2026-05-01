@@ -21,9 +21,8 @@ namespace Metano.Annotations.TypeScript;
 /// Member-level use (method, property, field) is accepted by the
 /// attribute surface so callers can already annotate ambient symbols
 /// inside a container. The per-member declaration-suppression pass
-/// and the split from the class-level flatten ship in a follow-up
-/// slice alongside the <c>[NoEmit]</c> redefinition and the DOM
-/// binding migration.
+/// and the split from the class-level flatten are tracked separately
+/// and not yet active.
 /// </para>
 /// <para>
 /// Applies only to <c>static class</c> at the class level. Non-static

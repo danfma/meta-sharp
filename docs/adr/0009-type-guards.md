@@ -65,7 +65,7 @@ strategies:
    - Inheritance composes: a derived type's guard validates the base
      type's fields first, then its own.
 
-`[ExportedAsModule]` static classes and exception types skip guard
+`[NoContainer]` / legacy `[ExportedAsModule]` static classes and exception types skip guard
 generation — the first is a namespace of functions with no instance
 shape, the second has the runtime class for `instanceof` already and
 no additional fields worth shape-checking.

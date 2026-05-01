@@ -26,10 +26,10 @@ SampleIssueTracker/
 This maps naturally to the transpiler's namespace-first import model — each
 namespace becomes a directory with a barrel `index.ts`.
 
-### Branded IDs via `[InlineWrapper]`
+### Branded IDs via `[Branded]`
 
 ```csharp
-[InlineWrapper]
+[Branded]
 public readonly record struct UserId(string Value)
 {
     public static UserId New() => new(Guid.NewGuid().ToString("N"));
@@ -65,11 +65,11 @@ and `PageResult<T>` wraps a list with pagination metadata.
 
 ### LINQ queries on real data
 
-`IssueQueries` exposes a module of functions (via `[ExportedAsModule]`) that run
+`IssueQueries` exposes a module of functions (via `[NoContainer]`) that run
 LINQ operations over an `IEnumerable<Issue>`:
 
 ```csharp
-[ExportedAsModule]
+[NoContainer]
 public static class IssueQueries
 {
     public static IEnumerable<Issue> HighestPriority(IEnumerable<Issue> issues) =>
@@ -138,7 +138,7 @@ js/sample-issue-tracker/src/
 │       ├── i-issue-repository.ts
 │       ├── in-memory-issue-repository.ts
 │       ├── issue-service.ts
-│       ├── issue-queries.ts   # ExportedAsModule → top-level functions
+│       ├── issue-queries.ts   # NoContainer → top-level functions
 │       └── index.ts
 ├── planning/
 │   └── domain/
@@ -162,7 +162,7 @@ dotnet build samples/SampleIssueTracker/SampleIssueTracker.csproj
 ## How to test
 
 ```bash
-cd js/sample-issue-tracker
+cd targets/js/sample-issue-tracker
 bun install
 bun run build
 bun test

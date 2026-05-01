@@ -370,15 +370,16 @@ public static class IrToTsExpressionBridge
 
     private static TsType? LowerLambdaParameterType(IrParameter p)
     {
-        // Ambient types (`[NoEmit]` legacy + `[External]` new contract)
-        // have no emitted declaration in the consumer's tree, so the
-        // lambda parameter type annotation is omitted and TypeScript
-        // infers it from the surrounding signature (the real .d.ts of
-        // the npm package).
+        // [External] ambient shapes have no emitted declaration in the
+        // consumer's tree, so the lambda parameter type annotation is
+        // omitted and TypeScript infers it from the surrounding signature
+        // (the real .d.ts of the npm package). [Ignore] should be barred
+        // by MS0013 before reaching emission, but the same drop is kept
+        // so a suppressed-diagnostic run still produces compilable TS.
         if (
             p.Type is IrNamedTypeRef named
             && named.Semantics is { } sem
-            && (sem.IsNoEmit || sem.IsExternal)
+            && (sem.IsIgnored || sem.IsExternal)
         )
             return null;
         return IrToTsTypeMapper.Map(p.Type);
@@ -390,7 +391,7 @@ public static class IrToTsExpressionBridge
     )
     {
         // Lambda params drop the annotation when the inferred type is
-        // `[NoEmit]` (ambient types from declaration files have no TS
+        // `[Ignore]` (ambient types from declaration files have no TS
         // identifier to emit) — matching the legacy `LambdaHandler`
         // behavior. Otherwise the full inferred type is emitted so the
         // generated TS keeps call-site type information.

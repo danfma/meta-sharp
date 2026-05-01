@@ -58,6 +58,11 @@ This is a **normal .NET project reference**. Metano picks up the reference
 during compilation, walks the referenced assembly's public types, and registers
 them in its cross-assembly type map.
 
+The TypeScript CLI also finds the target package root by walking upward from
+`MetanoOutputDir` until it sees a `package.json`. If no package file is found,
+it falls back to the legacy convention: the parent directory of the output
+folder. Set `MetanoPackageRoot` when your generated files live somewhere unusual.
+
 ## What Metano generates
 
 When a consumer uses a type from a referenced project, the transpiler:

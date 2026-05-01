@@ -11,15 +11,13 @@ annotations.
 | --- | --- |
 | `TranspileAttribute` | Marks an individual type for transpilation. |
 | `TranspileAssemblyAttribute` | Marks an assembly for assembly-wide transpilation. |
-| `NoTranspileAttribute` | Excludes a type from transpilation. |
-| `NoEmitAttribute` | Paints a type as .NET-only — no file emitted and no transpiled code may reference it (MS0013 `NoEmitReferencedByTranspiledCode`). |
 
 ## Naming and Emission Shape
 
 | Attribute | Purpose |
 | --- | --- |
 | `NameAttribute` | Overrides emitted type/member names. |
-| `IgnoreAttribute` | Omits a member from output. |
+| `IgnoreAttribute` | Marks a type or member as .NET-only for every target, or for one target via `[Ignore(TargetLanguage.X)]`. Ignored types do not emit and may not be referenced from transpilable code (MS0013 `IgnoreReferencedByTranspiledCode`). Replaces the former `[NoTranspile]` / `[NoEmit]` split. |
 | `StringEnumAttribute` | Emits enum output as string-based TS representation. |
 | `PlainObjectAttribute` | Emits object shape without class wrapper semantics. |
 | `BrandedAttribute` | Emits wrapper types using branded/opaque-style semantics. Successor of `InlineWrapperAttribute` — both attributes carry identical behavior while the legacy name stays supported. |
@@ -42,7 +40,7 @@ annotations.
 | --- | --- |
 | `GenerateGuardAttribute` | Generates a runtime `isT` type guard plus a throwing `assertT(value, message?)` companion that wraps it. |
 | `DiscriminatorAttribute` (TypeScript) | Names a `[StringEnum]` field as the discriminator; the generated `isT` short-circuits on a literal comparison against the type name before walking the remaining shape. |
-| `ExternalAttribute` (TypeScript) | Marks an ambient runtime-provided shape — no file emitted. Per #106 accepts `class`, `abstract class`, `interface`, `struct`, `method`, `property`, `field`. Static member access stays class-qualified (`Js.document`); the flatten contract anchors exclusively on `[NoContainer]`. Combine with `[NoContainer]` on the same static class to keep the "no file + flatten" shape (`Js.cs` runtime-globals). |
+| `ExternalAttribute` (TypeScript) | Marks an ambient runtime-provided shape — no file emitted. Accepts static classes, abstract classes, interfaces, structs, methods, properties, and fields; concrete non-static classes are rejected. Static member access stays class-qualified (`Js.document`); the flatten contract anchors exclusively on `[NoContainer]`. Combine with `[NoContainer]` on the same static class to keep the "no file + flatten" shape (`Js.cs` runtime-globals). |
 | `ConstantAttribute` | Applied to a parameter or field; the value must be a compile-time constant literal. Violations surface as MS0014 `InvalidConstant`. Enables literal-type narrowing in `[Emit]` templates and safe `[Inline]` expansion. |
 | `InlineAttribute` | Applied to a `static readonly` field, a `static` property with an expression-bodied getter, or a `static` method whose body is a single expression. Every reference substitutes the member's body at the call site; the declaration itself is not emitted. The optional `InlineMode` argument selects between `Materialize` (default — IIFE wrap, args evaluate once) and `Substitute` (β-reduction — args inline directly into the body, may duplicate). Class-level `[Inline]` propagates to every static member, with `Mode` cascading from the class declaration. Violations surface as MS0016 `InvalidInline`. See ADR-0017. |
 | `ThisAttribute` | Applied to the first parameter of a delegate or inlinable method; promotes the slot to the synthetic JavaScript `this` receiver. The parameter is dropped from the emitted TS positional list and re-introduced as the function type's `this` annotation (`(this: T, …) => R`). Lambda / method-group / body-rewrite emission lands in a follow-up slice. Violations surface as MS0018 `InvalidThis`. |

@@ -61,7 +61,7 @@ dotnet build
 ## How to test the generated code
 
 ```bash
-cd js/sample-todo
+cd targets/js/sample-todo
 bun install
 bun run build
 bun test

@@ -278,9 +278,7 @@ public class IrToTsBodyBridgeTests
     {
         // Ambient `[External]` parameter types have no TS identifier to emit —
         // the bridge drops the annotation so the lambda's inferred type
-        // comes from the call-site signature at consumption time. Migrated
-        // from `[NoEmit]` per #106 (legacy ambient still works while the
-        // attribute carries the parity flag).
+        // comes from the call-site signature at consumption time.
         var ts = PrintMethodFromIr(
             "void Use(System.Action<IAmbient> cb) { cb(default!); cb2(x => x.Read()); }",
             extraMembers: """

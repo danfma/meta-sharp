@@ -56,7 +56,7 @@ read it as a snapshot of where the target stands today.
 1. `dotnet build Metano.slnx` — solution builds.
 2. `dotnet run --project tests/Metano.Tests/` — full suite green (Dart-specific
    golden tests in `DartBackendTests.cs`).
-3. `dotnet run --project src/Metano.Compiler.Dart/ -- -p samples/SampleCounter/SampleCounter.csproj -o targets/flutter/sample_counter/lib/sample_counter --clean`
+3. `dotnet run --project src/Metano.Compiler.Dart/ -- -p samples/SampleCounterV1/SampleCounterV1.csproj -o targets/flutter/sample_counter/lib/sample_counter --clean`
    — regenerates the Counter sample.
 4. `cd targets/flutter/sample_counter && flutter analyze` — analyzer clean.
 5. `flutter test` (when the sample gains tests) — runtime passes.

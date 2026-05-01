@@ -2703,7 +2703,7 @@ public sealed class IrExpressionExtractor
     {
         if (container is null)
             return false;
-        if (SymbolHelper.HasNoEmit(container))
+        if (SymbolHelper.HasIgnore(container))
             return false;
         if (SymbolHelper.HasExternal(container))
             return false;

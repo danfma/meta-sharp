@@ -2,14 +2,7 @@
 import { Temporal } from "@js-temporal/polyfill";
 import { SerializerContext, type TypeSpec } from "metano-runtime/system/json";
 import { Decimal } from "decimal.js";
-import {
-  Comment,
-  IssueId,
-  IssuePriority,
-  IssueSnapshot,
-  IssueStatus,
-  IssueType,
-} from "#/issues/domain";
+import { Comment, IssueId, IssuePriority, IssueSnapshot, IssueStatus, IssueType } from "#/issues/domain";
 import { UserId } from "#/shared-kernel";
 
 export class JsonContext extends SerializerContext {
@@ -24,23 +17,9 @@ export class JsonContext extends SerializerContext {
   }
 
   get issueSnapshot(): TypeSpec<IssueSnapshot> {
-    return (this._issueSnapshot ??= this.createSpec({
+    return this._issueSnapshot ??= this.createSpec({
       type: IssueSnapshot,
-      factory: (p: Record<string, unknown>) =>
-        new IssueSnapshot(
-          p.id as IssueId,
-          p.title as string,
-          p.description as string,
-          p.type as IssueType,
-          p.priority as IssuePriority,
-          p.status as IssueStatus,
-          p.assigneeId as UserId | null,
-          p.sprintKey as string | null,
-          p.createdAt as Temporal.ZonedDateTime,
-          p.updatedAt as Temporal.ZonedDateTime,
-          p.estimatedHours as Decimal,
-          p.comments as Comment[],
-        ),
+      factory: (p: Record<string, unknown>) => new IssueSnapshot(p.id as IssueId, p.title as string, p.description as string, p.type as IssueType, p.priority as IssuePriority, p.status as IssueStatus, p.assigneeId as UserId | null, p.sprintKey as string | null, p.createdAt as Temporal.ZonedDateTime, p.updatedAt as Temporal.ZonedDateTime, p.estimatedHours as Decimal, p.comments as Comment[]),
       properties: [
         {
           ts: "id",
@@ -117,19 +96,13 @@ export class JsonContext extends SerializerContext {
           },
         },
       ],
-    }));
+    });
   }
 
   get comment(): TypeSpec<Comment> {
-    return (this._comment ??= this.createSpec({
+    return this._comment ??= this.createSpec({
       type: Comment,
-      factory: (p: Record<string, unknown>) =>
-        new Comment(
-          p.authorId as UserId,
-          p.message as string,
-          p.createdAt as Temporal.ZonedDateTime,
-          p.isSystem as boolean,
-        ),
+      factory: (p: Record<string, unknown>) => new Comment(p.authorId as UserId, p.message as string, p.createdAt as Temporal.ZonedDateTime, p.isSystem as boolean),
       properties: [
         {
           ts: "authorId",
@@ -152,6 +125,6 @@ export class JsonContext extends SerializerContext {
           type: { kind: "primitive" },
         },
       ],
-    }));
+    });
   }
 }

@@ -6,13 +6,19 @@
 ## Implementation status
 
 - Phase 1 (#97): `[Erasable]`, `[External]` widened, `[NoEmit]` redefinition deferred — landed.
-- Phase 2 (#106): `[NoEmit]` as `.NET-only` painting + MS0013, `[External]` flatten removal, ambient migration, `[ExportedAsModule]` `[Obsolete]` re-enabled — **landed in 2026-04-29 across PR1-PR4** (`e845479`, `af3402b`, `bb2a5dc`, `61c525a`).
-- Phase 3 (#98): `[Constant]` — pending.
-- Phase 4 (#99): `[Branded]` rename of `[InlineWrapper]` — pending.
+- Phase 2 (#106): `.NET-only` painting + MS0013, `[External]` flatten removal, ambient migration, `[ExportedAsModule]` `[Obsolete]` re-enabled — **landed in 2026-04-29 across PR1-PR4** (`e845479`, `af3402b`, `bb2a5dc`, `61c525a`). The working name in this ADR was `[NoEmit]`; the current public attribute is `[Ignore]`.
+- Phase 3 (#98): `[Constant]` — landed.
+- Phase 4 (#99): `[Branded]` rename of `[InlineWrapper]` — landed.
 - 2026-04-30: `[Erasable]` renamed to `[NoContainer]` and the implicit
   Erasable→Inline cascade replaced by an explicit
   `[Inline(InlineMode.Substitute)]` opt-in. See
   [ADR-0017](0017-no-container-and-explicit-inline-mode.md).
+
+Current public names are `[NoContainer]`, `[External]`, `[Ignore]`,
+`[Branded]`, `[Constant]`, and `[Inline]`. `[InlineWrapper]` remains accepted
+as a compatibility alias for `[Branded]`. The planned `[NoEmit]` name was
+removed before becoming the current public API; `[Ignore]` now carries the
+.NET-only / per-target opt-out contract.
 
 
 ## Context
@@ -85,7 +91,7 @@ forward, class-level `[External]` means "ambient class, declaration
 elsewhere, access stays class-qualified". The flatten behavior now
 lives exclusively under `[Erasable]`.
 
-The four features roll out as stacked PRs:
+The original rollout plan was split across stacked PRs:
 
 - PR-0 (#97) — `[Erasable]` + `[External]` refactor + `[NoEmit]` redefinition + `[ExportedAsModule]` deprecation
 - PR-1 (#98) — `[Constant]` (parameter + field)

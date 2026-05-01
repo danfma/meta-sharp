@@ -30,7 +30,7 @@ public class ExternalAttributeTranspileTests
             """
             using Metano.Annotations.TypeScript;
 
-            [NoEmit]
+            [External]
             public abstract class Document {}
 
             [External]
@@ -63,10 +63,10 @@ public class ExternalAttributeTranspileTests
             """
             using Metano.Annotations.TypeScript;
 
-            [NoEmit, Name("HTMLElement")]
+            [External, Name("HTMLElement")]
             public abstract class HtmlElement {}
 
-            [NoEmit]
+            [External]
             public abstract class Document
             {
                 public HtmlElement Body => throw null!;
@@ -154,10 +154,9 @@ public class ExternalAttributeTranspileTests
     [Test]
     public async Task External_Interface_EmitsNoFile_NoDiagnostic()
     {
-        // Per #106: `[External]` accepts interface targets so ambient
-        // structural shapes (DOM types, Hono-style context interfaces)
-        // can carry the attribute directly without a `[NoEmit]` ambient
-        // workaround.
+        // `[External]` accepts interface targets so ambient structural
+        // shapes (DOM types, Hono-style context interfaces) can carry the
+        // attribute directly.
         var (result, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations.TypeScript;
@@ -219,8 +218,7 @@ public class ExternalAttributeTranspileTests
     {
         // An `[External]` ambient type used as a lambda parameter must
         // emit the lambda WITHOUT a parameter type annotation so
-        // TypeScript infers from context (matches the legacy `[NoEmit]`
-        // ambient behavior, now widened to cover `[External]`).
+        // TypeScript infers from context.
         var result = TranspileHelper.Transpile(
             """
             using Metano.Annotations.TypeScript;

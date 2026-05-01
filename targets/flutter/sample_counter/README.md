@@ -1,8 +1,8 @@
 # sample_counter (Flutter)
 
-Flutter consumer of the SampleCounter C# project. The `Counter`, `ICounterView`
-and `CounterPresenter` classes in `lib/sample_counter/` are regenerated from
-the shared C# source by the Metano Dart target.
+Flutter consumer of the `SampleCounterV1` C# project. The `Counter`,
+`ICounterView`, and `CounterPresenter` classes in `lib/sample_counter/` are
+regenerated from the shared C# source by the Metano Dart target.
 
 ## Regenerate the Dart sources
 
@@ -10,7 +10,7 @@ From the repo root:
 
 ```sh
 dotnet run --project src/Metano.Compiler.Dart/ -- \
-  -p samples/SampleCounter/SampleCounter.csproj \
+  -p samples/SampleCounterV1/SampleCounterV1.csproj \
   -o targets/flutter/sample_counter/lib/sample_counter \
   --clean
 ```
@@ -34,6 +34,5 @@ consumer — no extension-based workarounds — wiring the generated
 `CounterPresenter` up to a `MaterialApp`.
 
 Known gaps (tracked as GitHub issues / follow-ups): classic extension
-methods, the `[ModuleEntryPoint]` body path, and a BCL mapping for
-`Console.WriteLine` → `print` so the counter's `Program.cs` entry point
-can emit on Dart too (today it's opted out via `[NoEmit(Dart)]`).
+methods, the `[ModuleEntryPoint]` body path, broader BCL coverage, and fuller
+runtime support for LINQ-heavy generated code.

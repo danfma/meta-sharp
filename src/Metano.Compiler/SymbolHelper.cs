@@ -129,8 +129,8 @@ public static class SymbolHelper
         HasTargetableFlag(symbol, "Ignore", target);
 
     /// <summary>
-    /// Shared matcher for per-target "flag" attributes (<c>[Ignore]</c>,
-    /// <c>[NoEmit]</c>, …) that carry only an optional <see cref="TargetLanguage"/>.
+    /// Shared matcher for per-target "flag" attributes (e.g. <c>[Ignore]</c>)
+    /// that carry only an optional <see cref="TargetLanguage"/>.
     /// <para>Match rules:</para>
     /// <list type="bullet">
     ///   <item>An <em>untargeted</em> occurrence (<c>[Attr]</c>) satisfies every
@@ -140,7 +140,7 @@ public static class SymbolHelper
     ///   passing <c>null</c> (target-agnostic queries such as the legacy
     ///   <see cref="IsTranspilable(this ISymbol, bool, IAssemblySymbol?)"/>)
     ///   does <b>not</b> match a targeted occurrence — otherwise
-    ///   <c>[NoEmit(TargetLanguage.Dart)]</c> would suppress TS discovery too.</item>
+    ///   <c>[Ignore(TargetLanguage.Dart)]</c> would suppress TS discovery too.</item>
     /// </list>
     /// </summary>
     private static bool HasTargetableFlag(
@@ -189,17 +189,6 @@ public static class SymbolHelper
     public static bool HasGenerateGuard(this ISymbol symbol) =>
         HasAttribute(symbol, "GenerateGuard");
 
-    public static bool HasNoTranspile(this ISymbol symbol) => HasAttribute(symbol, "NoTranspile");
-
-    public static bool HasNoEmit(this ISymbol symbol) => HasNoEmit(symbol, target: null);
-
-    /// <summary>
-    /// Target-aware <c>[NoEmit]</c> lookup — same shape as
-    /// <see cref="HasIgnore(this ISymbol, TargetLanguage?)"/>.
-    /// </summary>
-    public static bool HasNoEmit(this ISymbol symbol, TargetLanguage? target) =>
-        HasTargetableFlag(symbol, "NoEmit", target);
-
     public static bool HasModuleEntryPoint(this ISymbol symbol) =>
         HasAttribute(symbol, "ModuleEntryPoint");
 
@@ -234,7 +223,7 @@ public static class SymbolHelper
     /// scope) is decided by the lowering pipeline. In the current
     /// slice, class-level <c>[External]</c> flattens static member
     /// access at the bridge; per-member lowering ships alongside the
-    /// <c>[NoEmit]</c> redefinition. Namespace-qualified match so
+    /// <c>[Ignore]</c> redefinition. Namespace-qualified match so
     /// unrelated <c>[External]</c> attributes from other libraries
     /// are not mistaken for the Metano variant.
     /// </summary>
@@ -683,13 +672,14 @@ public static class SymbolHelper
 
     /// <summary>
     /// Determines if a type should be transpiled, considering:
-    /// 1. [NoTranspile] → always excluded
-    /// 2. [NoEmit] → excluded from transpilation, but the type is still discoverable
-    ///    via Roslyn semantic model so user code can reference it. The transpiler
-    ///    won't generate a .ts file or import it from anywhere — it's an ambient
-    ///    declaration over an external library shape.
-    /// 3. [Transpile] → always included
-    /// 4. assemblyWideTranspile + public → included
+    /// 1. [Ignore] → always excluded; type is paint-as-.NET-only and
+    ///    references from transpiled code raise MS0013.
+    /// 2. [External] → excluded from transpilation, but the type stays
+    ///    discoverable via the Roslyn semantic model so user code can
+    ///    reference it. No .ts file is generated and no import is added —
+    ///    it's an ambient declaration over an external library shape.
+    /// 3. [Transpile] → always included.
+    /// 4. assemblyWideTranspile + public → included.
     /// </summary>
     public static bool IsTranspilable(
         ISymbol symbol,
@@ -697,16 +687,14 @@ public static class SymbolHelper
         IAssemblySymbol? currentAssembly = null
     )
     {
-        if (HasNoTranspile(symbol))
-            return false;
-        if (HasNoEmit(symbol))
+        if (HasIgnore(symbol))
             return false;
         // `[External]` is emission-scope "no emit": the class is a
         // stub for runtime globals and must never produce a .ts file.
         // `[NoContainer]` participates in transpilation instead — its
         // members project as top-level exports in a file named after
         // the class, while static member access flattens at the call
-        // site. Both are kept separate from `[NoEmit]` so the
+        // site. Both are kept separate from `[Ignore]` so the
         // attribute semantics stay explicit at the source-code layer.
         if (HasExternal(symbol))
             return false;

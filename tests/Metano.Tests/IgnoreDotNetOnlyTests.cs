@@ -3,25 +3,25 @@ using Metano.Compiler.Diagnostics;
 namespace Metano.Tests;
 
 /// <summary>
-/// Tests for the redefined <c>[NoEmit]</c> contract (#106 PR3): the
+/// Tests for the redefined <c>[Ignore]</c> contract (#106 PR3): the
 /// type is painted as .NET-only and any reference from a transpilable
 /// type's signature OR body raises <c>MS0013
-/// NoEmitReferencedByTranspiledCode</c>. Ambient TS shapes used to
-/// share <c>[NoEmit]</c> historically; those migrated to
+/// IgnoreReferencedByTranspiledCode</c>. Ambient TS shapes used to
+/// share <c>[Ignore]</c> historically; those migrated to
 /// <c>[External]</c> in PR2 and stay covered by
-/// <see cref="NoEmitTranspileTests"/>.
+/// <see cref="ExternalAmbientTranspileTests"/>.
 /// </summary>
-public class NoEmitDotNetOnlyTests
+public class IgnoreDotNetOnlyTests
 {
     [Test]
-    public async Task NoEmit_ReferencedFromMethodParameter_RaisesMs0013()
+    public async Task Ignore_ReferencedFromMethodParameter_RaisesMs0013()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [NoEmit]
+            [Ignore]
             public class Marker {}
 
             public class Consumer
@@ -32,21 +32,21 @@ public class NoEmitDotNetOnlyTests
         );
 
         var ms0013 = diagnostics.FirstOrDefault(d =>
-            d.Code == DiagnosticCodes.NoEmitReferencedByTranspiledCode
+            d.Code == DiagnosticCodes.IgnoreReferencedByTranspiledCode
         );
         await Assert.That(ms0013).IsNotNull();
         await Assert.That(ms0013!.Message).Contains("Marker");
     }
 
     [Test]
-    public async Task NoEmit_ReferencedFromMethodReturn_RaisesMs0013()
+    public async Task Ignore_ReferencedFromMethodReturn_RaisesMs0013()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [NoEmit]
+            [Ignore]
             public class Marker {}
 
             public class Consumer
@@ -57,20 +57,20 @@ public class NoEmitDotNetOnlyTests
         );
 
         var ms0013 = diagnostics.FirstOrDefault(d =>
-            d.Code == DiagnosticCodes.NoEmitReferencedByTranspiledCode
+            d.Code == DiagnosticCodes.IgnoreReferencedByTranspiledCode
         );
         await Assert.That(ms0013).IsNotNull();
     }
 
     [Test]
-    public async Task NoEmit_ReferencedAsFieldType_RaisesMs0013()
+    public async Task Ignore_ReferencedAsFieldType_RaisesMs0013()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [NoEmit]
+            [Ignore]
             public class Marker {}
 
             public class Consumer
@@ -81,13 +81,13 @@ public class NoEmitDotNetOnlyTests
         );
 
         var ms0013 = diagnostics.FirstOrDefault(d =>
-            d.Code == DiagnosticCodes.NoEmitReferencedByTranspiledCode
+            d.Code == DiagnosticCodes.IgnoreReferencedByTranspiledCode
         );
         await Assert.That(ms0013).IsNotNull();
     }
 
     [Test]
-    public async Task NoEmit_ReferencedInsideMethodBody_RaisesMs0013()
+    public async Task Ignore_ReferencedInsideMethodBody_RaisesMs0013()
     {
         // Body-side: `new Marker()` reaches inside the method body, not
         // the signature. PR3 spec demands transitive painting.
@@ -96,7 +96,7 @@ public class NoEmitDotNetOnlyTests
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [NoEmit]
+            [Ignore]
             public class Marker {}
 
             public class Consumer
@@ -111,13 +111,13 @@ public class NoEmitDotNetOnlyTests
         );
 
         var ms0013 = diagnostics.FirstOrDefault(d =>
-            d.Code == DiagnosticCodes.NoEmitReferencedByTranspiledCode
+            d.Code == DiagnosticCodes.IgnoreReferencedByTranspiledCode
         );
         await Assert.That(ms0013).IsNotNull();
     }
 
     [Test]
-    public async Task NoEmit_GenericTypeArgument_RaisesMs0013()
+    public async Task Ignore_GenericTypeArgument_RaisesMs0013()
     {
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
@@ -125,7 +125,7 @@ public class NoEmitDotNetOnlyTests
             using System.Collections.Generic;
             [assembly: TranspileAssembly]
 
-            [NoEmit]
+            [Ignore]
             public class Marker {}
 
             public class Consumer
@@ -136,24 +136,24 @@ public class NoEmitDotNetOnlyTests
         );
 
         var ms0013 = diagnostics.FirstOrDefault(d =>
-            d.Code == DiagnosticCodes.NoEmitReferencedByTranspiledCode
+            d.Code == DiagnosticCodes.IgnoreReferencedByTranspiledCode
         );
         await Assert.That(ms0013).IsNotNull();
     }
 
     [Test]
-    public async Task NoEmit_NonTranspilableContainer_DoesNotRaise()
+    public async Task Ignore_NonTranspilableContainer_DoesNotRaise()
     {
-        // A `[NoEmit]` type referencing another `[NoEmit]` type stays
+        // A `[Ignore]` type referencing another `[Ignore]` type stays
         // silent — both live entirely on the .NET side.
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations;
 
-            [NoEmit]
+            [Ignore]
             public class Marker {}
 
-            [NoEmit]
+            [Ignore]
             public class Holder
             {
                 public Marker Field => throw null!;
@@ -162,21 +162,21 @@ public class NoEmitDotNetOnlyTests
         );
 
         await Assert
-            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.NoEmitReferencedByTranspiledCode))
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.IgnoreReferencedByTranspiledCode))
             .IsFalse();
     }
 
     [Test]
-    public async Task NoEmit_PerTargetDart_DoesNotRaiseInTypeScript()
+    public async Task Ignore_PerTargetDart_DoesNotRaiseInTypeScript()
     {
-        // `[NoEmit(TargetLanguage.Dart)]` paints the type as .NET-only
+        // `[Ignore(TargetLanguage.Dart)]` paints the type as .NET-only
         // on Dart only — TypeScript runs continue to emit it normally.
         var (_, diagnostics) = TranspileHelper.TranspileWithDiagnostics(
             """
             using Metano.Annotations;
             [assembly: TranspileAssembly]
 
-            [NoEmit(TargetLanguage.Dart)]
+            [Ignore(TargetLanguage.Dart)]
             public class TypeScriptOnly {}
 
             public class Consumer
@@ -187,7 +187,7 @@ public class NoEmitDotNetOnlyTests
         );
 
         await Assert
-            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.NoEmitReferencedByTranspiledCode))
+            .That(diagnostics.Any(d => d.Code == DiagnosticCodes.IgnoreReferencedByTranspiledCode))
             .IsFalse();
     }
 }

@@ -148,20 +148,20 @@ public class InlineAttributeTranspileTests
             using Metano.Annotations;
             using Metano.Annotations.TypeScript;
 
-            [External, NoEmit]
+            [External, Ignore]
             public static class Js
             {
                 [Name("document")]
                 public static Document Document => throw null!;
             }
 
-            [NoEmit, Name("HTMLElement")]
+            [External, Name("HTMLElement")]
             public abstract class HtmlElement
             {
                 public string Id { get; set; } = "";
             }
 
-            [NoEmit, Name("HTMLDivElement")]
+            [External, Name("HTMLDivElement")]
             public abstract class HtmlDivElement : HtmlElement;
 
             [External]

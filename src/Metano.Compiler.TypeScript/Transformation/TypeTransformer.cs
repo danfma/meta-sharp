@@ -332,7 +332,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// Builds the top-level statements for a single type into <paramref name="sink"/>,
     /// without computing the file path or collecting imports. Returns true if the type
     /// produced any statements (and is therefore part of a file group); false if it's
-    /// a no-op (e.g., <c>[Import]</c> or <c>[NoEmit]</c>).
+    /// a no-op (e.g., <c>[Import]</c> or <c>[Ignore]</c>).
     /// </summary>
     private bool BuildTypeStatements(
         INamedTypeSymbol type,
@@ -344,10 +344,10 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         if (SymbolHelper.HasImport(type))
             return false;
 
-        // [NoEmit] types are ambient/declaration-only — discoverable in C# so consumers
+        // [Ignore] types are ambient/declaration-only — discoverable in C# so consumers
         // can reference them in signatures, but no .ts file is generated and no import
         // is emitted. Used for structural shapes over external library types.
-        if (SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript))
+        if (SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript))
             return false;
 
         var startCount = sink.Count;
@@ -516,7 +516,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// the file group. The IR scanner only needs the type's declared shape (no bodies,
     /// no compilation context), so we run it for every supported kind regardless of
     /// which emitter handled the actual TS lowering. Types that don't go through any
-    /// IR extractor today (synthetic top-level entry points, [Import]/[NoEmit] types)
+    /// IR extractor today (synthetic top-level entry points, [Import]/[Ignore] types)
     /// are simply skipped — the legacy walker still picks up their template-level
     /// runtime needs.
     /// </summary>
@@ -530,7 +530,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             if (
                 SymbolHelper.HasImport(type)
-                || SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript)
+                || SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript)
             )
                 continue;
             // Synthetic top-level entry points are wrapped in a class but emitted
@@ -1221,7 +1221,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// <c>[NoContainer]</c> factory whose emitted name collides with any of
     /// these would shadow the existing import at the TS surface, breaking
     /// the consumer file in subtle ways the user would only catch at
-    /// <c>tsc</c> time. <c>[NoContainer]</c> owners and <c>[NoEmit]</c>
+    /// <c>tsc</c> time. <c>[NoContainer]</c> owners and <c>[Ignore]</c>
     /// types are skipped because they emit no class and contribute no
     /// surface name.
     /// </summary>
@@ -1238,7 +1238,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
         {
             if (SymbolHelper.HasNoContainer(type))
                 continue;
-            if (SymbolHelper.HasNoEmit(type, TargetLanguage.TypeScript))
+            if (SymbolHelper.HasIgnore(type, TargetLanguage.TypeScript))
                 continue;
             if (!transpilableTypesDict.TryGetValue(type.Name, out var typeRef))
                 continue;

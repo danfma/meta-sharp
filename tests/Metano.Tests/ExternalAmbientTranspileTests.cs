@@ -1,11 +1,5 @@
 namespace Metano.Tests;
 
-// NOTE: this file historically tested the `[NoEmit]` ambient contract.
-// Per #106 ambient consumers migrated to `[External]`; the cases below
-// pin the same emission contract under the new attribute. The
-// `[NoEmit]` redefinition (.NET-only painting + MS0013) lives in a
-// separate file added in PR3.
-
 /// <summary>
 /// Tests for the ambient contract carried by <c>[External]</c>:
 /// <list type="bullet">
@@ -16,7 +10,7 @@ namespace Metano.Tests;
 ///   without a parameter type annotation, letting TypeScript infer from context</item>
 /// </list>
 /// </summary>
-public class NoEmitTranspileTests
+public class ExternalAmbientTranspileTests
 {
     [Test]
     public async Task ExternalType_DoesNotProduceFile()

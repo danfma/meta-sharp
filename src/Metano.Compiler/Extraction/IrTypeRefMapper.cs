@@ -305,15 +305,15 @@ public static class IrTypeRefMapper
                 return new IrNamedTypeSemantics(
                     IrNamedTypeKind.StringEnum,
                     StringEnumValues: values,
-                    IsTranspilable: IsTranspilableType(named),
-                    IsNoEmit: SymbolHelper.HasNoEmit(named),
+                    IsTranspilable: IsTranspilableType(named, target),
+                    IsIgnored: SymbolHelper.HasIgnore(named, target),
                     EnumDefaultMember: ExtractEnumDefaultMember(named, target)
                 );
             }
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.NumericEnum,
-                IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsTranspilable: IsTranspilableType(named, target),
+                IsIgnored: SymbolHelper.HasIgnore(named, target),
                 EnumDefaultMember: ExtractEnumDefaultMember(named, target),
                 IsExternal: SymbolHelper.HasExternal(named)
             );
@@ -322,8 +322,8 @@ public static class IrTypeRefMapper
         if (named.TypeKind == TypeKind.Interface)
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Interface,
-                IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsTranspilable: IsTranspilableType(named, target),
+                IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named)
             );
 
@@ -338,8 +338,8 @@ public static class IrTypeRefMapper
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Branded,
                 BrandedUnderlyingPrimitive: primitive,
-                IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsTranspilable: IsTranspilableType(named, target),
+                IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named)
             );
         }
@@ -347,32 +347,32 @@ public static class IrTypeRefMapper
         if (IsExceptionType(named))
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Exception,
-                IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsTranspilable: IsTranspilableType(named, target),
+                IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named)
             );
 
         if (named.IsRecord)
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Record,
-                IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsTranspilable: IsTranspilableType(named, target),
+                IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named)
             );
 
         if (named.TypeKind == TypeKind.Struct)
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Struct,
-                IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsTranspilable: IsTranspilableType(named, target),
+                IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named)
             );
 
         if (named.TypeKind == TypeKind.Class)
             return new IrNamedTypeSemantics(
                 IrNamedTypeKind.Class,
-                IsTranspilable: IsTranspilableType(named),
-                IsNoEmit: SymbolHelper.HasNoEmit(named),
+                IsTranspilable: IsTranspilableType(named, target),
+                IsIgnored: SymbolHelper.HasIgnore(named, target),
                 IsExternal: SymbolHelper.HasExternal(named)
             );
 
@@ -449,7 +449,7 @@ public static class IrTypeRefMapper
     /// Returns <c>true</c> when the type is transpilable — either it carries
     /// <c>[Transpile]</c> explicitly, or its containing assembly has
     /// <c>[assembly: TranspileAssembly]</c> and the type itself is public
-    /// (and not opted out via <c>[NoTranspile]</c>/<c>[NoEmit]</c>).
+    /// (and not opted out via <c>[Ignore]</c>).
     /// <para>
     /// <see cref="IrTypeRefMapper"/> can't see the compilation's assembly,
     /// so we check the symbol's own containing assembly here. That's
@@ -457,12 +457,21 @@ public static class IrTypeRefMapper
     /// BCL / third-party assembly would be impossible to place from user
     /// code — only the user's own compilation can tag itself.
     /// </para>
+    /// <para>
+    /// <paramref name="target"/> threads the active backend so a
+    /// <c>[Ignore(TargetLanguage.Dart)]</c> type is treated as
+    /// non-transpilable for the Dart backend while remaining transpilable
+    /// for TypeScript.
+    /// </para>
     /// </summary>
-    private static bool IsTranspilableType(INamedTypeSymbol named)
+    private static bool IsTranspilableType(
+        INamedTypeSymbol named,
+        Metano.Annotations.TargetLanguage? target
+    )
     {
         if (SymbolHelper.HasTranspile(named))
             return true;
-        if (SymbolHelper.HasNoTranspile(named) || SymbolHelper.HasNoEmit(named))
+        if (SymbolHelper.HasIgnore(named, target))
             return false;
         if (named.DeclaredAccessibility != Accessibility.Public)
             return false;

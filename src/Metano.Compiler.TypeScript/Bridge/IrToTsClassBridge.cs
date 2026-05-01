@@ -45,7 +45,7 @@ internal static class IrToTsClassBridge
     /// <summary>
     /// Lowers a list of IR base / interface references into TS heritage
     /// entries. Drops named refs flagged <c>IsTranspilable: false</c>
-    /// (e.g. <c>[NoEmit]</c> or unmapped BCL interfaces) and rewrites
+    /// (e.g. <c>[Ignore]</c> or unmapped BCL interfaces) and rewrites
     /// the array shorthand <c>T[]</c> (produced when a base maps
     /// through <see cref="IrArrayTypeRef"/> for collection-like BCL
     /// types) into <c>Array&lt;T&gt;</c>: TypeScript rejects

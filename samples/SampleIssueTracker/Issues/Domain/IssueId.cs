@@ -2,7 +2,7 @@ using Metano.Annotations;
 
 namespace SampleIssueTracker.Issues.Domain;
 
-[InlineWrapper]
+[Branded]
 public readonly record struct IssueId(string Value)
 {
     public static IssueId New() => new(Guid.NewGuid().ToString("N"));

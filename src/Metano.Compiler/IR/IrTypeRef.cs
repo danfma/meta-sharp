@@ -54,7 +54,7 @@ public sealed record IrNamedTypeSemantics(
     IReadOnlyList<string>? StringEnumValues = null,
     IrPrimitive? BrandedUnderlyingPrimitive = null,
     bool IsTranspilable = false,
-    bool IsNoEmit = false,
+    bool IsIgnored = false,
     IrEnumMemberInfo? EnumDefaultMember = null,
     bool IsExternal = false
 );

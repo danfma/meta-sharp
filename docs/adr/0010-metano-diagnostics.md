@@ -61,7 +61,7 @@ The code taxonomy at the time of writing:
 | `MS0001` | `UnsupportedFeature`       | Construct not yet lowered                                               |
 | `MS0002` | `UnresolvedType`           | Type reference Roslyn couldn't resolve                                  |
 | `MS0003` | `AmbiguousConstruct`       | Two lowerings apply and disambiguation is required                      |
-| `MS0004` | `ConflictingAttributes`    | e.g. `[Transpile]` + `[NoTranspile]` on the same symbol                 |
+| `MS0004` | `ConflictingAttributes`    | e.g. incompatible target-shaping attributes on the same symbol          |
 | `MS0005` | `CyclicReference`          | Cyclic import chain detected by `CyclicReferenceDetector`               |
 | `MS0006` | `InvalidTemplate`          | A `JsTemplate` failed to expand (placeholder out of range, etc.)        |
 | `MS0007` | `CrossPackageResolution`   | Missing `[EmitPackage]` at the consumer or drift in `package.json#name` |

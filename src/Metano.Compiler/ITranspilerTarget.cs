@@ -23,7 +23,7 @@ public interface ITranspilerTarget
     /// The <see cref="TargetLanguage"/> this backend emits for. The host
     /// passes it to the active <see cref="ISourceFrontend"/> so
     /// target-specific resolution (per-target <c>[Name]</c>, per-target
-    /// <c>[NoEmit]</c>, …) happens once during extraction instead of being
+    /// <c>[Ignore]</c>, …) happens once during extraction instead of being
     /// duplicated inside every target. Default keeps
     /// <see cref="TargetLanguage.TypeScript"/> so third-party targets that
     /// predate this member keep compiling until they opt in; in-tree

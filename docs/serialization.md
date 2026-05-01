@@ -141,7 +141,7 @@ handles these kinds:
 | `array` | `T[]` | `.map(serialize)` | `.map(deserialize)` |
 | `map` | `Map<K,V>` | `Object.fromEntries(...)` | `new Map(Object.entries(...))` |
 | `hashSet` | `HashSet<T>` | `[...set]` | `new HashSet(arr)` |
-| `branded` | `[InlineWrapper]` type | passthrough (brand erases at runtime) | `Type.create(value)` |
+| `branded` | `[Branded]` / `[InlineWrapper]` type | passthrough (brand erases at runtime) | `Type.create(value)` |
 | `enum` | string enum | passthrough (already string) | validates against allowed values |
 | `numericEnum` | numeric enum | passthrough | validates against allowed values |
 | `nullable` | `T \| null` | `null` passes through, else recurse | same |

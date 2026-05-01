@@ -65,7 +65,7 @@ public interface ISourceFrontend
     /// a <c>.csproj</c> for the C# frontend).</param>
     /// <param name="target">The backend the extraction is being performed
     /// for. Drives target-specific resolution (per-target <c>[Name]</c>
-    /// aliases, per-target <c>[NoEmit]</c> filters) so the resulting IR
+    /// aliases, per-target <c>[Ignore]</c> filters) so the resulting IR
     /// already carries the names and emission decisions the backend will
     /// use. Defaults to <see cref="TargetLanguage.TypeScript"/> for
     /// backwards compatibility with tests and any callers that predate the

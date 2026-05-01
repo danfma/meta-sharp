@@ -34,9 +34,10 @@ flowchart LR
    producing the target-specific AST: TS records (`TsClass`, `TsFunction`, …)
    or Dart records (`DartClass`, `DartFunction`, …).
 5. **Print** — The target printer turns its AST into formatted source text.
-6. **Emit manifests + imports** — The target drives `package.json` / `pubspec`
-   updates, runtime-helper imports derived from `IrRuntimeRequirement`s, and
-   cross-package import resolution via `IrTypeOrigin`.
+6. **Emit manifests + imports** — The TypeScript target updates
+   `package.json`, runtime-helper imports derived from `IrRuntimeRequirement`s,
+   and cross-package import resolution via `IrTypeOrigin`. The Dart target
+   emits Dart source today; package manifest integration is still evolving.
 
 ## Solution layout
 
@@ -74,17 +75,19 @@ src/
 └── Metano.Build/                      ← MSBuild .targets file
 ```
 
-## The four-project split
+## The five-project split
 
-Metano is split into four `.NET` assemblies with strict dependencies:
+Metano is split into five `.NET` assemblies with strict dependencies:
 
 ### `Metano` (assembly / NuGet: `Metano`)
 
 The **attributes** (`[Transpile]`, `[Name]`, `[StringEnum]`, `[EmitPackage]`,
-`[PlainObject]`, `[Branded]`, `[NoEmit]`, `[ModuleEntryPoint]`,
-`[ExportVarFromBody]`, `[GenerateGuard]`, …) and the **declarative BCL
-runtime mappings** (`[MapMethod]`, `[MapProperty]` assembly-level attributes
-that define how `List<T>.Add` → `push`, etc.).
+`[PlainObject]`, `[Branded]`, `[InlineWrapper]`, `[ObjectArgs]`, `[Ignore]`,
+`[NoContainer]`, `[Inline]`, `[This]`, `[ModuleEntryPoint]`,
+`[ExportVarFromBody]`, `[GenerateGuard]`, …), TypeScript-specific annotations
+under `Metano.Annotations.TypeScript`, and the **declarative BCL runtime
+mappings** (`[MapMethod]`, `[MapProperty]` assembly-level attributes that
+define how `List<T>.Add` → `push`, etc.).
 
 This is the **only** assembly your user code depends on — everything else is
 build-time tooling.
@@ -222,8 +225,9 @@ Each shape has a dedicated IR → TS lowering, named consistently:
 - **`IrToTsBrandedBridge`** — `[Branded]` structs → branded primitive types.
 - **`IrToTsExceptionBridge`** — anything inheriting `System.Exception` →
   `class extends Error`.
-- **`IrToTsModuleBridge`** — `[ExportedAsModule]` static classes + top-level
-  statements → flat top-level functions.
+- **`IrToTsModuleBridge`** — `[NoContainer]` / legacy
+  `[ExportedAsModule]` static classes + top-level statements → flat top-level
+  functions.
 - **`IrToTsRecordSynthesisBridge`** — synthesizes `equals` / `hashCode` /
   `with` for records that aren't `[PlainObject]`.
 - **`IrToTsConstructorDispatcherBridge`** / **`IrToTsOverloadDispatcherBridge`** —
@@ -238,6 +242,9 @@ Each shape has a dedicated IR → TS lowering, named consistently:
   `TsImport` per module (metano-runtime, @js-temporal/polyfill, …).
 - **`IrToTsNamingPolicy`** — TS-specific naming: camelCase, reserved-word
   escaping, `[Name(TypeScript, …)]` resolution.
+- **`IrToTsDelegateBridge`** / **`IrToTsObjectArgsBridge`** — delegate
+  signatures, JS-style `this` receivers, and object-argument lowering for
+  UI-style APIs.
 
 ### `TypeScriptTransformContext`
 
@@ -253,19 +260,20 @@ properties so a single `BclExportTypeOverrides` and a single
 `src/Metano.Compiler.Dart/` mirrors the TypeScript target's shape:
 
 - **`Bridge/`** — `IrToDartClassBridge`, `IrToDartEnumBridge`,
-  `IrToDartInterfaceBridge`, `IrToDartModuleBridge`, `IrToDartTypeMapper`,
-  `IrToDartNamingPolicy`.
+  `IrToDartInterfaceBridge`, `IrToDartModuleBridge`, `IrToDartDelegateBridge`,
+  `IrToDartBclMapper`, `IrRuntimeRequirementToDartImport`,
+  `IrToDartTypeMapper`, `IrToDartNamingPolicy`.
 - **`Transformation/`** — `DartTransformer` orchestrates discovery and
-  file grouping; skips types flagged with `[NoEmit(Dart)]`.
+  file grouping; skips types flagged with `[Ignore(TargetLanguage.Dart)]`.
 - **`Dart/`** — Dart AST records and `IrBodyPrinter`, which renders IR
   expression / statement trees directly as Dart source (native switch-
   pattern arms, object patterns, `==` / `hashCode` / `copyWith` record
   synthesis via `Object.hash`).
 
-The covered IR subset matches the TypeScript side for types, members,
-constructors, and the core expression / statement surface. Gaps (classic
-extension methods, `[ModuleEntryPoint]` bodies, the JSON serializer
-context) are tracked as follow-ups.
+The covered IR subset matches the TypeScript side for many types, members,
+constructors, and core expression / statement shapes. Gaps, especially around
+package manifest integration and some TypeScript-specific attribute families,
+are tracked as follow-ups.
 
 ## The TS AST
 
@@ -273,8 +281,9 @@ context) are tracked as follow-ups.
 that model the TypeScript output:
 
 - **Top level**: `TsSourceFile`, `TsClass`, `TsInterface`, `TsEnum`,
-  `TsFunction`, `TsTypeAlias`, `TsImport`, `TsReExport`,
-  `TsNamespaceDeclaration`, `TsTopLevelStatement`, `TsModuleExport`.
+  `TsConstObject`, `TsFunction`, `TsTypeAlias`, `TsImport`, `TsReExport`,
+  `TsNamespaceDeclaration`, `TsTopLevelStatement`, `TsModuleExport`,
+  `TsExportImportAlias`.
 - **Class members**: `TsFieldMember`, `TsGetterMember`, `TsSetterMember`,
   `TsMethodMember`, `TsConstructor`.
 - **Expressions**: `TsIdentifier`, `TsCallExpression`, `TsNewExpression`,
@@ -335,6 +344,9 @@ cross-package references), preserves user-written fields (name, scripts,
 dev deps) on re-runs, and emits `imports` and `exports` entries aligned
 with the generated file layout.
 
+The writer is TypeScript-specific. The `metano-dart` CLI currently writes
+source files only.
+
 ## Testing
 
 The `Metano.Tests` project uses **TUnit** on Microsoft.Testing.Platform
@@ -361,7 +373,7 @@ The `Expected/` directory holds golden files for TS output comparison.
 
 | Feature type | Where |
 |---|---|
-| New attribute | `src/Metano/Annotations/` + handle it in the relevant extractor or bridge |
+| New attribute | `src/Metano/Annotations/` or `src/Metano/Annotations/TypeScript/` + handle it in the relevant extractor or bridge |
 | New BCL type mapping (declarative) | `src/Metano/Runtime/` with `[MapMethod]`/`[MapProperty]` |
 | New BCL type mapping (extractor rewrite) | `IrExpressionExtractor` (numeric normalization, etc.) |
 | New C# construct semantics | Extend the IR (`Metano.Compiler/IR/`) + the matching extractor |

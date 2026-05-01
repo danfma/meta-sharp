@@ -228,15 +228,15 @@ public class TargetSpecificNamingTests
     }
 
     [Test]
-    public async Task TargetSpecificNoEmit_DoesNotSuppressOtherTargets()
+    public async Task IgnorePerTarget_DoesNotSuppressOtherTargets()
     {
-        // Codex P1 regression: [NoEmit(TargetLanguage.Dart)] on a type must
+        // Codex P1 regression: [Ignore(TargetLanguage.Dart)] on a type must
         // NOT filter the type out of TS discovery. Otherwise foo.ts is never
         // emitted and related checks (nested/base types, imports) also treat
         // the type as non-transpilable.
         var result = TranspileHelper.Transpile(
             """
-            [Transpile, NoEmit(TargetLanguage.Dart)]
+            [Transpile, Ignore(TargetLanguage.Dart)]
             public class Foo
             {
                 public int Value { get; }
