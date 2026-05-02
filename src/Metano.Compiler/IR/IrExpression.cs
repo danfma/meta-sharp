@@ -293,7 +293,8 @@ public sealed record IrLambdaExpression(
     IReadOnlyList<IrStatement> Body,
     bool IsAsync = false,
     bool UsesThis = false,
-    IrTypeRef? ThisType = null
+    IrTypeRef? ThisType = null,
+    string? Name = null
 ) : IrExpression;
 
 // -- Collection literals --

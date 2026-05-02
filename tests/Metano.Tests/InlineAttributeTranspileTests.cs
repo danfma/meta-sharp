@@ -669,6 +669,100 @@ public class InlineAttributeTranspileTests
     }
 
     [Test]
+    public async Task Inline_DirectRecursion_Invocation_LowersAsNamedFunctionExpressionIife()
+    {
+        // #194: an [Inline] method that calls itself directly inside its
+        // body has no name to use after the declaration is erased. The
+        // body must lower as a JavaScript named function expression so the
+        // internal name (`inline$factorial`) carries the recursion.
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public static class MathHelpers
+            {
+                [Inline]
+                public static int Factorial(int n) => n <= 1 ? 1 : n * Factorial(n - 1);
+            }
+
+            public class Caller
+            {
+                public int Run(int n) => MathHelpers.Factorial(n);
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("function inline$factorial(");
+        await Assert.That(output).Contains("inline$factorial(n - 1)");
+        await Assert.That(output).DoesNotContain("Factorial(");
+    }
+
+    [Test]
+    public async Task Inline_DirectRecursion_MethodReference_LowersAsNamedFunctionExpression()
+    {
+        // Method-group reference position: `Func<int, int> f = Factorial`
+        // — same emission path, but the named function expression stands
+        // alone (no IIFE wrapper).
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public static class MathHelpers
+            {
+                [Inline]
+                public static int Factorial(int n) => n <= 1 ? 1 : n * Factorial(n - 1);
+            }
+
+            public class Caller
+            {
+                public int Run(int n)
+                {
+                    Func<int, int> f = MathHelpers.Factorial;
+                    return f(n);
+                }
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("function inline$factorial(");
+        await Assert.That(output).Contains("inline$factorial(n - 1)");
+        await Assert.That(output).DoesNotContain("MathHelpers.");
+    }
+
+    [Test]
+    public async Task Inline_NonRecursive_StillEmitsArrow()
+    {
+        // Regression guard: without direct self-reference, the lowered
+        // body keeps the arrow form (#193 step 2/3 unchanged).
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            [assembly: TranspileAssembly]
+
+            public static class MathHelpers
+            {
+                [Inline]
+                public static int Squared(int x) => x * x;
+            }
+
+            public class Caller
+            {
+                public int Run(int n) => MathHelpers.Squared(n);
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("(x: number) => x * x");
+        await Assert.That(output).DoesNotContain("function inline$");
+    }
+
+    [Test]
     public async Task Inline_SubstituteMode_BetaReducesArgsTextually()
     {
         var result = TranspileHelper.Transpile(

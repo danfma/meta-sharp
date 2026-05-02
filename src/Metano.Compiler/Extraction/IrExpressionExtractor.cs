@@ -2123,12 +2123,32 @@ public sealed class IrExpressionExtractor
         SemanticModel semanticModel
     )
     {
+        // Direct recursion: the body references its own declaring symbol.
+        // The erased declaration leaves no callable name in TS, so the
+        // lambda must lower as a JavaScript named function expression
+        // and rewrite self-references inside the body to the internal
+        // name. Indirect recursion stays out of scope — `_inlineExpanding`
+        // already breaks A→B→A cycles at the inner expansion site. (#194)
+        var selfName = DetectsDirectInlineRecursion(declaringMethod, bodyExpr, semanticModel)
+            ? $"inline${SymbolHelper.ToCamelCase(declaringMethod.Name)}"
+            : null;
+
+        IReadOnlyDictionary<ISymbol, IrExpression>? bodySubs = null;
+        if (selfName is not null)
+        {
+            var subs = new Dictionary<ISymbol, IrExpression>(SymbolEqualityComparer.Default)
+            {
+                [declaringMethod.OriginalDefinition] = new IrIdentifier(selfName),
+            };
+            bodySubs = subs;
+        }
+
         var bodyExtractor = new IrExpressionExtractor(
             semanticModel,
             _originResolver,
             _target,
             _inlineExpanding,
-            inlineParameterSubs: null
+            inlineParameterSubs: bodySubs
         );
         var bodyIr = bodyExtractor.Extract(bodyExpr);
 
@@ -2148,7 +2168,36 @@ public sealed class IrExpressionExtractor
             ? null
             : IrTypeRefMapper.Map(declaringMethod.ReturnType, _originResolver, _target);
 
-        return new IrLambdaExpression(parameters, returnType, [new IrReturnStatement(bodyIr)]);
+        return new IrLambdaExpression(
+            parameters,
+            returnType,
+            [new IrReturnStatement(bodyIr)],
+            Name: selfName
+        );
+    }
+
+    private static bool DetectsDirectInlineRecursion(
+        IMethodSymbol declaringMethod,
+        ExpressionSyntax bodyExpr,
+        SemanticModel semanticModel
+    )
+    {
+        var target = declaringMethod.OriginalDefinition;
+        foreach (var node in bodyExpr.DescendantNodesAndSelf())
+        {
+            ISymbol? symbol = node switch
+            {
+                IdentifierNameSyntax id => semanticModel.GetSymbolInfo(id).Symbol,
+                MemberAccessExpressionSyntax ma => semanticModel.GetSymbolInfo(ma).Symbol,
+                _ => null,
+            };
+            if (
+                symbol is IMethodSymbol method
+                && SymbolEqualityComparer.Default.Equals(method.OriginalDefinition, target)
+            )
+                return true;
+        }
+        return false;
     }
 
     private static ExpressionSyntax? TryFindInlineMethodBody(IMethodSymbol method)

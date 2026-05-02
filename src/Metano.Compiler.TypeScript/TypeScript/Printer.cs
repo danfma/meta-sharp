@@ -1166,6 +1166,22 @@ public sealed class Printer(string indent = "  ")
                 }
                 break;
 
+            case TsNamedFunctionExpression named:
+                if (named.Async)
+                    _sb.Write("async ");
+                _sb.Write("function ");
+                _sb.Write(named.Name);
+                _sb.Write("(");
+                PrintParameters(named.Parameters);
+                _sb.Write(")");
+                if (named.ReturnType is not null)
+                {
+                    _sb.Write(": ");
+                    PrintType(named.ReturnType);
+                }
+                _sb.WriteBlock(() => PrintStatementList(named.Body));
+                break;
+
             case TsUnaryExpression unary:
                 _sb.Write(unary.Operator);
                 PrintExpression(unary.Operand);

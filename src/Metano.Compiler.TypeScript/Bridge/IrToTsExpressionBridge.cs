@@ -402,6 +402,23 @@ public static class IrToTsExpressionBridge
             ))
             .ToList();
         var body = IrToTsStatementBridge.MapBody(lambda.Body, bclRegistry);
+        // Named function expression: emitted when the lambda is the
+        // lowered body of a directly-recursive [Inline] method (#194).
+        // The internal name lets the body call itself without relying
+        // on the erased declaration's identifier.
+        if (lambda.Name is { Length: > 0 } fnName)
+        {
+            var returnType = lambda.ReturnType is null
+                ? null
+                : IrToTsTypeMapper.Map(lambda.ReturnType);
+            return new TsNamedFunctionExpression(
+                fnName,
+                parameters,
+                returnType,
+                body,
+                Async: lambda.IsAsync
+            );
+        }
         var arrow = new TsArrowFunction(parameters, body, Async: lambda.IsAsync);
         // Lambdas bound to a `[This]`-bearing delegate: wrap the arrow
         // in a runtime `bindReceiver(...)` call. The helper's
