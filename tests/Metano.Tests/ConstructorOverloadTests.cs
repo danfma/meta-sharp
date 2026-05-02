@@ -40,8 +40,11 @@ public class ConstructorOverloadTests
         );
 
         var output = result["point.ts"];
-        // Should have overload signatures
-        await Assert.That(output).Contains("constructor(public x: number, public y: number);");
+        // Overload signatures are declaration-only — TS rejects parameter-
+        // property modifiers (`public x`) on overload sigs, so the bridge
+        // emits the plain `x: number` form on each signature and lets the
+        // dispatcher impl produce the runtime members.
+        await Assert.That(output).Contains("constructor(x: number, y: number);");
         await Assert.That(output).Contains("constructor();");
         // Should have dispatcher
         await Assert.That(output).Contains("...args: unknown[]");
@@ -109,11 +112,10 @@ public class ConstructorOverloadTests
         );
 
         var output = result["config.ts"];
-        // Three overload signatures
-        await Assert
-            .That(output)
-            .Contains("constructor(public name: string, public value: number);");
-        await Assert.That(output).Contains("constructor(public name: string);");
+        // Three overload signatures (declaration-only — no parameter-property
+        // modifiers, those would be a TS syntax error on an overload sig).
+        await Assert.That(output).Contains("constructor(name: string, value: number);");
+        await Assert.That(output).Contains("constructor(name: string);");
         await Assert.That(output).Contains("constructor();");
         await Assert.That(output).Contains("...args: unknown[]");
     }
@@ -170,5 +172,117 @@ public class ConstructorOverloadTests
         var output = result["box.ts"];
         await Assert.That(output).Contains("this._value = value");
         await Assert.That(output).Contains("this._value = other._value");
+    }
+
+    [Test]
+    public async Task DerivedWithOverloads_NonOverloadedBase_EachBranchCallsSuper()
+    {
+        // #25.2: derived class with two ctors over a base that has a single
+        // ctor — each dispatcher branch must emit the matching super(...)
+        // before inlining the body.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Base
+            {
+                public Base(int n) { N = n; }
+                public int N { get; }
+            }
+
+            [Transpile]
+            public class Derived : Base
+            {
+                public Derived(int n) : base(n) { Tag = "n"; }
+                public Derived(string s) : base(s.Length) { Tag = s; }
+                public string Tag { get; }
+            }
+            """
+        );
+
+        var output = result["derived.ts"];
+        await Assert.That(output).Contains("extends Base");
+        // Both branches reach a super(...) call before assigning the
+        // derived-side property.
+        await Assert.That(output).Contains("super(n)");
+        await Assert.That(output).Contains("super(s.length)");
+        await Assert.That(output).Contains("this.tag = \"n\"");
+        await Assert.That(output).Contains("this.tag = s");
+    }
+
+    [Test]
+    public async Task DerivedWithOverloads_OverloadedBase_SuperReachesBaseDispatcher()
+    {
+        // #25.2: derived's super(...) lands at the base's public constructor —
+        // which is itself the dispatcher signature `(...args: unknown[])` when
+        // the base has overloads. The runtime branch resolves at the base's
+        // entry. This test pins the structural shape: both classes get their
+        // own dispatcher and the derived branches call super with raw args.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public class Base
+            {
+                public Base(int n) { Kind = "n"; }
+                public Base(string s) { Kind = s; }
+                public string Kind { get; }
+            }
+
+            [Transpile]
+            public class Derived : Base
+            {
+                public Derived(int n) : base(n) { Tag = n.ToString(); }
+                public Derived(string s) : base(s) { Tag = s; }
+                public string Tag { get; }
+            }
+            """
+        );
+
+        var baseTs = result["base.ts"];
+        var derivedTs = result["derived.ts"];
+
+        // Base carries the dispatcher.
+        await Assert.That(baseTs).Contains("constructor(...args: unknown[])");
+        await Assert.That(baseTs).Contains("isInt32(args[0])");
+        await Assert.That(baseTs).Contains("isString(args[0])");
+
+        // Derived carries its own dispatcher and forwards args to super.
+        await Assert.That(derivedTs).Contains("extends Base");
+        await Assert.That(derivedTs).Contains("constructor(...args: unknown[])");
+        await Assert.That(derivedTs).Contains("super(n)");
+        await Assert.That(derivedTs).Contains("super(s)");
+    }
+
+    [Test]
+    public async Task DerivedWithOverloads_RecordBase_SuperHonorsPrimaryCtorShape()
+    {
+        // #25.2: derived record's super(...) targets a primary-ctor record
+        // base. The record's primary ctor has parameter-property modifiers;
+        // the derived branches must emit super(value) with the matching arg
+        // count regardless.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public record BaseRec(int Value);
+
+            [Transpile]
+            public record Derived : BaseRec
+            {
+                public Derived(int value) : base(value) { Tag = "n"; }
+                public Derived(string s) : base(s.Length) { Tag = s; }
+                public string Tag { get; init; } = "";
+            }
+            """
+        );
+
+        var derivedTs = result["derived.ts"];
+        await Assert.That(derivedTs).Contains("extends BaseRec");
+        await Assert.That(derivedTs).Contains("super(value)");
+        await Assert.That(derivedTs).Contains("super(s.length)");
     }
 }

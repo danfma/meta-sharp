@@ -629,14 +629,18 @@ public sealed class Printer(string indent = "  ")
         // In TS, constructor params without any modifier (public/readonly/etc) don't create properties.
         // Emit explicit "public" when not readonly but the param should still be a property.
         // None = plain parameter, no property created (used for exception constructors).
-        if (p.Accessibility == TsAccessibility.None)
+        // Rest parameters (`...args`) cannot carry parameter-property modifiers
+        // — TS rejects `public ...args` / `readonly ...args` as a syntax
+        // error. Skip the modifier prefix for those defensively in case the
+        // bridge wired one up.
+        if (p.Rest || p.Accessibility == TsAccessibility.None)
         { /* no modifier — plain parameter */
         }
         else if (p.Accessibility == TsAccessibility.Public && !p.Readonly)
             _sb.Write("public ");
         else
             PrintAccessibility(p.Accessibility);
-        if (p.Readonly)
+        if (p.Readonly && !p.Rest)
             _sb.Write("readonly ");
         if (p.Rest)
             _sb.Write("...");

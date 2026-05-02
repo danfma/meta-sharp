@@ -43,11 +43,17 @@ public static class IrToTsConstructorDispatcherBridge
         // the legacy dispatcher ordering.
         var sorted = all.OrderByDescending(c => c.Parameters.Count).ToList();
 
+        // Overload signatures are declaration-only — they do not introduce
+        // parameter properties. Set Accessibility=None so the printer emits
+        // a plain `n: number` instead of the (invalid-on-overload-sig)
+        // `public n: number` form. Same applies to the rest-args impl
+        // parameter further down. (#25.2)
         var overloads = sorted
             .Select(c => new TsConstructorOverload(
                 c.Parameters.Select(p => new TsConstructorParam(
                         TypeScriptNaming.ToCamelCase(p.Parameter.Name),
                         IrToTsTypeMapper.Map(p.Parameter.Type),
+                        Accessibility: TsAccessibility.None,
                         Rest: p.Parameter.IsParams
                     ))
                     .ToList()
@@ -70,7 +76,14 @@ public static class IrToTsConstructorDispatcherBridge
         );
 
         return new TsConstructor(
-            [new TsConstructorParam("args", new TsNamedType("unknown[]"), Rest: true)],
+            [
+                new TsConstructorParam(
+                    "args",
+                    new TsNamedType("unknown[]"),
+                    Accessibility: TsAccessibility.None,
+                    Rest: true
+                ),
+            ],
             body,
             overloads
         );
