@@ -81,6 +81,19 @@ public static class TranspilerHost
 
         var emitSw = Stopwatch.StartNew();
 
+        if (options.DryRun)
+        {
+            // Skip every disk write — print a preflight summary instead so
+            // CI checks and exploratory runs can validate the pipeline
+            // without touching the output tree.
+            PrintDryRunSummary(outputDir, output.Files);
+            emitSw.Stop();
+            totalSw.Stop();
+            if (options.ShowTimings)
+                Console.WriteLine($"  Total: {totalSw.ElapsedMilliseconds}ms");
+            return new TranspileResult(true, output.Files, warningCount, 0);
+        }
+
         await EmitFilesAsync(outputDir, output.Files, options.Clean, options.FilePrefix);
         emitSw.Stop();
         totalSw.Stop();
@@ -94,6 +107,30 @@ public static class TranspilerHost
         Console.WriteLine($"Metano: {output.Files.Count} file(s) generated in {outputDir}");
 
         return new TranspileResult(true, output.Files, warningCount, 0);
+    }
+
+    private static void PrintDryRunSummary(string outputDir, IReadOnlyList<GeneratedFile> files)
+    {
+        var totalLines = 0;
+        foreach (var file in files)
+            totalLines += CountLines(file.Content);
+
+        Console.WriteLine(
+            $"Metano (dry run): {files.Count} file(s), {totalLines} line(s) would be written to {outputDir}"
+        );
+        foreach (var file in files)
+            Console.WriteLine($"  Would write: {file.RelativePath}");
+    }
+
+    private static int CountLines(string content)
+    {
+        if (content.Length == 0)
+            return 0;
+        var count = 1;
+        for (var i = 0; i < content.Length; i++)
+            if (content[i] == '\n')
+                count++;
+        return content[^1] == '\n' ? count - 1 : count;
     }
 
     private static async Task EmitFilesAsync(

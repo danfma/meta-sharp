@@ -9,5 +9,6 @@ public sealed record TranspileOptions(
     string OutputDir,
     bool ShowTimings = false,
     bool Clean = false,
-    string? FilePrefix = null
+    string? FilePrefix = null,
+    bool DryRun = false
 );

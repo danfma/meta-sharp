@@ -19,6 +19,7 @@ public class Commands
     /// <param name="namespaceBarrels">Emit an additional src/index.ts root barrel mirroring the C# namespace hierarchy via `export namespace` blocks (opt-in; see ADR-0006).</param>
     /// <param name="stripInterfacePrefix">Drop the C# `I` prefix from generated interface names when it is followed by another uppercase letter (opt-in). Collisions with sibling types in the same namespace keep the prefix and emit MS0017.</param>
     /// <param name="filePrefix">Opaque text written verbatim at the top of every generated file, followed by a single newline. Use to inject formatter / lint directives (e.g., a Biome `biome-ignore-all` block, a Prettier `// @prettier-ignore`, a `// @generated` provenance marker).</param>
+    /// <param name="dryRun">Run the full pipeline but do NOT write any files. Print a preflight summary (file count + total line count + per-file paths) instead. Useful for CI preflight checks and exploratory runs. Skips the package.json update too.</param>
     [Command("")]
     public async Task Transpile(
         string project,
@@ -31,7 +32,8 @@ public class Commands
         bool skipPackageJson = false,
         bool namespaceBarrels = false,
         bool stripInterfacePrefix = false,
-        string? filePrefix = null
+        string? filePrefix = null,
+        bool dryRun = false
     )
     {
         var target = new TypeScriptTarget
@@ -45,7 +47,8 @@ public class Commands
             OutputDir: output,
             ShowTimings: time,
             Clean: clean,
-            FilePrefix: filePrefix
+            FilePrefix: filePrefix,
+            DryRun: dryRun
         );
 
         var result = await TranspilerHost.RunAsync(options, target);
@@ -58,7 +61,8 @@ public class Commands
 
         // Target-specific post-emit: write/merge the consumer's package.json so the
         // generated barrels are exposed via subpath imports/exports.
-        if (!skipPackageJson && target.LastSourceFiles.Count > 0)
+        // Dry-run skips the disk write to keep "no files modified" honest.
+        if (!skipPackageJson && !dryRun && target.LastSourceFiles.Count > 0)
         {
             var outputDir = Path.GetFullPath(output);
 
