@@ -4,6 +4,7 @@ using Metano.Compiler;
 using Metano.Compiler.Diagnostics;
 using Metano.Compiler.Extraction;
 using Metano.Compiler.IR;
+using Metano.TypeScript.AST;
 using Metano.TypeScript.Bridge;
 using Microsoft.CodeAnalysis;
 
@@ -306,9 +307,9 @@ public sealed class TypeScriptTransformContext(
     /// </summary>
     public IReadOnlyDictionary<
         string,
-        IrTranspilableTypeRef
+        NoContainerExport
     > NoContainerFunctionExports { get; init; } =
-        new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
+        new Dictionary<string, NoContainerExport>(StringComparer.Ordinal);
 
     /// <summary>
     /// Per-source-file synthesized alias map keyed by the absolute file
@@ -459,3 +460,17 @@ public sealed class TypeScriptTransformContext(
     public IrTypeOriginResolver OriginResolver =>
         _originResolver ??= IrTypeOriginResolverFactory.Create(TypeMapping!);
 }
+
+/// <summary>
+/// Bundle keyed by a flattened <c>[NoContainer]</c> function name (the
+/// camelCased member identifier the consumer file references). Carries
+/// the owning type's transpilable shape (namespace / file name) for
+/// own-assembly resolution and an optional <see cref="TsTypeOrigin"/>
+/// for cross-assembly entries — the latter routes the consumer's import
+/// line through the originating <c>[EmitPackage]</c> instead of a
+/// project-relative path.
+/// </summary>
+public sealed record NoContainerExport(
+    IrTranspilableTypeRef Owner,
+    TsTypeOrigin? CrossPackageOrigin = null
+);

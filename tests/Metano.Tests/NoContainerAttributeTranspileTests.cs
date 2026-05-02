@@ -188,6 +188,50 @@ public class NoContainerAttributeTranspileTests
     }
 
     [Test]
+    public async Task NoContainer_CrossAssembly_StaticMethodCall_EmitsImport()
+    {
+        // #178: a [NoContainer] static class shipped from a referenced
+        // [EmitPackage] assembly must surface its flattened call sites at
+        // the consumer's import line. Without cross-assembly scanning, the
+        // consumer file calls `foo(1)` but emits no import for it.
+        var result = TranspileHelper.TranspileWithLibrary(
+            """
+            using Metano.Annotations;
+
+            [assembly: TranspileAssembly]
+            [assembly: EmitPackage("ui-lib")]
+
+            namespace UiLib
+            {
+                [NoContainer]
+                public static class UI
+                {
+                    public static int Foo(int x) => x;
+                }
+            }
+            """,
+            """
+            using UiLib;
+
+            [assembly: TranspileAssembly]
+
+            public class Caller
+            {
+                public int Use() => UI.Foo(1);
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("foo(1)");
+        await Assert.That(output).Contains("from \"ui-lib");
+        await Assert.That(output).Contains("foo");
+        // Flattened call site (no qualifier).
+        await Assert.That(output).DoesNotContain("UI.foo");
+        await Assert.That(output).DoesNotContain("UI.Foo");
+    }
+
+    [Test]
     public async Task NoContainer_WithTranspile_EmitsModuleStyle()
     {
         // `[Transpile]` forces discovery inside binding projects that

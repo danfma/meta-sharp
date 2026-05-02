@@ -395,11 +395,23 @@ public sealed class ImportCollector(
                 // fall through to the transpilable-type branch
             }
             else if (
-                _context.NoContainerFunctionExports.TryGetValue(typeName, out var erasableOwner)
+                _context.NoContainerFunctionExports.TryGetValue(typeName, out var erasableExport)
                 && importedNames.Add(typeName)
             )
             {
+                // Cross-assembly entry — route through the originating
+                // [EmitPackage] subpath instead of a project-relative file path.
+                if (erasableExport.CrossPackageOrigin is { } crossOrigin)
+                {
+                    var crossPath =
+                        crossOrigin.SubPath.Length > 0
+                            ? $"{crossOrigin.PackageName}/{crossOrigin.SubPath}"
+                            : crossOrigin.PackageName;
+                    AddLocal(crossPath, typeName, typeOnly: false);
+                    continue;
+                }
                 // Same emit target — no import needed.
+                var erasableOwner = erasableExport.Owner;
                 if (
                     erasableOwner.Namespace == currentNs
                     && erasableOwner.FileName == currentFileName

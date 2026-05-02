@@ -202,6 +202,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             transpilableTypesDict,
             ir.BclExports,
             ir.ExternalImports,
+            ir.CrossAssemblyOrigins,
             compilation,
             _diagnostics.Add
         );
@@ -1146,13 +1147,14 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
     /// so both halves agree on the function identifier.
     /// </summary>
     private static (
-        IReadOnlyDictionary<string, IrTranspilableTypeRef> Exports,
+        IReadOnlyDictionary<string, NoContainerExport> Exports,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> SynthesizedAliasesByFile
     ) BuildNoContainerFunctionExports(
         IReadOnlyList<INamedTypeSymbol> transpilableTypes,
         IReadOnlyDictionary<string, IrTranspilableTypeRef> transpilableTypesDict,
         IReadOnlyDictionary<string, IrBclExport> bclExports,
         IReadOnlyDictionary<string, IrExternalImport> externalImports,
+        IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
         Compilation compilation,
         Action<MetanoDiagnostic> reportDiagnostic
     )
@@ -1164,7 +1166,7 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
             externalImports
         );
 
-        var exports = new Dictionary<string, IrTranspilableTypeRef>(StringComparer.Ordinal);
+        var exports = new Dictionary<string, NoContainerExport>(StringComparer.Ordinal);
         var claimedFactoryNames = new Dictionary<string, IMethodSymbol>(StringComparer.Ordinal);
         var synthesizedAliasesByFile = new Dictionary<string, Dictionary<string, string>>(
             StringComparer.Ordinal
@@ -1200,10 +1202,47 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 )
                     continue;
 
-                exports.Add(fnName, typeRef);
+                exports.Add(fnName, new NoContainerExport(typeRef));
                 claimedFactoryNames.Add(fnName, member);
             }
         }
+
+        // Cross-assembly [NoContainer] static classes shipped from a
+        // referenced [TranspileAssembly] + [EmitPackage] library. The
+        // consumer's flatten lowers their static-method calls to bare
+        // identifiers (`UI.Foo(x)` → `foo(x)`), but the type itself is
+        // not in `transpilableTypesDict` (own-assembly only). Without
+        // this scan, the consumer file emits the call but never imports
+        // the function — `tsc` errors. The per-assembly filter mirrors
+        // `CSharpSourceFrontend.EnumerateTranspilableReferencedAssemblies`.
+        // (#178)
+        var emitTargetValue = (int)TargetLanguage.TypeScript.ToEmitTarget();
+        foreach (var reference in compilation.References)
+        {
+            if (compilation.GetAssemblyOrModuleSymbol(reference) is not IAssemblySymbol asm)
+                continue;
+            if (SymbolEqualityComparer.Default.Equals(asm, compilation.Assembly))
+                continue;
+
+            var hasTranspileAssembly = asm.GetAttributes()
+                .Any(a =>
+                    a.AttributeClass?.Name is "TranspileAssemblyAttribute" or "TranspileAssembly"
+                );
+            if (!hasTranspileAssembly)
+                continue;
+
+            var packageInfo = SymbolHelper.GetEmitPackageInfo(asm, emitTargetValue);
+            if (packageInfo is null)
+                continue;
+
+            CollectTopLevelNoContainerExports(
+                asm.GlobalNamespace,
+                packageInfo,
+                crossAssemblyOrigins,
+                exports
+            );
+        }
+
         return (
             exports,
             synthesizedAliasesByFile.ToDictionary(
@@ -1212,6 +1251,65 @@ public sealed class TypeTransformer(IrCompilation ir, Compilation compilation)
                 StringComparer.Ordinal
             )
         );
+    }
+
+    private static void CollectTopLevelNoContainerExports(
+        INamespaceSymbol namespaceSymbol,
+        SymbolHelper.EmitPackageInfo packageInfo,
+        IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
+        Dictionary<string, NoContainerExport> exports
+    )
+    {
+        foreach (var type in namespaceSymbol.GetTypeMembers())
+            VisitCrossAssemblyType(type, packageInfo, crossAssemblyOrigins, exports);
+
+        foreach (var nestedNs in namespaceSymbol.GetNamespaceMembers())
+            CollectTopLevelNoContainerExports(nestedNs, packageInfo, crossAssemblyOrigins, exports);
+    }
+
+    private static void VisitCrossAssemblyType(
+        INamedTypeSymbol type,
+        SymbolHelper.EmitPackageInfo packageInfo,
+        IReadOnlyDictionary<string, IrTypeOrigin> crossAssemblyOrigins,
+        Dictionary<string, NoContainerExport> exports
+    )
+    {
+        if (type.DeclaredAccessibility == Accessibility.Public && SymbolHelper.HasNoContainer(type))
+        {
+            var originKey = type.GetCrossAssemblyOriginKey();
+            if (crossAssemblyOrigins.TryGetValue(originKey, out var typeOrigin))
+            {
+                var subPath = PathNaming.ComputeSubPath(
+                    typeOrigin.AssemblyRootNamespace ?? "",
+                    typeOrigin.Namespace ?? "",
+                    SymbolHelper.GetNameOverride(type, TargetLanguage.TypeScript) ?? type.Name
+                );
+                var origin = new TsTypeOrigin(packageInfo.Name, subPath);
+                var stub = new IrTranspilableTypeRef(
+                    Key: originKey,
+                    TsName: SymbolHelper.GetNameOverride(type, TargetLanguage.TypeScript)
+                        ?? type.Name,
+                    Namespace: typeOrigin.Namespace ?? "",
+                    FileName: SymbolHelper.ToKebabCase(
+                        SymbolHelper.GetNameOverride(type, TargetLanguage.TypeScript) ?? type.Name
+                    ),
+                    IsStringEnum: false
+                );
+                foreach (var member in type.GetMembers().OfType<IMethodSymbol>())
+                {
+                    if (!IsExportableNoContainerMethod(member))
+                        continue;
+                    var fnName = ResolveNoContainerFunctionName(member);
+                    // First-wins: own-assembly entries already registered take priority.
+                    if (exports.ContainsKey(fnName))
+                        continue;
+                    exports.Add(fnName, new NoContainerExport(stub, origin));
+                }
+            }
+        }
+
+        foreach (var nested in type.GetTypeMembers())
+            VisitCrossAssemblyType(nested, packageInfo, crossAssemblyOrigins, exports);
     }
 
     /// <summary>
