@@ -902,6 +902,20 @@ public sealed class ImportCollector(
                     names.Add(bareId.Name);
                     valueNames.Add(bareId.Name);
                 }
+                // Method-group reference to a [NoContainer] static method lowers
+                // to a bare lowercase identifier (delegate position, lambda
+                // capture, callback arg). The resolution loop below routes the
+                // name through `NoContainerFunctionExports` to emit the right
+                // import line; without registering it here the loop never sees
+                // it. (#179)
+                else if (
+                    bareId.Name.Length > 0
+                    && _context.NoContainerFunctionExports.ContainsKey(bareId.Name)
+                )
+                {
+                    names.Add(bareId.Name);
+                    valueNames.Add(bareId.Name);
+                }
                 break;
             case TsNewExpression newExpr:
                 if (newExpr.Callee is TsIdentifier id)

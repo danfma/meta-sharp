@@ -154,6 +154,40 @@ public class NoContainerAttributeTranspileTests
     }
 
     [Test]
+    public async Task NoContainer_MethodGroupReference_EmitsImport()
+    {
+        // #179: a method-group reference to a [NoContainer] static method
+        // (delegate position, lambda capture, callback arg) lowers to a
+        // bare lowercase identifier. ImportCollector's TsIdentifier branch
+        // used to filter by `char.IsUpper(name[0])`, so the lowercase name
+        // never reached the import line — `tsc` then errored on the
+        // unresolved identifier. The branch must accept lowercase when the
+        // name matches a known NoContainer function export.
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+            using Metano.Annotations;
+
+            [Transpile, NoContainer]
+            public static class Reducers
+            {
+                public static int Increment(int x) => x + 1;
+            }
+
+            [Transpile]
+            public class App
+            {
+                public Func<int, int> Bind() => Reducers.Increment;
+            }
+            """
+        );
+
+        var output = result["app.ts"];
+        await Assert.That(output).Contains("return increment;");
+        await Assert.That(output).Contains("import { increment } from \"./reducers\"");
+    }
+
+    [Test]
     public async Task NoContainer_WithTranspile_EmitsModuleStyle()
     {
         // `[Transpile]` forces discovery inside binding projects that
