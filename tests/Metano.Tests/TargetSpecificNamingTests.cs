@@ -186,6 +186,102 @@ public class TargetSpecificNamingTests
     }
 
     [Test]
+    public async Task TargetSpecificName_PropagatesThroughMethodReturnType()
+    {
+        // #170: a class renamed via [Name(TargetLanguage.TypeScript, "MyColumn")]
+        // must surface the new name at every type-reference position — not just
+        // at construction sites. Method return types, parameter types, generic
+        // arguments, and constraints all flow through IrTypeRefMapper, which
+        // must thread the active target so the rename hits BuildQualifiedName.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App
+            {
+                [Transpile, Name(TargetLanguage.TypeScript, "MyColumn")]
+                public class Column { }
+
+                [Transpile]
+                public class Caller
+                {
+                    public Column Make() => new Column();
+                    public void Take(Column c) { }
+                }
+            }
+            """
+        );
+
+        var caller = result["caller.ts"];
+        // Return type position
+        await Assert.That(caller).Contains("make(): MyColumn");
+        await Assert.That(caller).DoesNotContain("make(): Column");
+        // Parameter type position
+        await Assert.That(caller).Contains("c: MyColumn");
+        await Assert.That(caller).DoesNotContain("c: Column");
+        // Construction (already worked, regression guard)
+        await Assert.That(caller).Contains("new MyColumn()");
+        // Import line carries the renamed identifier
+        await Assert.That(caller).Contains("import { MyColumn }");
+    }
+
+    [Test]
+    public async Task TargetSpecificName_PropagatesThroughGenericTypeArgument()
+    {
+        // Same fix scope: a renamed class used as the type argument of a
+        // generic container must carry the rename. Without this, an
+        // `IList<Column>` return type lowers to `Array<Column>` while the
+        // import line resolves only `MyColumn`.
+        var result = TranspileHelper.Transpile(
+            """
+            using System.Collections.Generic;
+
+            namespace App
+            {
+                [Transpile, Name(TargetLanguage.TypeScript, "MyColumn")]
+                public class Column { }
+
+                [Transpile]
+                public class Caller
+                {
+                    public Dictionary<string, Column> All() => new Dictionary<string, Column>();
+                }
+            }
+            """
+        );
+
+        var caller = result["caller.ts"];
+        await Assert.That(caller).Contains("Map<string, MyColumn>");
+        await Assert.That(caller).DoesNotContain("Map<string, Column>");
+    }
+
+    [Test]
+    public async Task TargetSpecificName_PropagatesThroughInterfaceMember()
+    {
+        // Interfaces use IrInterfaceExtractor (separate from IrMethodExtractor);
+        // the rename must propagate through both extractor families.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App
+            {
+                [Transpile, Name(TargetLanguage.TypeScript, "MyColumn")]
+                public class Column { }
+
+                [Transpile]
+                public interface IFactory
+                {
+                    Column Build();
+                    void Receive(Column c);
+                }
+            }
+            """
+        );
+
+        var iface = result["i-factory.ts"];
+        await Assert.That(iface).Contains("build(): MyColumn");
+        await Assert.That(iface).Contains("c: MyColumn");
+        await Assert.That(iface).DoesNotContain(": Column");
+    }
+
+    [Test]
     public async Task TargetSpecificIgnore_SkipsMemberOnMatchingTargetOnly()
     {
         // `[Ignore(TargetLanguage.Dart)]` on a member must not affect the TS

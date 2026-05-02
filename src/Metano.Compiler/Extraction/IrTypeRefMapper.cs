@@ -49,7 +49,7 @@ public static class IrTypeRefMapper
             } nullable
         )
         {
-            return new IrNullableTypeRef(Map(nullable.TypeArguments[0], originResolver));
+            return new IrNullableTypeRef(Map(nullable.TypeArguments[0], originResolver, target));
         }
 
         // Nullable reference types (string?, Money?, etc.)
@@ -59,7 +59,7 @@ public static class IrTypeRefMapper
         )
         {
             return new IrNullableTypeRef(
-                Map(type.WithNullableAnnotation(NullableAnnotation.NotAnnotated), originResolver)
+                Map(type.WithNullableAnnotation(NullableAnnotation.NotAnnotated), originResolver, target)
             );
         }
 
@@ -104,7 +104,7 @@ public static class IrTypeRefMapper
             {
                 var inner =
                     named.TypeArguments.Length > 0
-                        ? Map(named.TypeArguments[0], originResolver)
+                        ? Map(named.TypeArguments[0], originResolver, target)
                         : new IrPrimitiveTypeRef(IrPrimitive.Void);
                 return new IrPromiseTypeRef(inner);
             }
@@ -140,13 +140,13 @@ public static class IrTypeRefMapper
             // Dictionary-like → Map
             if (named.IsDictionaryLike() && named.TypeArguments.Length >= 2)
                 return new IrMapTypeRef(
-                    Map(named.TypeArguments[0], originResolver),
-                    Map(named.TypeArguments[1], originResolver)
+                    Map(named.TypeArguments[0], originResolver, target),
+                    Map(named.TypeArguments[1], originResolver, target)
                 );
 
             // Set-like → Set
             if (named.IsSetLike() && named.TypeArguments.Length > 0)
-                return new IrSetTypeRef(Map(named.TypeArguments[0], originResolver));
+                return new IrSetTypeRef(Map(named.TypeArguments[0], originResolver, target));
 
             // KeyValuePair<K,V> → KeyValuePair
             if (
@@ -154,8 +154,8 @@ public static class IrTypeRefMapper
                 && named.TypeArguments.Length >= 2
             )
                 return new IrKeyValuePairTypeRef(
-                    Map(named.TypeArguments[0], originResolver),
-                    Map(named.TypeArguments[1], originResolver)
+                    Map(named.TypeArguments[0], originResolver, target),
+                    Map(named.TypeArguments[1], originResolver, target)
                 );
 
             // Tuple / ValueTuple
@@ -169,14 +169,14 @@ public static class IrTypeRefMapper
                 && named.TypeArguments.Length > 0
             )
                 return new IrTupleTypeRef(
-                    named.TypeArguments.Select(a => Map(a, originResolver)).ToList()
+                    named.TypeArguments.Select(a => Map(a, originResolver, target)).ToList()
                 );
 
             // IGrouping<K,V>
             if (fullName.StartsWith("System.Linq.IGrouping") && named.TypeArguments.Length >= 2)
                 return new IrGroupingTypeRef(
-                    Map(named.TypeArguments[0], originResolver),
-                    Map(named.TypeArguments[1], originResolver)
+                    Map(named.TypeArguments[0], originResolver, target),
+                    Map(named.TypeArguments[1], originResolver, target)
                 );
 
             // IEnumerable<T> / IReadOnlyCollection<T> → Iterable.
@@ -214,7 +214,7 @@ public static class IrTypeRefMapper
                         BuildNamedTypeSemantics(named, target)
                     );
                 }
-                return MapDelegateType(named, originResolver);
+                return MapDelegateType(named, originResolver, target);
             }
 
             // User-defined named types: may carry a cross-package origin.
@@ -247,7 +247,7 @@ public static class IrTypeRefMapper
 
         // Array types
         if (type is IArrayTypeSymbol array)
-            return new IrArrayTypeRef(Map(array.ElementType, originResolver));
+            return new IrArrayTypeRef(Map(array.ElementType, originResolver, target));
 
         return new IrUnknownTypeRef();
     }
@@ -257,7 +257,8 @@ public static class IrTypeRefMapper
     /// </summary>
     public static IrTypeRef MapForGeneratorReturn(
         ITypeSymbol type,
-        IrTypeOriginResolver? originResolver = null
+        IrTypeOriginResolver? originResolver = null,
+        Metano.Annotations.TargetLanguage? target = null
     )
     {
         if (type is INamedTypeSymbol named)
@@ -271,11 +272,11 @@ public static class IrTypeRefMapper
                 && named.TypeArguments.Length > 0
             )
             {
-                return new IrGeneratorTypeRef(Map(named.TypeArguments[0], originResolver));
+                return new IrGeneratorTypeRef(Map(named.TypeArguments[0], originResolver, target));
             }
         }
 
-        return Map(type, originResolver);
+        return Map(type, originResolver, target);
     }
 
     /// <summary>
@@ -486,7 +487,8 @@ public static class IrTypeRefMapper
 
     private static IrFunctionTypeRef MapDelegateType(
         INamedTypeSymbol delegateType,
-        IrTypeOriginResolver? originResolver
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
     )
     {
         var invoke = delegateType.GetMembers("Invoke").OfType<IMethodSymbol>().FirstOrDefault();
@@ -504,17 +506,21 @@ public static class IrTypeRefMapper
         var sourceParameters = invoke.Parameters;
         if (sourceParameters.Length > 0 && SymbolHelper.HasThis(sourceParameters[0]))
         {
-            thisType = Map(sourceParameters[0].Type, originResolver);
+            thisType = Map(sourceParameters[0].Type, originResolver, target);
             sourceParameters = sourceParameters.RemoveAt(0);
         }
 
         var parameters = sourceParameters
-            .Select(p => new IrParameter(p.Name, Map(p.Type, originResolver), IsParams: p.IsParams))
+            .Select(p => new IrParameter(
+                p.Name,
+                Map(p.Type, originResolver, target),
+                IsParams: p.IsParams
+            ))
             .ToList();
 
         var returnType = invoke.ReturnsVoid
             ? new IrPrimitiveTypeRef(IrPrimitive.Void)
-            : Map(invoke.ReturnType, originResolver);
+            : Map(invoke.ReturnType, originResolver, target);
 
         return new IrFunctionTypeRef(parameters, returnType, thisType);
     }

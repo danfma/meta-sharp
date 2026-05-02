@@ -29,15 +29,15 @@ public static class IrInterfaceExtractor
             switch (member)
             {
                 case IPropertySymbol prop:
-                    members.Add(ExtractProperty(prop, originResolver));
+                    members.Add(ExtractProperty(prop, originResolver, target));
                     break;
 
                 case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary:
-                    members.Add(ExtractMethod(method, originResolver));
+                    members.Add(ExtractMethod(method, originResolver, target));
                     break;
 
                 case IEventSymbol evt:
-                    members.Add(ExtractEvent(evt, originResolver));
+                    members.Add(ExtractEvent(evt, originResolver, target));
                     break;
             }
         }
@@ -46,13 +46,14 @@ public static class IrInterfaceExtractor
 
         var baseInterfaces =
             type.Interfaces.Length > 0
-                ? type.Interfaces.Select(i => IrTypeRefMapper.Map(i, originResolver)).ToList()
+                ? type.Interfaces.Select(i => IrTypeRefMapper.Map(i, originResolver, target))
+                    .ToList()
                 : null;
 
         var typeParameters =
             type.TypeParameters.Length > 0
                 ? type
-                    .TypeParameters.Select(tp => ExtractTypeParameter(tp, originResolver))
+                    .TypeParameters.Select(tp => ExtractTypeParameter(tp, originResolver, target))
                     .ToList()
                 : null;
 
@@ -68,7 +69,8 @@ public static class IrInterfaceExtractor
 
     private static IrPropertyDeclaration ExtractProperty(
         IPropertySymbol prop,
-        IrTypeOriginResolver? originResolver
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
     )
     {
         var accessors =
@@ -80,7 +82,7 @@ public static class IrInterfaceExtractor
             prop.Name,
             IrVisibility.Public,
             prop.IsStatic,
-            IrTypeRefMapper.Map(prop.Type, originResolver),
+            IrTypeRefMapper.Map(prop.Type, originResolver, target),
             accessors,
             IsOptional: prop.HasOptional()
         )
@@ -91,25 +93,26 @@ public static class IrInterfaceExtractor
 
     private static IrMethodDeclaration ExtractMethod(
         IMethodSymbol method,
-        IrTypeOriginResolver? originResolver
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
     )
     {
         var parameters = method
             .Parameters.Select(p => new IrParameter(
                 p.Name,
-                IrTypeRefMapper.Map(p.Type, originResolver),
+                IrTypeRefMapper.Map(p.Type, originResolver, target),
                 IsParams: p.IsParams,
                 IsOptional: p.HasOptional(),
                 IsConstant: p.HasConstant()
             ))
             .ToList();
 
-        var returnType = IrTypeRefMapper.Map(method.ReturnType, originResolver);
+        var returnType = IrTypeRefMapper.Map(method.ReturnType, originResolver, target);
 
         var typeParams =
             method.TypeParameters.Length > 0
                 ? method
-                    .TypeParameters.Select(tp => ExtractTypeParameter(tp, originResolver))
+                    .TypeParameters.Select(tp => ExtractTypeParameter(tp, originResolver, target))
                     .ToList()
                 : null;
 
@@ -141,13 +144,14 @@ public static class IrInterfaceExtractor
 
     private static IrEventDeclaration ExtractEvent(
         IEventSymbol evt,
-        IrTypeOriginResolver? originResolver
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
     ) =>
         new(
             evt.Name,
             IrVisibility.Public,
             evt.IsStatic,
-            IrTypeRefMapper.Map(evt.Type, originResolver)
+            IrTypeRefMapper.Map(evt.Type, originResolver, target)
         )
         {
             Attributes = IrAttributeExtractor.Extract(evt),
@@ -155,12 +159,14 @@ public static class IrInterfaceExtractor
 
     private static IrTypeParameter ExtractTypeParameter(
         ITypeParameterSymbol tp,
-        IrTypeOriginResolver? originResolver
+        IrTypeOriginResolver? originResolver,
+        Metano.Annotations.TargetLanguage? target
     ) =>
         new(
             tp.Name,
             tp.ConstraintTypes.Length > 0
-                ? tp.ConstraintTypes.Select(t => IrTypeRefMapper.Map(t, originResolver)).ToList()
+                ? tp.ConstraintTypes.Select(t => IrTypeRefMapper.Map(t, originResolver, target))
+                    .ToList()
                 : null
         );
 }

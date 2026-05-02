@@ -22,13 +22,13 @@ public static class IrMethodExtractor
         var hasYield = DetectYield(method);
 
         var returnType = hasYield
-            ? IrTypeRefMapper.MapForGeneratorReturn(method.ReturnType, originResolver)
-            : IrTypeRefMapper.Map(method.ReturnType, originResolver);
+            ? IrTypeRefMapper.MapForGeneratorReturn(method.ReturnType, originResolver, target)
+            : IrTypeRefMapper.Map(method.ReturnType, originResolver, target);
 
         var parameters = method
             .Parameters.Select(p => new IrParameter(
                 p.Name,
-                IrTypeRefMapper.Map(p.Type, originResolver),
+                IrTypeRefMapper.Map(p.Type, originResolver, target),
                 HasDefaultValue: p.HasExplicitDefaultValue,
                 DefaultValue: ExtractDefaultValue(p, compilation, originResolver),
                 IsParams: p.IsParams,
@@ -44,7 +44,9 @@ public static class IrMethodExtractor
                         tp.Name,
                         tp.ConstraintTypes.Length > 0
                             ? tp
-                                .ConstraintTypes.Select(t => IrTypeRefMapper.Map(t, originResolver))
+                                .ConstraintTypes.Select(t =>
+                                    IrTypeRefMapper.Map(t, originResolver, target)
+                                )
                                 .ToList()
                             : null
                     ))
