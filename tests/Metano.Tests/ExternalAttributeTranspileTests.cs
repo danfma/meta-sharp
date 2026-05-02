@@ -249,6 +249,44 @@ public class ExternalAttributeTranspileTests
         await Assert.That(output).DoesNotContain("c: ICtx");
     }
 
+    [Test]
+    public async Task ExternalWithImport_AmbientShape_ResolvesViaPackageTypes()
+    {
+        // Pinning the [External] + [Import] resolution recipe (#190 option 3):
+        // [External] suppresses emission; [Import] tells TS where the name
+        // lives (the package's own .d.ts). A purely-synthetic [External] with
+        // no [Import] requires the consumer to provide an ambient declaration
+        // — a future iteration may emit that automatically (#190).
+        var result = TranspileHelper.Transpile(
+            """
+            using Metano.Annotations;
+            using Metano.Annotations.TypeScript;
+            [assembly: TranspileAssembly]
+
+            [External, Import(name: "VNode", from: "inferno")]
+            public abstract class InfernoElement;
+
+            public class Renderer
+            {
+                public InfernoElement? Root { get; set; }
+
+                public void Mount(InfernoElement node) {}
+            }
+            """
+        );
+
+        // No .ts file emitted for the ambient marker.
+        await Assert.That(result).DoesNotContainKey("inferno-element.ts");
+
+        // Consumer aliases the npm export to the C# name. Reference is
+        // type-only here, so the import collapses to the whole-statement
+        // `import type` form.
+        var renderer = result["renderer.ts"];
+        await Assert.That(renderer).Contains("VNode as InfernoElement");
+        await Assert.That(renderer).Contains("from \"inferno\"");
+        await Assert.That(renderer).Contains("InfernoElement");
+    }
+
     // ─── Diagnostics (MS0012) ────────────────────────────────
 
     [Test]
