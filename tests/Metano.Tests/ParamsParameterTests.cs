@@ -124,8 +124,14 @@ public class ParamsParameterTests
     }
 
     [Test]
-    public async Task Record_PositionalParams_DegradesToPlainArrayPropertyParam()
+    public async Task Record_PositionalParams_SplitsFieldAndRestCtorParam()
     {
+        // #152: TS forbids combining a parameter-property modifier with the
+        // rest prefix (`readonly ...tags: string[]` is a syntax error).
+        // The bridge splits the slot: declare a separate `readonly tags`
+        // field, emit the ctor with `...tags: string[]`, and copy across in
+        // the body. This restores the variadic call surface that #145 had
+        // to suppress.
         var result = TranspileHelper.Transpile(
             """
             namespace App;
@@ -137,8 +143,58 @@ public class ParamsParameterTests
 
         var output = result["tagged.ts"];
         await Assert.That(output).Contains("readonly tags: string[]");
+        await Assert.That(output).Contains("...tags: string[]");
+        await Assert.That(output).Contains("this.tags = tags;");
         await Assert.That(output).DoesNotContain("readonly ...tags");
-        await Assert.That(output).DoesNotContain("public ...tags");
+    }
+
+    [Test]
+    public async Task Record_PositionalParams_VariadicCallSiteSpreadsArray()
+    {
+        // With the field/rest split in place, the call-site spread that #145
+        // had to suppress for record ctors is back: passing an array to the
+        // params slot lowers as `new Tagged("hi", ...tags)`.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed record Tagged(string Label, params string[] Tags);
+
+            [Transpile]
+            public sealed class Caller
+            {
+                public Tagged Build(string[] tags) => new Tagged("hi", tags);
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("new Tagged(\"hi\", ...tags)");
+    }
+
+    [Test]
+    public async Task Record_PositionalParams_DiscreteArgsPassThrough()
+    {
+        // Regression guard: discrete-arg call sites stay unchanged — the
+        // emitted ctor's rest-parameter swallows them like any other `params`.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed record Tagged(string Label, params string[] Tags);
+
+            [Transpile]
+            public sealed class Caller
+            {
+                public Tagged Build() => new Tagged("hi", "a", "b", "c");
+            }
+            """
+        );
+
+        var output = result["caller.ts"];
+        await Assert.That(output).Contains("new Tagged(\"hi\", \"a\", \"b\", \"c\")");
     }
 
     [Test]

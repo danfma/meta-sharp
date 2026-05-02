@@ -2792,8 +2792,6 @@ public sealed class IrExpressionExtractor
             return;
         if (syntaxArgs.Count != symbol.Parameters.Length)
             return;
-        if (TargetsPromotedRecordParams(symbol))
-            return;
         var lastSyntax = syntaxArgs[^1];
         var lastType = _semantic.GetTypeInfo(lastSyntax.Expression).ConvertedType;
         if (lastType is null)
@@ -2802,15 +2800,6 @@ public sealed class IrExpressionExtractor
             return;
         args[^1] = args[^1] with { IsSpread = true };
     }
-
-    /// <summary>
-    /// Records lower positional <c>params</c> through TS parameter-property
-    /// syntax, which forbids the rest-parameter prefix; emit-side falls
-    /// back to a regular array slot, so the call site must also keep the
-    /// array argument unspread to match the emitted signature.
-    /// </summary>
-    private static bool TargetsPromotedRecordParams(IMethodSymbol symbol) =>
-        symbol.MethodKind == MethodKind.Constructor && symbol.ContainingType is { IsRecord: true };
 
     private IrExpression ExtractObjectCreation(ObjectCreationExpressionSyntax oc)
     {

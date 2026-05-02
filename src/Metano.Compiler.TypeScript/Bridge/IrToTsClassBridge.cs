@@ -768,9 +768,29 @@ internal static class IrToTsClassBridge
                 continue;
             var name = p.EmittedName ?? TypeScriptNaming.ToCamelCase(p.Parameter.Name);
             var tsType = resolveType(p);
+            var defaultValue = ResolveCtorParamDefault(p, bclRegistry);
+            // TypeScript forbids combining a parameter-property modifier
+            // (`readonly` / `public`) with the rest prefix (`...`). For a
+            // record positional `params T[]` slot, drop the modifiers and
+            // emit the rest form; the field declaration + body assignment
+            // are synthesized separately by the class emitter so the
+            // promoted shape is preserved at the surface. (#152)
+            if (p.Parameter.IsParams)
+            {
+                result.Add(
+                    new TsConstructorParam(
+                        name,
+                        tsType,
+                        Readonly: false,
+                        Accessibility: TsAccessibility.None,
+                        DefaultValue: defaultValue,
+                        Rest: true
+                    )
+                );
+                continue;
+            }
             var isReadonly = p.Promotion is IrParameterPromotion.ReadonlyProperty;
             var accessibility = MapAccessibility(p.PromotedVisibility ?? IrVisibility.Public);
-            var defaultValue = ResolveCtorParamDefault(p, bclRegistry);
             result.Add(
                 new TsConstructorParam(name, tsType, isReadonly, accessibility, defaultValue)
             );
@@ -894,6 +914,26 @@ internal static class IrToTsClassBridge
                     new TsExpressionStatement(
                         new TsBinaryExpression(
                             new TsPropertyAccess(new TsIdentifier("this"), fieldName),
+                            "=",
+                            new TsIdentifier(paramName)
+                        )
+                    )
+                );
+            }
+
+            // Promoted `params T[]` slots can't carry the parameter-property
+            // modifier (TS forbids `readonly ...x: T[]`), so the field is
+            // declared separately by the class emitter and the value is
+            // copied across in the ctor body. (#152)
+            foreach (var p in ir.Parameters)
+            {
+                if (!p.Parameter.IsParams || p.Promotion is IrParameterPromotion.None)
+                    continue;
+                var paramName = p.EmittedName ?? TypeScriptNaming.ToCamelCase(p.Parameter.Name);
+                body.Add(
+                    new TsExpressionStatement(
+                        new TsBinaryExpression(
+                            new TsPropertyAccess(new TsIdentifier("this"), paramName),
                             "=",
                             new TsIdentifier(paramName)
                         )
