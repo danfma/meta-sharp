@@ -171,6 +171,115 @@ public class DelegateTypeAliasTests
     }
 
     [Test]
+    public async Task NestedDelegate_InsideTranspilableType_EmitsAlias()
+    {
+        // #153 gap: a `public delegate ...` declared inside another
+        // [Transpile] class should still emit as a TS type alias so
+        // consumers can reference `Outer.Inner`. The legacy path didn't
+        // discover the nested declaration.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public sealed class Outer
+            {
+                [Transpile]
+                public delegate void Inner(string message);
+            }
+            """
+        );
+
+        var output = result["outer.ts"];
+        await Assert.That(output).Contains("Inner");
+        await Assert.That(output).Contains("(message: string) => void");
+    }
+
+    [Test]
+    public async Task GenericDelegate_WithMultipleConstraints_EmitsIntersection()
+    {
+        // #153 gap: `where T : IFoo, IBar` should lower to
+        // `T extends IFoo & IBar` instead of dropping every constraint
+        // beyond the first. Aligns the delegate bridge with class /
+        // interface bridges, all of which share the same mapper.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App;
+
+            [Transpile]
+            public interface IFoo {}
+
+            [Transpile]
+            public interface IBar {}
+
+            [Transpile]
+            public delegate T Combine<T>(T value) where T : IFoo, IBar;
+            """
+        );
+
+        var output = result["combine.ts"];
+        await Assert.That(output).Contains("T extends IFoo & IBar");
+    }
+
+    [Test]
+    public async Task DelegateAlias_InsideGenericArgument_SubstitutesCorrectly()
+    {
+        // #153 gap: a [Transpile] delegate referenced as the generic
+        // type argument of an Action / Func / List etc. must surface
+        // by its alias name, not as the inlined function-type shape.
+        var result = TranspileHelper.Transpile(
+            """
+            using System;
+
+            namespace App;
+
+            [Transpile]
+            public delegate void Notifier(string message);
+
+            [Transpile]
+            public sealed class Hub
+            {
+                public Action<Notifier>? OnRegister { get; set; }
+            }
+            """
+        );
+
+        var output = result["hub.ts"];
+        await Assert.That(output).Contains("(obj: Notifier) => void");
+        await Assert.That(output).Contains("import type { Notifier }");
+    }
+
+    [Test]
+    public async Task DelegateAlias_BarrelReExport_PreservesTypeQualifier()
+    {
+        // #153 gap: when a delegate alias re-exports through a directory
+        // barrel, the `export type` qualifier must be preserved so
+        // `tsc --isolatedModules` keeps the declaration as a type-only
+        // re-export. With two top-level types under different namespaces
+        // the package root sits one level above, forcing a sub-barrel
+        // for the events folder.
+        var result = TranspileHelper.Transpile(
+            """
+            namespace App.Events
+            {
+                [Transpile]
+                public delegate void Handler(int code);
+            }
+
+            namespace App.Other
+            {
+                [Transpile]
+                public sealed class Marker {}
+            }
+            """
+        );
+
+        await Assert.That(result).ContainsKey("events/index.ts");
+        var barrel = result["events/index.ts"];
+        await Assert.That(barrel).Contains("export type { Handler } from \"./handler\"");
+    }
+
+    [Test]
     public async Task CrossPackageDelegate_EmitsImportFromPackage()
     {
         var library = """

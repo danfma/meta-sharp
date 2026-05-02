@@ -75,13 +75,7 @@ internal static class IrToTsClassBridge
     /// <c>extends</c> bound and the legacy transformer made the same choice.
     /// </summary>
     public static IReadOnlyList<TsTypeParameter>? BuildTypeParameters(IrClassDeclaration ir) =>
-        ir.TypeParameters is { Count: > 0 } tps
-            ? tps.Select(tp => new TsTypeParameter(
-                    tp.Name,
-                    tp.Constraints is { Count: > 0 } cs ? IrToTsTypeMapper.Map(cs[0]) : null
-                ))
-                .ToList()
-            : null;
+        IrToTsTypeParameterMapper.Convert(ir.TypeParameters);
 
     /// <summary>
     /// Computes the implicit <c>default(T)</c> initializer for a field /

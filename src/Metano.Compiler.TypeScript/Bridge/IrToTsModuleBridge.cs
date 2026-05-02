@@ -101,15 +101,5 @@ public static class IrToTsModuleBridge
 
     private static IReadOnlyList<TsTypeParameter>? MapTypeParameters(
         IReadOnlyList<IrTypeParameter>? typeParameters
-    )
-    {
-        if (typeParameters is null || typeParameters.Count == 0)
-            return null;
-        return typeParameters
-            .Select(tp => new TsTypeParameter(
-                tp.Name,
-                tp.Constraints is { Count: > 0 } c ? IrToTsTypeMapper.Map(c[0]) : null
-            ))
-            .ToList();
-    }
+    ) => IrToTsTypeParameterMapper.Convert(typeParameters);
 }
