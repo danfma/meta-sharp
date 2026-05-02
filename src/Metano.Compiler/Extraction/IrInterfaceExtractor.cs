@@ -46,7 +46,8 @@ public static class IrInterfaceExtractor
 
         var baseInterfaces =
             type.Interfaces.Length > 0
-                ? type.Interfaces.Select(i => IrTypeRefMapper.Map(i, originResolver, target))
+                ? type
+                    .Interfaces.Select(i => IrTypeRefMapper.Map(i, originResolver, target))
                     .ToList()
                 : null;
 
@@ -165,7 +166,8 @@ public static class IrInterfaceExtractor
         new(
             tp.Name,
             tp.ConstraintTypes.Length > 0
-                ? tp.ConstraintTypes.Select(t => IrTypeRefMapper.Map(t, originResolver, target))
+                ? tp
+                    .ConstraintTypes.Select(t => IrTypeRefMapper.Map(t, originResolver, target))
                     .ToList()
                 : null
         );

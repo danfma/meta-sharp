@@ -59,7 +59,11 @@ public static class IrTypeRefMapper
         )
         {
             return new IrNullableTypeRef(
-                Map(type.WithNullableAnnotation(NullableAnnotation.NotAnnotated), originResolver, target)
+                Map(
+                    type.WithNullableAnnotation(NullableAnnotation.NotAnnotated),
+                    originResolver,
+                    target
+                )
             );
         }
 
